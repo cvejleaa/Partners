@@ -1,5 +1,13 @@
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # test_bridge_web.dart bruger web-only biblioteket dart:js_util, som ikke kan
+  # resolves når analyzer kører mod VM-target. Filen kompileres og verificeres
+  # i stedet af "flutter build web"-trinnet. På ikke-web vælger main.dart's
+  # conditional import automatisk test_bridge_stub.dart.
+  exclude:
+    - lib/utils/test_bridge_web.dart
+
 linter:
   rules:
     prefer_const_constructors: true
