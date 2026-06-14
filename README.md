@@ -43,6 +43,67 @@ flutter analyze
 flutter test
 ```
 
+## Test-pakken (komplet verifikation af MVP)
+
+Spillets logik testes på 3 niveauer.
+
+### 1) Engine-/regel-tests (Dart, hurtig)
+
+Verificerer regler, vinder-detektion, kortbytte og at AI kan spille **et helt
+spil til ende** uden ulovlige træk. Kører på få sekunder.
+
+```bash
+flutter test
+```
+
+Bemærk: `test/full_game_test.dart` simulerer **5 komplette spil** med 4 AI-spillere
+og verificerer hver hånd. Dette er den mest pålidelige test af spillogikken.
+
+### 2) Flutter UI integration test
+
+Driver setup-skærmen via det rigtige widget-træ og verificerer flow til
+spilskærmen. Kører som et embedded device test.
+
+```bash
+flutter test integration_test/full_game_walkthrough_test.dart
+```
+
+### 3) Playwright (browser end-to-end, hele spillet via JS-bridge)
+
+Bygger appen til web, server den lokalt, og lader Playwright spille et helt
+spil via en JS test-bridge — `window.partnersTest` aktiveres når URL'en
+indeholder `?test=1`. Tager screenshots ved exchange-, play- og game-over-faser.
+
+```bash
+# Engang: installer Node-deps
+npm install
+npx playwright install --with-deps chromium
+
+# Byg web + kør alle Playwright tests
+flutter build web --release --base-href "/"
+npm test
+
+# Eller separat
+npm run build:web
+npm run serve:web &              # i baggrunden på :8080
+npx playwright test               # i et andet terminal-vindue
+npx playwright show-report        # se HTML-rapport
+```
+
+Tests:
+- `tests/playwright/smoke.spec.ts` — app booter, ingen console-fejl, screenshots
+  på desktop + mobile viewport
+- `tests/playwright/full-game.spec.ts` — bridge er eksponeret, AI spiller et
+  helt spil til ende, vinderens 8 brikker er alle i hjemstrækket, screenshots
+
+### Hvad de tre niveauer dækker
+
+| Niveau | Verificerer | Når noget fejler her... |
+|--------|-------------|--------------------------|
+| `flutter test` | Spillogik, regler, AI, vinder | Bug i `lib/game/` |
+| Integration | UI-flow, navigation | Bug i `lib/ui/` widget-træ |
+| Playwright | Web build, JS-bridge, browser-renderering | Bug i build/deploy eller test-bridge |
+
 ### Kør på iOS-simulator (kræver macOS + Xcode)
 
 ```bash

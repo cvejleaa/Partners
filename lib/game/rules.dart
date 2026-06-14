@@ -171,29 +171,13 @@ class Rules {
 
     if (pos is TrackPosition) {
       final int entry = geometry.startTrackIndexFor(player.index);
-      // Antal felter frem til (men ikke inkl.) eget udgangsfelt — startsporet
-      // er der hvor brikken kommer ind igen efter en hel runde, så det er
-      // også indgangen til hjemstrækket.
+      // Antal felter frem til (og inkl.) eget udgangsfelt.
       final int distanceToEntry =
           (entry - pos.index - 1 + geometry.trackLength) %
-              geometry.trackLength +
+                  geometry.trackLength +
               1;
-      // Hvis brikken ikke har "rejst en omgang" må den gerne gå forbi entry,
-      // men den kan ikke gå ind i hjemstrækket før den har passeret entry én
-      // gang.
-      // Forsimpling for MVP: brikken kan dreje ind i hjemstrækket, hvis
-      // [steps] passer præcist til distanceToEntry + slot, og brikken
-      // hasLeftStart (dvs. den blev sat ud denne runde og er ikke slået retur).
-      if (steps == distanceToEntry) {
-        // Lander præcis på indgangsfelt — vi tolker det som hjemstræk slot 0.
-        if (piece.hasLeftStart) {
-          if (state.pieceAt(HomeStretchPosition(player.index, 0)) == null) {
-            return HomeStretchPosition(player.index, 0);
-          }
-        }
-        // Alternativt bare bliv stående på track-feltet (= entry).
-        return TrackPosition(entry);
-      }
+      // Hvis brikken ikke er kommet ud af start i denne runde
+      // (hasLeftStart=false) kan den ikke gå i hjemstrækket.
       if (steps > distanceToEntry && piece.hasLeftStart) {
         final int slot = steps - distanceToEntry - 1;
         if (slot >= geometry.homeStretchLength) return null;
@@ -204,11 +188,11 @@ class Rules {
         }
         return HomeStretchPosition(player.index, slot);
       }
-      // Almindeligt skridt på banen; tjek om der er en egen brik der spærrer
-      // landingen (capture-tjek sker i kalderen).
+      // Lander præcis på eget udgangsfelt → bliv på track (brikken har valget
+      // om at fortsætte; for MVP forbliver den på banen).
+      // Eller almindeligt skridt på banen (inkl. forbi entry hvis !hasLeftStart).
       final int newIndex =
           (pos.index + steps) % geometry.trackLength;
-      // Tjek ikke for spring-over på banen (det er tilladt udenfor hjemstræk).
       return TrackPosition(newIndex);
     }
     return null;

@@ -39,3 +39,9 @@ android/key.properties
 
 # Coverage
 coverage/
+
+# Playwright
+node_modules/
+test-results/
+playwright-report/
+playwright/.cache/
