@@ -88,3 +88,62 @@ flutter build ios --release         # iOS (kræver Mac/Xcode)
 
 Hvis I lokalt spiller med andre detaljer (knægt = byt brikker, 8 = spring,
 5 = flyt modstander), kan reglerne let justeres i `lib/game/rules.dart`.
+
+## Deploy til Firebase Hosting (partners.vejleaa.dk)
+
+### Engangsopsætning
+
+1. **Opret Firebase-projekt** (eller brug eksisterende):
+   - Gå til https://console.firebase.google.com → "Add project".
+   - Når projektet er oprettet, find **Project ID** (fx `partners-vejleaa`).
+2. **Indsæt Project ID** i `.firebaserc`:
+   ```bash
+   # Erstat REPLACE-WITH-YOUR-FIREBASE-PROJECT-ID med dit Project ID
+   ```
+3. **Aktivér Hosting** i Firebase-konsollen (Build → Hosting → Get started).
+4. **Installer Firebase CLI** lokalt (engang pr. maskine):
+   ```bash
+   npm install -g firebase-tools
+   firebase login
+   ```
+
+### Manuel deploy fra din maskine
+
+```bash
+flutter pub get
+flutter build web --release --base-href "/"
+firebase deploy --only hosting
+```
+
+Outputtet viser et midlertidigt URL som `https://<project-id>.web.app`. Test
+spillet der først.
+
+### Custom domain — partners.vejleaa.dk
+
+1. I Firebase Console → Hosting → **Add custom domain** → indtast
+   `partners.vejleaa.dk`.
+2. Firebase viser et TXT-record til ejerskabsverifikation (læg det på
+   `vejleaa.dk` hos din DNS-udbyder).
+3. Når TXT'en er bekræftet, viser Firebase **to A-records** (eller en CNAME).
+   Læg dem på `partners`-subdomænet:
+   ```
+   partners.vejleaa.dk.   A   151.101.1.195
+   partners.vejleaa.dk.   A   151.101.65.195
+   ```
+   (Brug de eksakte IP'er Firebase viser dig — de kan ændre sig.)
+4. Vent på DNS-propagering (få minutter til et par timer). Firebase udsteder
+   automatisk SSL-certifikat.
+
+### Auto-deploy ved push (GitHub Actions)
+
+Workflow'et `.github/workflows/deploy.yml` deployer automatisk ved push til
+`main`. Det kræver to repository secrets i GitHub (Settings → Secrets and
+variables → Actions):
+
+- `FIREBASE_SERVICE_ACCOUNT` — JSON-indholdet af en service-account-nøgle.
+  Lav den i Firebase Console → Project Settings → Service accounts →
+  "Generate new private key".
+- `FIREBASE_PROJECT_ID` — dit Project ID (samme som i `.firebaserc`).
+
+Når begge secrets er sat, deployer hvert push til `main` automatisk til
+`https://partners.vejleaa.dk`.
