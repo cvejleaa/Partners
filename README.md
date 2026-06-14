@@ -43,6 +43,13 @@ flutter analyze
 flutter test
 ```
 
+## Selvtest fra brugerfladen (ingen kode/terminal)
+
+Appen har en indbygget **Selvtest**-skærm. På forsiden (opsætning) er der et
+ikon øverst til højre (✓). Den kører hele spil med 4 AI-spillere direkte i
+browseren og viser grøn/rød resultat med statistik — uden at du skal røre kode
+eller terminal. Den ligger med i den deployede app på partners.vejleaa.dk.
+
 ## Test-pakken (komplet verifikation af MVP)
 
 Spillets logik testes på 3 niveauer.
@@ -152,23 +159,11 @@ Hvis I lokalt spiller med andre detaljer (knægt = byt brikker, 8 = spring,
 
 ## Deploy til Firebase Hosting (partners.vejleaa.dk)
 
-### Engangsopsætning
+Projektet er allerede konfigureret mod Firebase-projektet `partners-8d4aa`
+(`.firebaserc` + workflow). Den anbefalede vej er **auto-deploy via GitHub
+Actions** (se nederst). Manuel deploy beskrives også herunder.
 
-1. **Opret Firebase-projekt** (eller brug eksisterende):
-   - Gå til https://console.firebase.google.com → "Add project".
-   - Når projektet er oprettet, find **Project ID** (fx `partners-vejleaa`).
-2. **Indsæt Project ID** i `.firebaserc`:
-   ```bash
-   # Erstat REPLACE-WITH-YOUR-FIREBASE-PROJECT-ID med dit Project ID
-   ```
-3. **Aktivér Hosting** i Firebase-konsollen (Build → Hosting → Get started).
-4. **Installer Firebase CLI** lokalt (engang pr. maskine):
-   ```bash
-   npm install -g firebase-tools
-   firebase login
-   ```
-
-### Manuel deploy fra din maskine
+### Manuel deploy fra din maskine (valgfrit)
 
 ```bash
 flutter pub get
@@ -195,16 +190,25 @@ spillet der først.
 4. Vent på DNS-propagering (få minutter til et par timer). Firebase udsteder
    automatisk SSL-certifikat.
 
-### Auto-deploy ved push (GitHub Actions)
+### Auto-deploy ved push (GitHub Actions) — det automatiske flow
 
-Workflow'et `.github/workflows/deploy.yml` deployer automatisk ved push til
-`main`. Det kræver to repository secrets i GitHub (Settings → Secrets and
-variables → Actions):
+Workflow'et `.github/workflows/deploy.yml` gør **alt automatisk**:
+1. `flutter analyze` + `flutter test` (med JUnit-rapport som vises i Actions-UI)
+2. `flutter build web --release`
+3. Playwright end-to-end (rapport som artefakt + på `/test-report/`)
+4. Deploy til Firebase Hosting (live → partners.vejleaa.dk)
 
-- `FIREBASE_SERVICE_ACCOUNT` — JSON-indholdet af en service-account-nøgle.
-  Lav den i Firebase Console → Project Settings → Service accounts →
+Det kører ved push til `main` (og udviklingsgrenen) samt via **"Run workflow"**-
+knappen i GitHub (Actions → Test & Deploy → Run workflow).
+
+**Det eneste der mangler for at deploy virker:** ét repository secret i GitHub
+(Settings → Secrets and variables → Actions → New repository secret):
+
+- Navn: `FIREBASE_SERVICE_ACCOUNT`
+- Værdi: hele JSON-indholdet af en service-account-nøgle fra
+  Firebase Console → ⚙ Project Settings → Service accounts →
   "Generate new private key".
-- `FIREBASE_PROJECT_ID` — dit Project ID (samme som i `.firebaserc`).
 
-Når begge secrets er sat, deployer hvert push til `main` automatisk til
-`https://partners.vejleaa.dk`.
+Project ID (`partners-8d4aa`) er allerede sat i workflow'et og `.firebaserc`.
+Uden secret'en kører testene stadig (synlige i Actions-UI), men deploy springes
+over.

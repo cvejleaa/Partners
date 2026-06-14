@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../utils/palette.dart';
 import '../../app.dart';
 import 'game_screen.dart';
+import 'self_test_screen.dart';
 
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
@@ -34,7 +35,22 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   Widget build(BuildContext context) {
     final bool unique = _colorIdx.toSet().length == 4;
     return Scaffold(
-      appBar: AppBar(title: const Text('Partners — Opsætning')),
+      appBar: AppBar(
+        title: const Text('Partners — Opsætning'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Kør selvtest',
+            icon: const Icon(Icons.fact_check_outlined),
+            onPressed: () {
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const SelfTestScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
