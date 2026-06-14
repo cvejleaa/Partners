@@ -37,6 +37,9 @@ class GameController extends StateNotifier<GameState> {
   final Uuid _uuid = const Uuid();
   final Random _rng = Random();
 
+  /// Offentlig adgang til den aktuelle state (StateNotifier.state er protected).
+  GameState get currentState => state;
+
   static GameState _emptyState() {
     return GameState(
       players: <Player>[],

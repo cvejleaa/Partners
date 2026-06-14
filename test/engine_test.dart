@@ -5,7 +5,6 @@ import 'package:partners/game/ai/heuristic_ai.dart';
 import 'package:partners/game/game_engine.dart';
 import 'package:partners/models/board.dart';
 import 'package:partners/models/game_state.dart';
-import 'package:partners/models/piece.dart';
 import 'package:partners/models/playing_card.dart';
 
 import 'test_helpers.dart';

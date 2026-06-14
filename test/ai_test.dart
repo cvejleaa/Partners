@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/game/ai/heuristic_ai.dart';
 import 'package:partners/models/board.dart';
 import 'package:partners/models/move.dart';
-import 'package:partners/models/piece.dart';
 import 'package:partners/models/playing_card.dart';
 
 import 'test_helpers.dart';

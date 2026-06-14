@@ -1,6 +1,5 @@
 // ignore_for_file: avoid_dynamic_calls, deprecated_member_use
 
-import 'dart:js' show allowInterop;
 import 'dart:js_util' as js_util;
 
 import 'package:flutter/foundation.dart';
@@ -21,20 +20,20 @@ import '../models/player.dart';
 void installTestBridge(GameController controller, HeuristicAi ai) {
   final bridge = js_util.newObject<Object>();
 
-  js_util.setProperty(bridge, 'ready', allowInterop(() => true));
+  js_util.setProperty(bridge, 'ready', js_util.allowInterop(() => true));
 
-  js_util.setProperty(bridge, 'version', allowInterop(() => '0.1.0'));
+  js_util.setProperty(bridge, 'version', js_util.allowInterop(() => '0.1.0'));
 
   js_util.setProperty(
     bridge,
     'getState',
-    allowInterop(() => js_util.jsify(_serializeState(controller.state))),
+    js_util.allowInterop(() => js_util.jsify(_serializeState(controller.currentState))),
   );
 
   js_util.setProperty(
     bridge,
     'startGame',
-    allowInterop((Object? namesJs, Object? colorsJs) {
+    js_util.allowInterop((Object? namesJs, Object? colorsJs) {
       final names = _decodeStringList(namesJs);
       final colors = _decodeIntList(colorsJs);
       final setups = <PlayerSetup>[
@@ -47,35 +46,35 @@ void installTestBridge(GameController controller, HeuristicAi ai) {
       ];
       controller.startGame(setups);
       controller.startHand();
-      return js_util.jsify(_serializeState(controller.state));
+      return js_util.jsify(_serializeState(controller.currentState));
     }),
   );
 
   js_util.setProperty(
     bridge,
     'submitExchange',
-    allowInterop((int playerIndex, int cardIndex) {
-      final card = controller.state.players[playerIndex].hand[cardIndex];
+    js_util.allowInterop((int playerIndex, int cardIndex) {
+      final card = controller.currentState.players[playerIndex].hand[cardIndex];
       controller.submitExchange(playerIndex, card);
-      return js_util.jsify(_serializeState(controller.state));
+      return js_util.jsify(_serializeState(controller.currentState));
     }),
   );
 
   js_util.setProperty(
     bridge,
     'aiSubmitExchange',
-    allowInterop((int playerIndex) {
-      final card = ai.chooseExchangeCard(controller.state, playerIndex);
+    js_util.allowInterop((int playerIndex) {
+      final card = ai.chooseExchangeCard(controller.currentState, playerIndex);
       controller.submitExchange(playerIndex, card);
-      return js_util.jsify(_serializeState(controller.state));
+      return js_util.jsify(_serializeState(controller.currentState));
     }),
   );
 
   js_util.setProperty(
     bridge,
     'aiPlay',
-    allowInterop((int playerIndex) {
-      final move = ai.chooseMove(controller.state, playerIndex);
+    js_util.allowInterop((int playerIndex) {
+      final move = ai.chooseMove(controller.currentState, playerIndex);
       if (move != null) {
         controller.applyMove(playerIndex, move);
         return js_util.jsify(<String, Object?>{
@@ -87,15 +86,15 @@ void installTestBridge(GameController controller, HeuristicAi ai) {
                 'to': _posLabel(s.to),
                 'captured': s.capturedPieceId,
               }).toList(),
-          'state': _serializeState(controller.state),
+          'state': _serializeState(controller.currentState),
         });
       } else {
-        final card = ai.chooseDiscard(controller.state, playerIndex);
+        final card = ai.chooseDiscard(controller.currentState, playerIndex);
         controller.discard(playerIndex, card);
         return js_util.jsify(<String, Object?>{
           'action': 'discard',
           'card': card.toString(),
-          'state': _serializeState(controller.state),
+          'state': _serializeState(controller.currentState),
         });
       }
     }),
@@ -106,45 +105,45 @@ void installTestBridge(GameController controller, HeuristicAi ai) {
   js_util.setProperty(
     bridge,
     'playFullGame',
-    allowInterop((int maxHands) {
+    js_util.allowInterop((int maxHands) {
       final log = <Map<String, Object?>>[];
       int handsPlayed = 0;
-      while (controller.state.phase != GamePhase.gameOver &&
+      while (controller.currentState.phase != GamePhase.gameOver &&
           handsPlayed < maxHands) {
-        if (controller.state.phase == GamePhase.setup) {
+        if (controller.currentState.phase == GamePhase.setup) {
           controller.startHand();
         }
-        if (controller.state.phase == GamePhase.exchange) {
+        if (controller.currentState.phase == GamePhase.exchange) {
           for (int i = 0; i < 4; i++) {
-            final c = ai.chooseExchangeCard(controller.state, i);
+            final c = ai.chooseExchangeCard(controller.currentState, i);
             controller.submitExchange(i, c);
             log.add(<String, Object?>{
               'phase': 'exchange',
-              'hand': controller.state.handNumber,
+              'hand': controller.currentState.handNumber,
               'player': i,
               'card': c.toString(),
             });
           }
         }
         int safety = 100;
-        while (controller.state.phase == GamePhase.play && safety-- > 0) {
-          final idx = controller.state.currentPlayerIndex;
-          final move = ai.chooseMove(controller.state, idx);
+        while (controller.currentState.phase == GamePhase.play && safety-- > 0) {
+          final idx = controller.currentState.currentPlayerIndex;
+          final move = ai.chooseMove(controller.currentState, idx);
           if (move != null) {
             controller.applyMove(idx, move);
             log.add(<String, Object?>{
               'phase': 'play',
-              'hand': controller.state.handNumber,
+              'hand': controller.currentState.handNumber,
               'player': idx,
               'card': move.card.toString(),
               'steps': move.steps.length,
             });
           } else {
-            final c = ai.chooseDiscard(controller.state, idx);
+            final c = ai.chooseDiscard(controller.currentState, idx);
             controller.discard(idx, c);
             log.add(<String, Object?>{
               'phase': 'discard',
-              'hand': controller.state.handNumber,
+              'hand': controller.currentState.handNumber,
               'player': idx,
               'card': c.toString(),
             });
@@ -153,16 +152,16 @@ void installTestBridge(GameController controller, HeuristicAi ai) {
         handsPlayed++;
       }
       return js_util.jsify(<String, Object?>{
-        'winningTeam': controller.state.winningTeamIndex,
+        'winningTeam': controller.currentState.winningTeamIndex,
         'handsPlayed': handsPlayed,
         'moves': log.length,
         'log': log,
-        'state': _serializeState(controller.state),
+        'state': _serializeState(controller.currentState),
       });
     }),
   );
 
-  js_util.setProperty(bridge, 'reset', allowInterop(() {
+  js_util.setProperty(bridge, 'reset', js_util.allowInterop(() {
     controller.reset();
   }));
 
