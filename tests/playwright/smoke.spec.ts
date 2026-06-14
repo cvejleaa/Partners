@@ -8,9 +8,10 @@ import { test, expect } from '@playwright/test';
  * tests verify the app boots, the canvas mounts, no JS errors are thrown
  * and screenshots can be captured as visual baselines.
  *
- * For interactive end-to-end testing of game logic, see the JS test bridge
- * suite in full-game.spec.ts and the Flutter integration tests under
- * /integration_test/.
+ * Full-game logic is verified two other ways:
+ *  - `flutter test` (test/full_game_test.dart) plays 5 complete games in CI.
+ *  - The in-app "Selvtest" screen plays full games in the browser with a
+ *    visible pass/fail result (reachable from the setup screen).
  */
 
 test.describe('App boots and renders', () => {

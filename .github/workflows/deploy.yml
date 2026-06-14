@@ -41,21 +41,8 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Unit & engine tests (med JUnit-rapport)
-        run: |
-          dart pub global activate junitreport
-          mkdir -p test-results
-          set -o pipefail
-          flutter test --machine | "$HOME/.pub-cache/bin/tojunit" --output test-results/flutter-junit.xml
-
-      - name: Publicér Flutter testresultat
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Flutter tests
-          path: test-results/flutter-junit.xml
-          reporter: java-junit
-          fail-on-error: false
+      - name: Unit & engine tests (5 hele spil + regler)
+        run: flutter test --reporter expanded
 
       - name: Byg web (release)
         run: flutter build web --release --base-href "/"
@@ -81,16 +68,14 @@ jobs:
         run: |
           mkdir -p build/web/test-report
           if [ -d playwright-report ]; then cp -r playwright-report/* build/web/test-report/ || true; fi
-          if [ -f test-results/flutter-junit.xml ]; then cp test-results/flutter-junit.xml build/web/test-report/ || true; fi
 
       - name: Upload testartefakter
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: |
-            playwright-report
-            test-results
+          path: playwright-report
+          if-no-files-found: ignore
           retention-days: 14
 
       - name: Skriv resumé

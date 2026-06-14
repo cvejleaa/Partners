@@ -75,18 +75,18 @@ spilskærmen. Kører som et embedded device test.
 flutter test integration_test/full_game_walkthrough_test.dart
 ```
 
-### 3) Playwright (browser end-to-end, hele spillet via JS-bridge)
+### 3) Playwright (browser smoke-test)
 
-Bygger appen til web, server den lokalt, og lader Playwright spille et helt
-spil via en JS test-bridge — `window.partnersTest` aktiveres når URL'en
-indeholder `?test=1`. Tager screenshots ved exchange-, play- og game-over-faser.
+Bygger appen til web, server den lokalt, og verificerer at appen booter og
+renderer i en rigtig browser uden console-fejl. Tager screenshots på desktop-
+og mobil-viewport.
 
 ```bash
 # Engang: installer Node-deps
 npm install
 npx playwright install --with-deps chromium
 
-# Byg web + kør alle Playwright tests
+# Byg web + kør Playwright
 flutter build web --release --base-href "/"
 npm test
 
@@ -98,18 +98,21 @@ npx playwright show-report        # se HTML-rapport
 ```
 
 Tests:
-- `tests/playwright/smoke.spec.ts` — app booter, ingen console-fejl, screenshots
-  på desktop + mobile viewport
-- `tests/playwright/full-game.spec.ts` — bridge er eksponeret, AI spiller et
-  helt spil til ende, vinderens 8 brikker er alle i hjemstrækket, screenshots
+- `tests/playwright/smoke.spec.ts` — app booter, ingen console-fejl, manifest
+  tilgængelig, screenshots på desktop + mobile viewport
 
-### Hvad de tre niveauer dækker
+> Hele spillet gennemspilles i `flutter test` (5 spil) og kan desuden køres
+> direkte i browseren via in-app **Selvtest**-skærmen — det er den anbefalede
+> måde at se et helt spil verificeret i en UI.
+
+### Hvad lagene dækker
 
 | Niveau | Verificerer | Når noget fejler her... |
 |--------|-------------|--------------------------|
-| `flutter test` | Spillogik, regler, AI, vinder | Bug i `lib/game/` |
+| `flutter test` | Spillogik, regler, AI, 5 hele spil, vinder | Bug i `lib/game/` |
 | Integration | UI-flow, navigation | Bug i `lib/ui/` widget-træ |
-| Playwright | Web build, JS-bridge, browser-renderering | Bug i build/deploy eller test-bridge |
+| Playwright | Web build booter og renderer i browser | Bug i build/deploy |
+| In-app Selvtest | Hele spil + regler i browseren (synligt resultat) | Bug i `lib/game/` |
 
 ### Kør på iOS-simulator (kræver macOS + Xcode)
 
