@@ -1,10 +1,10 @@
 /// Brættets geometri.
 ///
-/// Banen er en ring med [trackLength] felter (default 64 = 16 felter pr. spiller).
-/// Hver spiller har et udgangsfelt på `playerIndex * 16` (dvs. 0, 16, 32, 48).
-/// Hjemstrækket har 4 felter.
+/// Banen er en ring med [trackLength] felter (default 60 = 4 udgangsfelter +
+/// 14 mellemfelter mellem hver). Hver spiller har et udgangsfelt på
+/// `playerIndex * 15` (dvs. 0, 15, 30, 45). Hjemstrækket har 4 felter.
 class BoardGeometry {
-  const BoardGeometry({this.trackLength = 64, this.homeStretchLength = 4});
+  const BoardGeometry({this.trackLength = 60, this.homeStretchLength = 4});
 
   final int trackLength;
   final int homeStretchLength;
