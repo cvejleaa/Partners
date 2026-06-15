@@ -17,9 +17,13 @@ class GameState {
     required this.phase,
     required this.handNumber,
     this.winningTeamIndex,
+    this.starterIndex = 0,
+    this.starterStreak = 0,
+    List<int>? starterCounts,
     CardRules? cardRules,
     Map<int, PlayingCard?>? exchangeBuffer,
   })  : cardRules = cardRules ?? CardRules.defaults(),
+        starterCounts = starterCounts ?? List<int>.filled(4, 0),
         exchangeBuffer = exchangeBuffer ?? <int, PlayingCard?>{};
 
   final List<Player> players;
@@ -31,6 +35,14 @@ class GameState {
   GamePhase phase;
   int handNumber;
   int? winningTeamIndex;
+
+  /// Den spiller der starter runden (spiller først). Roterer med uret efter 3
+  /// runder som startende.
+  int starterIndex;
+  int starterStreak;
+
+  /// Hvor mange gange hver spiller har startet en runde (til visning).
+  final List<int> starterCounts;
 
   /// Konfigurerbare kortregler (justeres på admin-skærmen).
   final CardRules cardRules;

@@ -56,7 +56,7 @@ void main() {
       expect(exit.steps.first.capturedPieceId, isNotNull);
     });
 
-    test('1 og 11 frem er gyldige fra banen', () {
+    test('1 og 11 frem er gyldige fra banen (ud-felt 15 tæller ikke med)', () {
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(5)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.ace, Suit.hearts));
@@ -64,13 +64,14 @@ void main() {
           .where((Move m) => !m.exitsStart && m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      expect(targets, containsAll(<int>[6, 16]));
+      // 5+1=6; 5+11 springer over ud-felt 15 → 17.
+      expect(targets, containsAll(<int>[6, 17]));
     });
   });
 
   group('Konge', () {
     test('13 frem er gyldigt fra banen', () {
-      // Start på 3 → 16 (undgår ud-feltet på 15).
+      // Start på 3, 13 frem springer over ud-felt 15 → 17.
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(3)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.king, Suit.spades));
@@ -78,7 +79,7 @@ void main() {
           .where((Move m) => !m.exitsStart && m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      expect(targets, contains(16));
+      expect(targets, contains(17));
     });
   });
 
@@ -94,8 +95,8 @@ void main() {
       expect(targets, containsAll(<int>[24, 16]));
     });
 
-    test('4 baglæns krydser felt 0 korrekt (wrap-around)', () {
-      // Brik på TrackPosition(2) — 4 baglæns → TrackPosition(58)
+    test('4 baglæns springer over ud-felt 0 (wrap-around)', () {
+      // Brik på 2 — 4 baglæns springer over ud-felt 0 → 57.
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(2)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.four, Suit.clubs));
@@ -103,7 +104,7 @@ void main() {
           .where((Move m) => m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      expect(targets, contains(58));
+      expect(targets, contains(57));
     });
   });
 
@@ -111,7 +112,7 @@ void main() {
     test('split over to brikker er muligt', () {
       final state = makeState(piecePositions: <List<PiecePosition>>[
         <PiecePosition>[
-          const TrackPosition(10),
+          const TrackPosition(1),
           const TrackPosition(20),
           const StartPosition(0, 2),
           const StartPosition(0, 3),
@@ -128,7 +129,7 @@ void main() {
     test('total er aldrig > 7', () {
       final state = makeState(piecePositions: <List<PiecePosition>>[
         <PiecePosition>[
-          const TrackPosition(10),
+          const TrackPosition(1),
           const TrackPosition(20),
           const StartPosition(0, 2),
           const StartPosition(0, 3),
@@ -307,11 +308,11 @@ void main() {
 
   group('Hjemstræk', () {
     test('passerer udgangsfelt og lander i hjemstræk slot 0', () {
-      // Spiller 0, entry=0. Brik på TrackPosition(55). distanceToEntry = 5.
-      // Card = 6 → past entry by 1 → home slot 0.
+      // Brik på 55: fem tæller 56,57,58,59 (4) og drejer så ind i hjemstræk
+      // slot 0 (ud-feltet 0 tæller ikke med).
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(55)));
       final moves = rules.legalMoves(state, state.players[0],
-          const PlayingCard(Rank.six, Suit.hearts));
+          const PlayingCard(Rank.five, Suit.hearts));
       final homeMove = moves.firstWhere(
           (Move m) => m.steps.first.to is HomeStretchPosition);
       final hp = homeMove.steps.first.to as HomeStretchPosition;
@@ -390,6 +391,39 @@ void main() {
               m.steps.first.from is HomeStretchPosition &&
               (m.steps.first.from as HomeStretchPosition).slot == 0);
       expect(fromSlot0, isEmpty);
+    });
+  });
+
+  group('Ud-kort', () {
+    test('rent ud-kort kan kun rykke en brik ud', () {
+      final state = makeState();
+      final moves =
+          rules.legalMoves(state, state.players[0], const PlayingCard.exit(0));
+      expect(moves, isNotEmpty);
+      expect(moves.every((Move m) => m.exitsStart), isTrue);
+    });
+
+    test('ud-kort gør intet når alle brikker er ude af start', () {
+      final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(5)));
+      // Spiller 0 har stadig 3 brikker i start her, så ud-kort virker; test i
+      // stedet en spiller helt uden start-brikker.
+      final allOut = makeState(piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(2),
+          const TrackPosition(5),
+          const TrackPosition(8),
+          const TrackPosition(11),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ]);
+      expect(
+        rules.legalMoves(
+            allOut, allOut.players[0], const PlayingCard.exit(0)),
+        isEmpty,
+      );
+      // (state bruges ikke yderligere)
+      expect(state.players[0].pieces.length, 4);
     });
   });
 }

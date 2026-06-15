@@ -73,7 +73,8 @@ class HeuristicAi implements AiPlayer {
   // ---------------------------------------------------------------------------
 
   int _cardScore(PlayingCard c) {
-    switch (c.rank) {
+    if (c.isExit) return 12;
+    switch (c.rank!) {
       case Rank.ace:
         return 11;
       case Rank.king:

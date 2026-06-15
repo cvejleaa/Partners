@@ -25,8 +25,13 @@ class Rules {
 
   /// Find alle gyldige [Move] som [player] kan lave med [card] i [state].
   List<Move> legalMoves(GameState state, Player player, PlayingCard card) {
+    // Rene ud-kort kan kun rykke en brik ud.
+    if (card.isExit) {
+      return _exitStartMoves(state, player, card).toList();
+    }
+
     final List<Move> moves = <Move>[];
-    final CardRuleConfig cfg = state.cardRules.forRank(card.rank);
+    final CardRuleConfig cfg = state.cardRules.forRank(card.rank!);
 
     // 1) Gå ud af start (til eget ud-felt).
     if (cfg.exitStart) {
@@ -91,28 +96,6 @@ class Rules {
   int? _entryOwner(int trackIndex) {
     final int q = geometry.trackLength ~/ 4;
     return trackIndex % q == 0 ? trackIndex ~/ q : null;
-  }
-
-  /// Et besat ud-felt spærrer: ingen kan passere det.
-  bool _isOccupiedEntry(GameState state, int trackIndex) {
-    return _entryOwner(trackIndex) != null &&
-        state.piecesAt(TrackPosition(trackIndex)).isNotEmpty;
-  }
-
-  /// Sand hvis et fremad-/baglæns-træk passerer over et besat ud-felt.
-  bool _passesOccupiedEntry(
-    GameState state,
-    int start,
-    int steps,
-    bool forward,
-  ) {
-    for (int k = 1; k < steps; k++) {
-      final int idx = forward
-          ? (start + k) % geometry.trackLength
-          : (start - k + geometry.trackLength) % geometry.trackLength;
-      if (_isOccupiedEntry(state, idx)) return true;
-    }
-    return false;
   }
 
   // ---------------------------------------------------------------------------
@@ -194,12 +177,21 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
-    // Kan ikke passere et besat ud-felt baglæns.
-    if (_passesOccupiedEntry(state, pos.index, steps, false)) return null;
-    final int raw = (pos.index - steps) % geometry.trackLength;
-    final int normalised =
-        raw < 0 ? raw + geometry.trackLength : raw;
-    final TrackPosition target = TrackPosition(normalised);
+    // Tæl kun nummererede felter baglæns; ud-felter springes over (besat spærrer).
+    final int len = geometry.trackLength;
+    int idx = pos.index;
+    int counted = 0;
+    while (counted < steps) {
+      final int next = (idx - 1 + len) % len;
+      if (_entryOwner(next) != null) {
+        if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
+        idx = next;
+        continue;
+      }
+      idx = next;
+      counted++;
+    }
+    final TrackPosition target = TrackPosition(idx);
     final _Landing landing = _landing(state, piece.ownerIndex, target);
     if (!landing.legal) return null;
     return Move(
@@ -238,26 +230,35 @@ class Rules {
     }
 
     if (pos is TrackPosition) {
-      // Kan ikke passere et besat ud-felt undervejs.
-      if (_passesOccupiedEntry(state, pos.index, steps, true)) return null;
-      final int entry = geometry.startTrackIndexFor(player.index);
-      final int distanceToEntry =
-          (entry - pos.index - 1 + geometry.trackLength) %
-                  geometry.trackLength +
-              1;
-      // Drej ind i EGET hjemstræk efter at have passeret eget ud-felt.
-      if (steps > distanceToEntry && piece.hasLeftStart) {
-        final int slot = steps - distanceToEntry - 1;
-        if (slot >= geometry.homeStretchLength) return null;
-        for (int s = 0; s <= slot; s++) {
-          if (state.pieceAt(HomeStretchPosition(player.index, s)) != null) {
-            return null;
+      // Tæl kun nummererede felter — ud-felter tælles ALDRIG med, man kan ikke
+      // stoppe på dem, og et besat ud-felt spærrer for passage.
+      final int len = geometry.trackLength;
+      final int ownEntry = geometry.startTrackIndexFor(player.index);
+      int idx = pos.index;
+      int counted = 0;
+      while (counted < steps) {
+        final int next = (idx + 1) % len;
+        // Drej ind i EGET hjemstræk når man når sit eget ud-felt (efter en omgang).
+        if (next == ownEntry && piece.hasLeftStart) {
+          final int slot = (steps - counted) - 1;
+          if (slot >= geometry.homeStretchLength) return null;
+          for (int s = 0; s <= slot; s++) {
+            if (state.pieceAt(HomeStretchPosition(player.index, s)) != null) {
+              return null;
+            }
           }
+          return HomeStretchPosition(player.index, slot);
         }
-        return HomeStretchPosition(player.index, slot);
+        if (_entryOwner(next) != null) {
+          // Ud-felt: kan ikke passere hvis besat; ellers passeres det uden at tælle.
+          if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
+          idx = next;
+          continue;
+        }
+        idx = next;
+        counted++;
       }
-      final int newIndex = (pos.index + steps) % geometry.trackLength;
-      return TrackPosition(newIndex);
+      return TrackPosition(idx);
     }
     return null;
   }

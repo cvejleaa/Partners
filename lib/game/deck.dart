@@ -14,6 +14,10 @@ class Deck {
         cards.add(PlayingCard(r, s));
       }
     }
+    // 4 rene ud-kort (markeres med hjerte).
+    for (int i = 0; i < 4; i++) {
+      cards.add(PlayingCard.exit(i));
+    }
     return cards;
   }
 

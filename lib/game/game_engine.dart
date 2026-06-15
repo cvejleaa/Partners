@@ -54,6 +54,9 @@ class GameEngine extends ChangeNotifier {
         player.hand.add(state.deck.removeLast());
       }
     }
+    if (state.starterIndex < state.starterCounts.length) {
+      state.starterCounts[state.starterIndex] += 1;
+    }
     state.phase = GamePhase.exchange;
     state.handNumber += 1;
     notifyListeners();
@@ -68,8 +71,7 @@ class GameEngine extends ChangeNotifier {
     if (state.exchangeBuffer.length == state.players.length) {
       _applyExchange();
       state.phase = GamePhase.play;
-      state.currentPlayerIndex =
-          (state.dealerIndex + 1) % state.players.length;
+      state.currentPlayerIndex = state.starterIndex;
     }
     notifyListeners();
   }
@@ -165,9 +167,14 @@ class GameEngine extends ChangeNotifier {
         return;
       }
     }
-    // Hvis alle hænder er tomme (alle har spillet/sat over): ny hånd
+    // Hvis alle hænder er tomme (alle har spillet/sat over): ny hånd.
+    // Samme startende spiller i 3 runder, derefter roteres med uret.
     if (state.players.every((Player p) => p.hand.isEmpty)) {
-      state.dealerIndex = (state.dealerIndex + 1) % state.players.length;
+      state.starterStreak += 1;
+      if (state.starterStreak >= 3) {
+        state.starterIndex = (state.starterIndex + 1) % state.players.length;
+        state.starterStreak = 0;
+      }
       startNewHand();
       return;
     }

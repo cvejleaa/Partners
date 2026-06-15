@@ -111,6 +111,33 @@ void main() {
     expect(state.players[state.currentPlayerIndex].hand, isNotEmpty);
   });
 
+  test('startende spiller roterer med uret efter 3 runder', () {
+    final state = makeState();
+    state.deck.addAll(_freshDeck());
+    final engine = GameEngine(state: state, rng: Random(5));
+
+    engine.startNewHand();
+    final Map<int, int> starterByHand = <int, int>{};
+    starterByHand[state.handNumber] = state.starterIndex;
+
+    int guard = 0;
+    while (state.handNumber < 4 && guard++ < 500) {
+      if (state.phase == GamePhase.exchange) {
+        for (int i = 0; i < 4; i++) {
+          engine.submitExchangeCard(i, state.players[i].hand.first);
+        }
+      } else if (state.phase == GamePhase.play) {
+        // Alle passer på skift → runden slutter, og motoren starter næste.
+        engine.passHand(state.currentPlayerIndex);
+      }
+      starterByHand[state.handNumber] = state.starterIndex;
+    }
+    expect(starterByHand[1], 0);
+    expect(starterByHand[2], 0);
+    expect(starterByHand[3], 0);
+    expect(starterByHand[4], 1);
+  });
+
   test('discardCard fjerner kort og avancerer spiller', () {
     final state = makeState();
     state.deck.addAll(_freshDeck());

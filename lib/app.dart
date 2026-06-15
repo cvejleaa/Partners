@@ -139,6 +139,9 @@ class GameController extends StateNotifier<GameState> {
       phase: e.phase,
       handNumber: e.handNumber,
       winningTeamIndex: e.winningTeamIndex,
+      starterIndex: e.starterIndex,
+      starterStreak: e.starterStreak,
+      starterCounts: List<int>.from(e.starterCounts),
       cardRules: e.cardRules,
       exchangeBuffer: Map<int, PlayingCard?>.from(e.exchangeBuffer),
     );

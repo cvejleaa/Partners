@@ -17,13 +17,25 @@ enum Rank {
 }
 
 class PlayingCard {
-  const PlayingCard(this.rank, this.suit);
+  const PlayingCard(Rank this.rank, Suit this.suit)
+      : isExit = false,
+        exitId = -1;
 
-  final Rank rank;
-  final Suit suit;
+  /// Et rent "ud"-kort (markeres med et hjerte). [exitId] 0..3 gør de fire
+  /// ud-kort distinkte.
+  const PlayingCard.exit(this.exitId)
+      : rank = null,
+        suit = null,
+        isExit = true;
+
+  final Rank? rank;
+  final Suit? suit;
+  final bool isExit;
+  final int exitId;
 
   String get rankLabel {
-    switch (rank) {
+    if (isExit) return 'UD';
+    switch (rank!) {
       case Rank.ace:
         return 'A';
       case Rank.jack:
@@ -54,7 +66,8 @@ class PlayingCard {
   }
 
   String get suitSymbol {
-    switch (suit) {
+    if (isExit) return '♥';
+    switch (suit!) {
       case Suit.hearts:
         return '♥';
       case Suit.diamonds:
@@ -66,12 +79,12 @@ class PlayingCard {
     }
   }
 
-  bool get isRed => suit == Suit.hearts || suit == Suit.diamonds;
+  bool get isRed => isExit || suit == Suit.hearts || suit == Suit.diamonds;
 
-  /// Mulige fremad-skridt for dette kort. Tom liste = ingen ren flytte-værdi
-  /// (fx 7'er der splittes, eller bagudvendte).
+  /// Mulige fremad-skridt (kun til AI-heuristik; reglerne bruger CardRules).
   List<int> get forwardSteps {
-    switch (rank) {
+    if (isExit) return const <int>[];
+    switch (rank!) {
       case Rank.ace:
         return const <int>[1, 11];
       case Rank.two:
@@ -79,13 +92,13 @@ class PlayingCard {
       case Rank.three:
         return const <int>[3];
       case Rank.four:
-        return const <int>[]; // håndteres separat (frem eller tilbage 4)
+        return const <int>[];
       case Rank.five:
         return const <int>[5];
       case Rank.six:
         return const <int>[6];
       case Rank.seven:
-        return const <int>[]; // splittes, total 7
+        return const <int>[];
       case Rank.eight:
         return const <int>[8];
       case Rank.nine:
@@ -101,15 +114,19 @@ class PlayingCard {
     }
   }
 
-  bool get canExitStart => rank == Rank.ace || rank == Rank.king;
+  bool get canExitStart => isExit || rank == Rank.ace || rank == Rank.king;
 
   @override
-  String toString() => '$rankLabel$suitSymbol';
+  String toString() => isExit ? 'UD♥' : '$rankLabel$suitSymbol';
 
   @override
   bool operator ==(Object other) =>
-      other is PlayingCard && other.rank == rank && other.suit == suit;
+      other is PlayingCard &&
+      other.isExit == isExit &&
+      other.exitId == exitId &&
+      other.rank == rank &&
+      other.suit == suit;
 
   @override
-  int get hashCode => Object.hash(rank, suit);
+  int get hashCode => Object.hash(rank, suit, isExit, exitId);
 }
