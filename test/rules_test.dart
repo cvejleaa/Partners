@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:partners/game/card_rules.dart';
 import 'package:partners/game/rules.dart';
 import 'package:partners/models/board.dart';
 import 'package:partners/models/move.dart';
@@ -438,7 +439,7 @@ void main() {
         expect(a.ownerIndex == b.ownerIndex, isFalse);
       }
       // Der findes et bytte mellem makker (2) og modstander (1) — uden mig.
-      bool partnerVsOpp = moves.any((m) {
+      final bool partnerVsOpp = moves.any((m) {
         final o = <int>{
           state.pieceById(m.steps[0].pieceId).ownerIndex,
           state.pieceById(m.steps[1].pieceId).ownerIndex,

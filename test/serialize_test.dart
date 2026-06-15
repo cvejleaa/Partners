@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/models/board.dart';
-import 'package:partners/models/game_state.dart';
 import 'package:partners/models/playing_card.dart';
 import 'package:partners/online/serialize.dart';
 
