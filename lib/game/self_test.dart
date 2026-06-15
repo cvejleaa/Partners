@@ -187,7 +187,8 @@ _GameOutcome _playFullGame({int seed = 0, int maxHands = 500}) {
         engine.applyMove(idx, move);
         moves++;
       } else {
-        engine.discardCard(idx, ai.chooseDiscard(state, idx));
+        // Kan ikke rykke: smid resten og sid over resten af runden.
+        engine.passHand(idx);
         discards++;
       }
     }

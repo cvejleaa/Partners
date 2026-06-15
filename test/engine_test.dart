@@ -88,6 +88,29 @@ void main() {
     }
   });
 
+  test('spiller uden lovligt træk smider hånden og sidder over', () {
+    // Alle brikker i start; hånd uden ud-kort → ingen lovlige træk.
+    final state = makeState(
+      hands: <List<PlayingCard>>[
+        const <PlayingCard>[
+          PlayingCard(Rank.two, Suit.hearts),
+          PlayingCard(Rank.three, Suit.clubs),
+        ],
+        const <PlayingCard>[PlayingCard(Rank.ace, Suit.spades)],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+      currentPlayerIndex: 0,
+    );
+    final engine = GameEngine(state: state, rng: Random(3));
+    expect(engine.canPlay(0), isFalse);
+    engine.passHand(0);
+    expect(state.players[0].hand, isEmpty);
+    // Turen går videre til en spiller med kort (ikke den der sad over).
+    expect(state.currentPlayerIndex, isNot(0));
+    expect(state.players[state.currentPlayerIndex].hand, isNotEmpty);
+  });
+
   test('discardCard fjerner kort og avancerer spiller', () {
     final state = makeState();
     state.deck.addAll(_freshDeck());

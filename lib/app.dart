@@ -113,6 +113,13 @@ class GameController extends StateNotifier<GameState> {
     _bump();
   }
 
+  bool canPlay(int playerIndex) => _engine?.canPlay(playerIndex) ?? false;
+
+  void passHand(int playerIndex) {
+    _engine?.passHand(playerIndex);
+    _bump();
+  }
+
   void reset() {
     _engine = null;
     state = _emptyState();

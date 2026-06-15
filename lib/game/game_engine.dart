@@ -111,6 +111,18 @@ class GameEngine extends ChangeNotifier {
     return moves;
   }
 
+  /// Sand hvis spilleren kan lave mindst ét lovligt træk med sin hånd.
+  bool canPlay(int playerIndex) => allLegalMoves(playerIndex).isNotEmpty;
+
+  /// Spilleren kan ikke rykke nogen brik: smid resten af hånden og sid over
+  /// resten af runden.
+  void passHand(int playerIndex) {
+    final Player player = state.players[playerIndex];
+    state.discard.addAll(player.hand);
+    player.hand.clear();
+    _afterMove(playerIndex);
+  }
+
   /// Spil et træk (validering antages allerede udført).
   void applyMove(int playerIndex, Move move) {
     final Player player = state.players[playerIndex];
@@ -153,15 +165,19 @@ class GameEngine extends ChangeNotifier {
         return;
       }
     }
-    // Næste spiller
-    state.currentPlayerIndex =
-        (playerIndex + 1) % state.players.length;
-    // Hvis alle hænder er tomme: ny hånd
+    // Hvis alle hænder er tomme (alle har spillet/sat over): ny hånd
     if (state.players.every((Player p) => p.hand.isEmpty)) {
       state.dealerIndex = (state.dealerIndex + 1) % state.players.length;
       startNewHand();
       return;
     }
+    // Næste spiller med kort på hånden (spring spillere over der sidder over).
+    final int n = state.players.length;
+    int next = (playerIndex + 1) % n;
+    while (state.players[next].hand.isEmpty) {
+      next = (next + 1) % n;
+    }
+    state.currentPlayerIndex = next;
     notifyListeners();
   }
 

@@ -69,9 +69,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         if (move != null) {
           game.applyMove(s.currentPlayerIndex, move);
         } else {
-          final PlayingCard c =
-              _ai.chooseDiscard(s, s.currentPlayerIndex);
-          game.discard(s.currentPlayerIndex, c);
+          // Kan ikke rykke: smid resten og sid over resten af runden.
+          game.passHand(s.currentPlayerIndex);
         }
         setState(() {});
         _scheduleAi();
@@ -223,6 +222,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   Widget _buildPlayArea(GameState state, Player human) {
     final bool humanTurn = state.currentPlayerIndex == human.index;
+    final bool humanCanPlay = humanTurn &&
+        ref.read(gameProvider.notifier).canPlay(human.index);
     return Container(
       padding: const EdgeInsets.all(12),
       color: Colors.brown.withOpacity(0.06),
@@ -233,12 +234,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             Text(
                 '${state.currentPlayer.name} tænker…',
                 style: Theme.of(context).textTheme.titleMedium),
-          if (humanTurn)
+          if (humanTurn && humanCanPlay)
             Text(
               _selectedCard == null
                   ? 'Vælg et kort'
                   : 'Vælg en brik (gult = lovligt træk)',
               style: Theme.of(context).textTheme.titleMedium,
+            ),
+          if (humanTurn && !humanCanPlay)
+            Text(
+              'Du kan ikke rykke nogen brik',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: Colors.red.shade700),
             ),
           const SizedBox(height: 8),
           Wrap(
@@ -249,14 +258,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   card: c,
                   faceUp: humanTurn,
                   selected: _selectedCard == c,
-                  onTap: !humanTurn ? null : () => _selectCard(c),
+                  onTap: (!humanTurn || !humanCanPlay)
+                      ? null
+                      : () => _selectCard(c),
                 ),
             ],
           ),
-          if (humanTurn && _selectedCard != null)
-            TextButton(
-              onPressed: () => _humanDiscardSelected(),
-              child: const Text('Smid kortet uden træk'),
+          if (humanTurn && !humanCanPlay)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: FilledButton.icon(
+                onPressed: _humanPass,
+                icon: const Icon(Icons.block),
+                label: const Text('Smid kortene og sid over'),
+              ),
             ),
         ],
       ),
@@ -333,11 +348,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     _scheduleAi();
   }
 
-  void _humanDiscardSelected() {
+  void _humanPass() {
     final game = ref.read(gameProvider.notifier);
     final state = ref.read(gameProvider);
-    if (_selectedCard == null) return;
-    game.discard(state.currentPlayerIndex, _selectedCard!);
+    game.passHand(state.currentPlayerIndex);
     setState(() {
       _selectedCard = null;
       _candidateMoves = <Move>[];
