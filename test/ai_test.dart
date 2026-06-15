@@ -44,7 +44,7 @@ void main() {
           const StartPosition(0, 3),
         ],
         <PiecePosition>[
-          const TrackPosition(15),
+          const TrackPosition(13),
           const StartPosition(1, 1),
           const StartPosition(1, 2),
           const StartPosition(1, 3),
@@ -54,7 +54,7 @@ void main() {
       ],
       hands: <List<PlayingCard>>[
         const <PlayingCard>[
-          PlayingCard(Rank.five, Suit.hearts),
+          PlayingCard(Rank.three, Suit.hearts),
         ],
         for (int i = 1; i < 4; i++) <PlayingCard>[],
       ],

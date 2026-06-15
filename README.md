@@ -57,6 +57,13 @@ eller byttes (modstandere må gerne passere forbi). Brikker der er nået i mål
 (hjemstrækket) kan ikke komme ud på banen igen, og en brik der kommer ud af
 start lander altid på sit eget ud-felt.
 
+**Ud-felter:** Man kan ikke lande på en *anden* spillers ud-felt — derfor kan en
+brik på sit eget ud-felt aldrig slås hjem. Et **besat ud-felt spærrer**: ingen
+kan passere forbi det, så længe der står en brik på det.
+
+**Sidde over:** Kan man ikke rykke nogen brik med kortene på hånden, smider man
+hele hånden og sidder over resten af runden.
+
 ## Selvtest fra brugerfladen (ingen kode/terminal)
 
 Appen har en indbygget **Selvtest**-skærm. På forsiden (opsætning) er der et

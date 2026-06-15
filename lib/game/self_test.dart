@@ -275,17 +275,17 @@ List<CheckResult> _ruleChecks() {
       const StartPosition(0, 3),
     ];
     positions[1] = <PiecePosition>[
-      const TrackPosition(15),
+      const TrackPosition(13),
       const StartPosition(1, 1),
       const StartPosition(1, 2),
       const StartPosition(1, 3),
     ];
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
-        s, s.players[0], const PlayingCard(Rank.five, Suit.hearts));
+        s, s.players[0], const PlayingCard(Rank.three, Suit.hearts));
     final hit = moves.where((Move m) =>
         m.steps.first.to is TrackPosition &&
-        (m.steps.first.to as TrackPosition).index == 15 &&
+        (m.steps.first.to as TrackPosition).index == 13 &&
         m.steps.first.capturedPieceId != null);
     out.add(CheckResult('Slag på modstander registreres', hit.isNotEmpty));
   }
@@ -295,18 +295,18 @@ List<CheckResult> _ruleChecks() {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
       const TrackPosition(10),
-      const TrackPosition(15),
+      const TrackPosition(13),
       const StartPosition(0, 2),
       const StartPosition(0, 3),
     ];
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
-        s, s.players[0], const PlayingCard(Rank.five, Suit.hearts));
+        s, s.players[0], const PlayingCard(Rank.three, Suit.hearts));
     final canStack = moves.any((Move m) =>
         m.steps.first.from is TrackPosition &&
         (m.steps.first.from as TrackPosition).index == 10 &&
         m.steps.first.to is TrackPosition &&
-        (m.steps.first.to as TrackPosition).index == 15 &&
+        (m.steps.first.to as TrackPosition).index == 13 &&
         m.steps.first.capturedPieceId == null);
     out.add(CheckResult('Kan stable på egen brik', canStack));
   }
@@ -321,18 +321,36 @@ List<CheckResult> _ruleChecks() {
       const StartPosition(0, 3),
     ];
     positions[1] = <PiecePosition>[
-      const TrackPosition(15),
-      const TrackPosition(15),
+      const TrackPosition(13),
+      const TrackPosition(13),
       const StartPosition(1, 2),
       const StartPosition(1, 3),
     ];
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
-        s, s.players[0], const PlayingCard(Rank.five, Suit.hearts));
+        s, s.players[0], const PlayingCard(Rank.three, Suit.hearts));
+    final landsOn13 = moves.any((Move m) =>
+        m.steps.first.to is TrackPosition &&
+        (m.steps.first.to as TrackPosition).index == 13);
+    out.add(CheckResult('Beskyttet dobbelt kan ikke slås', !landsOn13));
+  }
+
+  // Kan ikke lande på andres ud-felt
+  {
+    final positions = _allStart();
+    positions[0] = <PiecePosition>[
+      const TrackPosition(12),
+      const StartPosition(0, 1),
+      const StartPosition(0, 2),
+      const StartPosition(0, 3),
+    ];
+    final s = _stateWith(positions);
+    final moves = rules.legalMoves(
+        s, s.players[0], const PlayingCard(Rank.three, Suit.hearts));
     final landsOn15 = moves.any((Move m) =>
         m.steps.first.to is TrackPosition &&
         (m.steps.first.to as TrackPosition).index == 15);
-    out.add(CheckResult('Beskyttet dobbelt kan ikke slås', !landsOn15));
+    out.add(CheckResult('Kan ikke lande på andres ud-felt', !landsOn15));
   }
 
   // 4 baglæns wrap-around

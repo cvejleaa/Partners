@@ -70,14 +70,15 @@ void main() {
 
   group('Konge', () {
     test('13 frem er gyldigt fra banen', () {
-      final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(2)));
+      // Start på 3 → 16 (undgår ud-feltet på 15).
+      final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(3)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.king, Suit.spades));
       final targets = moves
           .where((Move m) => !m.exitsStart && m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      expect(targets, contains(15));
+      expect(targets, contains(16));
     });
   });
 
@@ -162,6 +163,130 @@ void main() {
           const StartPosition(0, 3),
         ],
         <PiecePosition>[
+          const TrackPosition(13),
+          const StartPosition(1, 1),
+          const StartPosition(1, 2),
+          const StartPosition(1, 3),
+        ],
+        for (int i = 2; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.three, Suit.hearts));
+      final hit = moves.firstWhere(
+        (Move m) =>
+            m.steps.first.to is TrackPosition &&
+            (m.steps.first.to as TrackPosition).index == 13,
+      );
+      expect(hit.steps.first.capturedPieceId, isNotNull);
+    });
+
+    test('kan stable på egen brik (intet slag)', () {
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(10),
+          const TrackPosition(13),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.three, Suit.hearts));
+      final landingOn13 = moves.where(
+        (Move m) =>
+            m.steps.first.from is TrackPosition &&
+            (m.steps.first.from as TrackPosition).index == 10 &&
+            m.steps.first.to is TrackPosition &&
+            (m.steps.first.to as TrackPosition).index == 13,
+      );
+      expect(landingOn13, isNotEmpty);
+      expect(landingOn13.first.steps.first.capturedPieceId, isNull);
+    });
+
+    test('beskyttet dobbelt kan ikke slås', () {
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(10),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        // To modstanderbrikker på felt 13 = beskyttet dobbelt.
+        <PiecePosition>[
+          const TrackPosition(13),
+          const TrackPosition(13),
+          const StartPosition(1, 2),
+          const StartPosition(1, 3),
+        ],
+        for (int i = 2; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.three, Suit.hearts));
+      final landingOn13 = moves.where(
+        (Move m) =>
+            m.steps.first.to is TrackPosition &&
+            (m.steps.first.to as TrackPosition).index == 13,
+      );
+      expect(landingOn13, isEmpty);
+    });
+
+    test('kan ikke lande på andres ud-felt', () {
+      // Spiller 0 på 13; tre frem ville ramme felt 16 (ok), men fem frem rammer
+      // felt 18; vælg i stedet 12 → 15 (spiller 1's ud-felt) skal være forbudt.
+      final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(12)));
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.three, Suit.hearts));
+      final landsOn15 = moves.any((Move m) =>
+          m.steps.first.to is TrackPosition &&
+          (m.steps.first.to as TrackPosition).index == 15);
+      expect(landsOn15, isFalse);
+    });
+
+    test('brik på eget ud-felt kan ikke slås', () {
+      // Spiller 1's brik står på spiller 1's ud-felt (15). Spiller 0 på 12 kan
+      // ikke lande på 15 (andres ud-felt) → ingen slag.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(12),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        <PiecePosition>[
+          const TrackPosition(15),
+          const StartPosition(1, 1),
+          const StartPosition(1, 2),
+          const StartPosition(1, 3),
+        ],
+        for (int i = 2; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.three, Suit.hearts));
+      final landsOn15 = moves.any((Move m) =>
+          m.steps.first.to is TrackPosition &&
+          (m.steps.first.to as TrackPosition).index == 15);
+      expect(landsOn15, isFalse);
+    });
+
+    test('kan ikke passere et besat ud-felt', () {
+      // Spiller 1 har en brik på sit ud-felt (15). Spiller 0 på 13 med en
+      // femmer (→18) ville passere 15 og er derfor blokeret.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(13),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        <PiecePosition>[
           const TrackPosition(15),
           const StartPosition(1, 1),
           const StartPosition(1, 2),
@@ -173,66 +298,10 @@ void main() {
       final state = makeState(piecePositions: positions);
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.five, Suit.hearts));
-      final hit = moves.firstWhere(
-        (Move m) =>
-            m.steps.first.to is TrackPosition &&
-            (m.steps.first.to as TrackPosition).index == 15,
-      );
-      expect(hit.steps.first.capturedPieceId, isNotNull);
-    });
-
-    test('kan stable på egen brik (intet slag)', () {
-      final positions = <List<PiecePosition>>[
-        <PiecePosition>[
-          const TrackPosition(10),
-          const TrackPosition(15),
-          const StartPosition(0, 2),
-          const StartPosition(0, 3),
-        ],
-        for (int i = 1; i < 4; i++)
-          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
-      ];
-      final state = makeState(piecePositions: positions);
-      final moves = rules.legalMoves(state, state.players[0],
-          const PlayingCard(Rank.five, Suit.hearts));
-      final landingOn15 = moves.where(
-        (Move m) =>
-            m.steps.first.from is TrackPosition &&
-            (m.steps.first.from as TrackPosition).index == 10 &&
-            m.steps.first.to is TrackPosition &&
-            (m.steps.first.to as TrackPosition).index == 15,
-      );
-      expect(landingOn15, isNotEmpty);
-      expect(landingOn15.first.steps.first.capturedPieceId, isNull);
-    });
-
-    test('beskyttet dobbelt kan ikke slås', () {
-      final positions = <List<PiecePosition>>[
-        <PiecePosition>[
-          const TrackPosition(10),
-          const StartPosition(0, 1),
-          const StartPosition(0, 2),
-          const StartPosition(0, 3),
-        ],
-        // To modstanderbrikker på felt 15 = beskyttet dobbelt.
-        <PiecePosition>[
-          const TrackPosition(15),
-          const TrackPosition(15),
-          const StartPosition(1, 2),
-          const StartPosition(1, 3),
-        ],
-        for (int i = 2; i < 4; i++)
-          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
-      ];
-      final state = makeState(piecePositions: positions);
-      final moves = rules.legalMoves(state, state.players[0],
-          const PlayingCard(Rank.five, Suit.hearts));
-      final landingOn15 = moves.where(
-        (Move m) =>
-            m.steps.first.to is TrackPosition &&
-            (m.steps.first.to as TrackPosition).index == 15,
-      );
-      expect(landingOn15, isEmpty);
+      final fromThirteen = moves.where((Move m) =>
+          m.steps.first.from is TrackPosition &&
+          (m.steps.first.from as TrackPosition).index == 13);
+      expect(fromThirteen, isEmpty);
     });
   });
 

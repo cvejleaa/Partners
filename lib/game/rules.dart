@@ -74,11 +74,45 @@ class Rules {
   /// - Præcis 1 modstander: slag.
   /// - 2+ modstandere (beskyttet dobbelt): ulovligt.
   _Landing _landing(GameState state, int ownerIndex, TrackPosition to) {
+    // Man kan ikke stå på en ANDEN spillers ud-felt. Dermed kan en brik på sit
+    // eget ud-felt aldrig slås hjem (ingen modstander kan lande der).
+    final int? entryOwner = _entryOwner(to.index);
+    if (entryOwner != null && entryOwner != ownerIndex) {
+      return const _Landing(false);
+    }
     final List<Piece> occ = state.piecesAt(to);
     if (occ.isEmpty) return const _Landing(true);
     if (occ.first.ownerIndex == ownerIndex) return const _Landing(true);
     if (occ.length >= 2) return const _Landing(false); // beskyttet
     return _Landing(true, occ.first.id); // slag på enlig modstander
+  }
+
+  /// Hvilken spillers ud-felt et spor-indeks er (eller null).
+  int? _entryOwner(int trackIndex) {
+    final int q = geometry.trackLength ~/ 4;
+    return trackIndex % q == 0 ? trackIndex ~/ q : null;
+  }
+
+  /// Et besat ud-felt spærrer: ingen kan passere det.
+  bool _isOccupiedEntry(GameState state, int trackIndex) {
+    return _entryOwner(trackIndex) != null &&
+        state.piecesAt(TrackPosition(trackIndex)).isNotEmpty;
+  }
+
+  /// Sand hvis et fremad-/baglæns-træk passerer over et besat ud-felt.
+  bool _passesOccupiedEntry(
+    GameState state,
+    int start,
+    int steps,
+    bool forward,
+  ) {
+    for (int k = 1; k < steps; k++) {
+      final int idx = forward
+          ? (start + k) % geometry.trackLength
+          : (start - k + geometry.trackLength) % geometry.trackLength;
+      if (_isOccupiedEntry(state, idx)) return true;
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------------------
@@ -160,6 +194,8 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
+    // Kan ikke passere et besat ud-felt baglæns.
+    if (_passesOccupiedEntry(state, pos.index, steps, false)) return null;
     final int raw = (pos.index - steps) % geometry.trackLength;
     final int normalised =
         raw < 0 ? raw + geometry.trackLength : raw;
@@ -202,6 +238,8 @@ class Rules {
     }
 
     if (pos is TrackPosition) {
+      // Kan ikke passere et besat ud-felt undervejs.
+      if (_passesOccupiedEntry(state, pos.index, steps, true)) return null;
       final int entry = geometry.startTrackIndexFor(player.index);
       final int distanceToEntry =
           (entry - pos.index - 1 + geometry.trackLength) %
@@ -233,8 +271,12 @@ class Rules {
     Player player,
     PlayingCard card,
   ) sync* {
-    bool eligible(Piece p) =>
-        p.position is TrackPosition && !state.isProtected(p.position);
+    bool eligible(Piece p) {
+      final PiecePosition pos = p.position;
+      if (pos is! TrackPosition) return false;
+      if (_entryOwner(pos.index) != null) return false; // ikke på et ud-felt
+      return !state.isProtected(pos);
+    }
 
     final List<Piece> own =
         player.pieces.where(eligible).toList();
