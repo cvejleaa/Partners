@@ -142,47 +142,61 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
               ),
             ),
           Expanded(
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Center(
-                    child: AspectRatio(
-                      aspectRatio: 1,
-                      child: BoardView(
-                        state: state,
-                        viewerIndex: viewer,
-                        highlightedPieceIds: highlighted,
-                        onPieceTap: _handlePieceTap(state, mySeat),
+            child: LayoutBuilder(builder: (ctx, c) {
+              final bool isMobile = c.maxWidth < 720;
+              final board = Center(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: BoardView(
+                    state: state,
+                    viewerIndex: viewer,
+                    highlightedPieceIds: highlighted,
+                    onPieceTap: _handlePieceTap(state, mySeat),
+                  ),
+                ),
+              );
+              if (isMobile) {
+                return Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: <Widget>[
+                          for (int i = 0; i < state.players.length; i++)
+                            Expanded(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 2),
+                                child: _onlinePanel(state, i,
+                                    lastByPlayer[i], compact: true),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  ),
-                ),
-                SizedBox(
-                  width: 120,
-                  child: ListView(
-                    children: <Widget>[
-                      for (int i = 0; i < state.players.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: PlayerPanel(
-                            player: state.players[i],
-                            rules: state.cardRules,
-                            isCurrent: state.currentPlayerIndex == i,
-                            cardCount: state.players[i].hand.length,
-                            starterCount: i < state.starterCounts.length
-                                ? state.starterCounts[i]
-                                : 0,
-                            isStarter: state.starterIndex == i,
-                            satOut: state.phase == GamePhase.play &&
-                                state.players[i].hand.isEmpty,
-                            lastCard: lastByPlayer[i],
+                    Expanded(child: board),
+                  ],
+                );
+              }
+              return Row(
+                children: <Widget>[
+                  Expanded(child: board),
+                  SizedBox(
+                    width: 140,
+                    child: ListView(
+                      children: <Widget>[
+                        for (int i = 0; i < state.players.length; i++)
+                          Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: _onlinePanel(state, i, lastByPlayer[i]),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            }),
           ),
           _buildActionArea(state, mySeat),
         ],
@@ -326,6 +340,22 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     return const SizedBox(height: 80);
   }
 
+  Widget _onlinePanel(GameState state, int i, PlayingCard? lastCard,
+          {bool compact = false}) =>
+      PlayerPanel(
+        player: state.players[i],
+        rules: state.cardRules,
+        isCurrent: state.currentPlayerIndex == i,
+        cardCount: state.players[i].hand.length,
+        starterCount: i < state.starterCounts.length
+            ? state.starterCounts[i]
+            : 0,
+        isStarter: state.starterIndex == i,
+        satOut: state.phase == GamePhase.play && state.players[i].hand.isEmpty,
+        lastCard: lastCard,
+        compact: compact,
+      );
+
   Widget _bar(String text) => Container(
         width: double.infinity,
         color: const Color(0xFF14331F),
@@ -351,32 +381,37 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
             style: const TextStyle(color: Colors.white),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            alignment: WrapAlignment.center,
-            children: <Widget>[
-              for (final c in state.players[mySeat].hand)
-                CardView(
-                  card: c,
-                  rules: state.cardRules,
-                  selected: _selectedCard == c,
-                  onTap: () {
-                    if (exchange) {
-                      _run(() => _svc.mutate(widget.code,
-                          (e, s) => e.submitExchangeCard(mySeat, c)));
-                    } else {
-                      final rules = Rules(state.geometry);
-                      setState(() {
-                        _selectedCard = c;
-                        _candidateMoves =
-                            rules.legalMoves(state, state.players[mySeat], c);
-                        _swapFirstPiece = null;
-                      });
-                    }
-                  },
-                ),
-            ],
+          SizedBox(
+            height: 110,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              children: <Widget>[
+                for (final c in state.players[mySeat].hand)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: CardView(
+                      card: c,
+                      rules: state.cardRules,
+                      selected: _selectedCard == c,
+                      onTap: () {
+                        if (exchange) {
+                          _run(() => _svc.mutate(widget.code,
+                              (e, s) => e.submitExchangeCard(mySeat, c)));
+                        } else {
+                          final rules = Rules(state.geometry);
+                          setState(() {
+                            _selectedCard = c;
+                            _candidateMoves = rules.legalMoves(
+                                state, state.players[mySeat], c);
+                            _swapFirstPiece = null;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),

@@ -16,6 +16,7 @@ class PlayerPanel extends StatelessWidget {
     this.isStarter = false,
     this.satOut = false,
     this.lastCard,
+    this.compact = false,
   });
 
   final Player player;
@@ -26,24 +27,27 @@ class PlayerPanel extends StatelessWidget {
   final bool isStarter;
   final bool satOut;
   final PlayingCard? lastCard;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final double dotSize = compact ? 12 : 16;
+    final double nameSize = compact ? 12 : 14;
+    final double countSize = compact ? 11 : 13;
+    final double cardW = compact ? 30 : 38;
+    final double cardSlot = compact ? 46 : 58;
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.all(compact ? 5 : 8),
       decoration: BoxDecoration(
         color: isCurrent ? player.color.withOpacity(0.22) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isCurrent ? player.color : Colors.black26,
-          width: isCurrent ? 3 : 1,
+          width: isCurrent ? 2.5 : 1,
         ),
         boxShadow: isCurrent
             ? <BoxShadow>[
-                BoxShadow(
-                  color: player.color.withOpacity(0.6),
-                  blurRadius: 10,
-                ),
+                BoxShadow(color: player.color.withOpacity(0.6), blurRadius: 8),
               ]
             : null,
       ),
@@ -54,73 +58,77 @@ class PlayerPanel extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
+              if (isStarter) ...<Widget>[
+                const Icon(Icons.flag, size: 14, color: Color(0xFF8B5E3C)),
+                const SizedBox(width: 2),
+              ],
               Container(
-                width: 16,
-                height: 16,
+                width: dotSize,
+                height: dotSize,
                 decoration: BoxDecoration(
                   color: player.color,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.black26),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               Flexible(
                 child: Text(
                   player.name,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
+                    fontSize: nameSize,
                     fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          // Tydeligt STARTER-mærke.
-          if (isStarter)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF8B5E3C),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(Icons.flag, size: 14, color: Colors.white),
-                  SizedBox(width: 3),
-                  Text('STARTER',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold)),
-                ],
+          if (isStarter && !compact)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5E3C),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(Icons.flag, size: 14, color: Colors.white),
+                    SizedBox(width: 3),
+                    Text('STARTER',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold)),
+                  ],
+                ),
               ),
             ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              // Antal kort.
-              Icon(Icons.style, size: 14, color: Colors.grey.shade700),
+              Icon(Icons.style, size: 12, color: Colors.grey.shade700),
               const SizedBox(width: 2),
               Text(satOut ? 'over' : '$cardCount',
-                  style: const TextStyle(fontSize: 13)),
-              const SizedBox(width: 10),
-              // Tydeligt antal-starter-mærke.
+                  style: TextStyle(fontSize: countSize)),
+              const SizedBox(width: 6),
               _StartBadge(count: starterCount),
             ],
           ),
-          // Spillede kort ligger synligt under spilleren.
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           SizedBox(
-            height: 58,
+            height: cardSlot,
             child: lastCard != null
-                ? CardView(card: lastCard!, rules: rules, width: 38)
+                ? CardView(card: lastCard!, rules: rules, width: cardW)
                 : (satOut
                     ? const Text('sad over',
                         style: TextStyle(
-                            fontSize: 11, fontStyle: FontStyle.italic))
+                            fontSize: 10, fontStyle: FontStyle.italic))
                     : const SizedBox.shrink()),
           ),
         ],

@@ -148,55 +148,105 @@ class _GameScreenState extends ConsumerState<GameScreen>
         title: Text('Hånd #${state.handNumber}  •  ${_phaseLabel(state.phase)}'),
       ),
       body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.all(6),
-              child: Center(child: _panel(state, partner)),
-            ),
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  Padding(padding: const EdgeInsets.all(6), child: _panel(state, left)),
-                  Expanded(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: Stack(
-                            children: <Widget>[
-                              BoardView(
-                                state: state,
-                                viewerIndex: human.index,
-                                highlightedPieceIds: highlighted,
-                                animation: _animMoves.isEmpty
-                                    ? null
-                                    : BoardAnimation(_animMoves, _anim.value),
-                                onPieceTap: _animMoves.isEmpty
-                                    ? (id) => _handlePieceTap(state, id)
-                                    : null,
-                              ),
-                              if (_overlayCard != null) _buildOverlay(state),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(padding: const EdgeInsets.all(6), child: _panel(state, right)),
-                ],
-              ),
-            ),
-            _buildHumanArea(state, human),
-          ],
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final bool isMobile = c.maxWidth < 720;
+            return isMobile
+                ? _buildMobile(state, human, partner, left, right, highlighted)
+                : _buildWide(state, human, partner, left, right, highlighted);
+          },
         ),
       ),
     );
   }
 
-  Widget _panel(GameState state, Player p) => PlayerPanel(
+  Widget _buildWide(
+    GameState state,
+    Player human,
+    Player partner,
+    Player left,
+    Player right,
+    Set<String> highlighted,
+  ) {
+    return Column(
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.all(6),
+          child: Center(child: _panel(state, partner)),
+        ),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Padding(padding: const EdgeInsets.all(6), child: _panel(state, left)),
+              Expanded(child: _boardArea(state, human, highlighted)),
+              Padding(padding: const EdgeInsets.all(6), child: _panel(state, right)),
+            ],
+          ),
+        ),
+        _buildHumanArea(state, human),
+      ],
+    );
+  }
+
+  Widget _buildMobile(
+    GameState state,
+    Player human,
+    Player partner,
+    Player left,
+    Player right,
+    Set<String> highlighted,
+  ) {
+    return Column(
+      children: <Widget>[
+        // Kompakt række med modstandere/makker øverst.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Expanded(child: _panel(state, left, compact: true)),
+              const SizedBox(width: 4),
+              Expanded(child: _panel(state, partner, compact: true)),
+              const SizedBox(width: 4),
+              Expanded(child: _panel(state, right, compact: true)),
+            ],
+          ),
+        ),
+        Expanded(child: _boardArea(state, human, highlighted)),
+        _buildHumanArea(state, human),
+      ],
+    );
+  }
+
+  Widget _boardArea(GameState state, Player human, Set<String> highlighted) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Stack(
+            children: <Widget>[
+              BoardView(
+                state: state,
+                viewerIndex: human.index,
+                highlightedPieceIds: highlighted,
+                animation: _animMoves.isEmpty
+                    ? null
+                    : BoardAnimation(_animMoves, _anim.value),
+                onPieceTap: _animMoves.isEmpty
+                    ? (id) => _handlePieceTap(state, id)
+                    : null,
+              ),
+              if (_overlayCard != null) _buildOverlay(state),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _panel(GameState state, Player p, {bool compact = false}) => PlayerPanel(
         player: p,
         rules: state.cardRules,
         isCurrent: state.currentPlayerIndex == p.index,
@@ -207,6 +257,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         isStarter: state.starterIndex == p.index,
         satOut: state.phase == GamePhase.play && p.hand.isEmpty,
         lastCard: _lastPlayedCard[p.index],
+        compact: compact,
       );
 
   Widget _buildOverlay(GameState state) {
@@ -254,21 +305,26 @@ class _GameScreenState extends ConsumerState<GameScreen>
             style: const TextStyle(color: Colors.white),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            alignment: WrapAlignment.center,
-            children: <Widget>[
-              for (final PlayingCard c in human.hand)
-                CardView(
-                  card: c,
-                  rules: state.cardRules,
-                  selected: _humanExchangeChoice == c,
-                  onTap: humanDone
-                      ? null
-                      : () => setState(() => _humanExchangeChoice = c),
-                ),
-            ],
+          SizedBox(
+            height: 110,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              children: <Widget>[
+                for (final PlayingCard c in human.hand)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: CardView(
+                      card: c,
+                      rules: state.cardRules,
+                      selected: _humanExchangeChoice == c,
+                      onTap: humanDone
+                          ? null
+                          : () => setState(() => _humanExchangeChoice = c),
+                    ),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           if (!humanDone)
@@ -317,20 +373,27 @@ class _GameScreenState extends ConsumerState<GameScreen>
             Text('Du kan ikke rykke nogen brik',
                 style: TextStyle(color: Colors.red.shade300)),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            alignment: WrapAlignment.center,
-            children: <Widget>[
-              for (final PlayingCard c in human.hand)
-                CardView(
-                  card: c,
-                  rules: state.cardRules,
-                  faceUp: humanTurn,
-                  selected: _selectedCard == c,
-                  onTap: (!humanTurn || !humanCanPlay) ? null : () => _selectCard(c),
-                ),
-            ],
+          SizedBox(
+            height: 110,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              children: <Widget>[
+                for (final PlayingCard c in human.hand)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: CardView(
+                      card: c,
+                      rules: state.cardRules,
+                      faceUp: humanTurn,
+                      selected: _selectedCard == c,
+                      onTap: (!humanTurn || !humanCanPlay)
+                          ? null
+                          : () => _selectCard(c),
+                    ),
+                  ),
+              ],
+            ),
           ),
           if (humanTurn && !humanCanPlay && !busy)
             Padding(
