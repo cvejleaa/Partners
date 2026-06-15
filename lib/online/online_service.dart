@@ -234,6 +234,15 @@ class OnlineService {
     return s;
   }
 
+  /// Marker at den aktuelle bruger har set indlæg op til (eksklusivt) [count].
+  Future<void> markSeen(String code, int count) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _games.doc(code).update(<String, dynamic>{
+      'seen.$uid': count,
+    });
+  }
+
   /// Kør en handling på spillet i en transaktion (sikker mod samtidige skriv).
   Future<void> mutate(
     String code,
@@ -265,6 +274,7 @@ Map<String, dynamic> moveLogEntry(int seat, Move move) => <String, dynamic>{
       'steps': move.steps
           .map((s) => <String, dynamic>{
                 'pieceId': s.pieceId,
+                'from': posToMap(s.from),
                 'to': posToMap(s.to),
               })
           .toList(),

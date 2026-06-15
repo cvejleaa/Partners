@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/rules.dart';
+import '../../models/board.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
 import '../../models/playing_card.dart';
@@ -25,6 +26,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   String? _swapFirstPiece;
   String _lastProcessed = '';
   bool _busy = false;
+
+  // Catch-up replay-tilstand.
+  int _replayIndex = 0;
+  bool _replayActive = false;
+  int _replayTarget = 0;
 
   OnlineService get _svc => ref.read(onlineServiceProvider);
 
@@ -54,15 +60,119 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
           final myUid = _svc.uid;
           final int mySeat = uids.indexOf(myUid);
           final bool isHost = d['hostUid'] == myUid;
-          final lastByPlayer = _parseLog(d['log'] as List? ?? <dynamic>[]);
+          final log = (d['log'] as List? ?? <dynamic>[]);
+          final lastByPlayer = _parseLog(log);
 
-          // Vært driver AI-pladser og AI-bytte.
-          _maybeHostAct(state, isHost);
+          // Catch-up replay af træk, jeg ikke har set endnu.
+          final seenMap = (d['seen'] as Map?) ?? const <String, dynamic>{};
+          final int mySeen = (seenMap[myUid] as num?)?.toInt() ?? 0;
+          _maybeStartReplay(state, log, mySeen);
 
-          return _buildGame(state, mySeat, lastByPlayer);
+          // Vært driver AI-pladser og AI-bytte (kun når der ikke replayes).
+          if (!_replayActive) _maybeHostAct(state, isHost);
+
+          final names = (d['names'] as List).map((e) => e as String).toList();
+          return Stack(
+            children: <Widget>[
+              _buildGame(state, mySeat, lastByPlayer),
+              if (_replayActive) _replayOverlay(log, names, state),
+            ],
+          );
         },
       ),
     );
+  }
+
+  void _maybeStartReplay(GameState state, List log, int mySeen) {
+    if (_replayActive) return;
+    if (log.length <= mySeen) return;
+    setState(() {
+      _replayActive = true;
+      _replayIndex = mySeen;
+      _replayTarget = log.length;
+    });
+  }
+
+  Future<void> _finishReplay() async {
+    try {
+      await _svc.markSeen(widget.code, _replayTarget);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _replayActive = false);
+  }
+
+  Widget _replayOverlay(List log, List<String> names, GameState state) {
+    if (_replayIndex >= log.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _finishReplay());
+      return const SizedBox.shrink();
+    }
+    final m = Map<String, dynamic>.from(log[_replayIndex] as Map);
+    final int seat = (m['player'] as num).toInt();
+    final PlayingCard? card = m['card'] == null
+        ? null
+        : cardFromMap(Map<String, dynamic>.from(m['card'] as Map));
+    final desc = _describeStep(m);
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.7),
+        child: Center(
+          child: Card(
+            margin: const EdgeInsets.all(24),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text('Mens du var væk (${_replayIndex - 0 + 1}/${log.length})',
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  Text(seat < names.length ? names[seat] : 'Spiller $seat',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  if (card != null)
+                    CardView(card: card, rules: state.cardRules, width: 70),
+                  const SizedBox(height: 10),
+                  Text(desc, textAlign: TextAlign.center),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      TextButton(
+                        onPressed: () {
+                          setState(() => _replayIndex = log.length);
+                        },
+                        child: const Text('Spring over'),
+                      ),
+                      FilledButton(
+                        onPressed: () {
+                          setState(() => _replayIndex += 1);
+                        },
+                        child: Text(_replayIndex + 1 >= log.length
+                            ? 'Færdig'
+                            : 'Næste'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _describeStep(Map<String, dynamic> m) {
+    final steps = (m['steps'] as List?) ?? const <dynamic>[];
+    if (steps.isEmpty) return 'sad over';
+    if (steps.length == 2) return 'byttede to brikker';
+    final s = Map<String, dynamic>.from(steps.first as Map);
+    final to = posFromMap(Map<String, dynamic>.from(s['to'] as Map));
+    if (to is HomeStretchPosition) return 'rykkede en brik i hjemstrækket';
+    if (to is TrackPosition) return 'rykkede en brik til felt ${to.index}';
+    return 'flyttede en brik';
   }
 
   Map<int, PlayingCard> _parseLog(List log) {
