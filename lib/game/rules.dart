@@ -279,14 +279,14 @@ class Rules {
       return !state.isProtected(pos);
     }
 
-    final List<Piece> own =
-        player.pieces.where(eligible).toList();
-    final List<Piece> others = state.allPieces
-        .where((Piece p) => p.ownerIndex != player.index && eligible(p))
-        .toList();
-
-    for (final Piece a in own) {
-      for (final Piece b in others) {
+    // Byt to brikker fra FORSKELLIGE spillere (fx makker ↔ modstander).
+    // Må aldrig bytte to brikker for samme spiller.
+    final List<Piece> all = state.allPieces.where(eligible).toList();
+    for (int i = 0; i < all.length; i++) {
+      for (int j = i + 1; j < all.length; j++) {
+        final Piece a = all[i];
+        final Piece b = all[j];
+        if (a.ownerIndex == b.ownerIndex) continue;
         yield Move(
           card: card,
           steps: <MoveStep>[

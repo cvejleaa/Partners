@@ -13,7 +13,7 @@ import 'models/move.dart';
 import 'models/piece.dart';
 import 'models/player.dart';
 import 'models/playing_card.dart';
-import 'ui/screens/setup_screen.dart';
+import 'ui/screens/home_screen.dart';
 
 class PlayerSetup {
   PlayerSetup({
@@ -159,7 +159,7 @@ class PartnersApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF8B5E3C),
         useMaterial3: true,
       ),
-      home: const SetupScreen(),
+      home: const HomeScreen(),
     );
   }
 }

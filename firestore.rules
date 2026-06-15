@@ -1,13 +1,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Kortregel-konfiguration (admin-skærmen). Åben indtil vi tilføjer login.
+    // Kortregel-konfiguration (admin). Åben (ingen følsomme data).
     match /config/{document} {
       allow read, write: if true;
     }
-    // Plads til kommende online multiplayer-spil.
-    match /games/{document=**} {
-      allow read, write: if true;
+    // Brugerprofiler: alle indloggede kan slå op (til invitation); kun ejeren
+    // kan skrive sin egen.
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    // Spil: kræver login (v1: alle indloggede kan læse/skrive).
+    match /games/{game} {
+      allow read, write: if request.auth != null;
     }
   }
 }

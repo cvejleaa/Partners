@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:partners/game/card_rules.dart';
 import 'package:partners/models/board.dart';
 import 'package:partners/models/game_state.dart';
 import 'package:partners/models/piece.dart';
@@ -10,6 +11,7 @@ GameState makeState({
   List<List<PlayingCard>>? hands,
   int currentPlayerIndex = 0,
   GamePhase phase = GamePhase.play,
+  CardRules? cardRules,
 }) {
   const BoardGeometry geom = BoardGeometry();
   final List<Player> players = <Player>[];
@@ -48,5 +50,6 @@ GameState makeState({
     currentPlayerIndex: currentPlayerIndex,
     phase: phase,
     handNumber: 1,
+    cardRules: cardRules,
   );
 }

@@ -394,6 +394,61 @@ void main() {
     });
   });
 
+  group('Byt to brikker', () {
+    // Regelsæt hvor Knægt kan bytte.
+    final swapRules = CardRules.defaults()
+        .withRank(Rank.jack, const CardRuleConfig(swap: true));
+
+    test('kan bytte to forskellige spilleres brikker, men aldrig samme spillers',
+        () {
+      // Spiller 0 har to brikker ude (10, 20); makker (2) på 25; modstander
+      // (1) på 35.
+      final state = makeState(
+        cardRules: swapRules,
+        piecePositions: <List<PiecePosition>>[
+          <PiecePosition>[
+            const TrackPosition(10),
+            const TrackPosition(20),
+            const StartPosition(0, 2),
+            const StartPosition(0, 3),
+          ],
+          <PiecePosition>[
+            const TrackPosition(35),
+            const StartPosition(1, 1),
+            const StartPosition(1, 2),
+            const StartPosition(1, 3),
+          ],
+          <PiecePosition>[
+            const TrackPosition(25),
+            const StartPosition(2, 1),
+            const StartPosition(2, 2),
+            const StartPosition(2, 3),
+          ],
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(3, s)],
+        ],
+      );
+      final moves = rules.legalMoves(
+          state, state.players[0], const PlayingCard(Rank.jack, Suit.hearts));
+      // Alle bytte-træk har 2 steps og involverer to forskellige ejere.
+      expect(moves, isNotEmpty);
+      for (final m in moves) {
+        expect(m.steps.length, 2);
+        final a = state.pieceById(m.steps[0].pieceId);
+        final b = state.pieceById(m.steps[1].pieceId);
+        expect(a.ownerIndex == b.ownerIndex, isFalse);
+      }
+      // Der findes et bytte mellem makker (2) og modstander (1) — uden mig.
+      bool partnerVsOpp = moves.any((m) {
+        final o = <int>{
+          state.pieceById(m.steps[0].pieceId).ownerIndex,
+          state.pieceById(m.steps[1].pieceId).ownerIndex,
+        };
+        return o.containsAll(<int>{1, 2});
+      });
+      expect(partnerVsOpp, isTrue);
+    });
+  });
+
   group('Ud-kort', () {
     test('rent ud-kort kan kun rykke en brik ud', () {
       final state = makeState();
