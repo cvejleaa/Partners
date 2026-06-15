@@ -25,6 +25,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   PlayingCard? _selectedCard;
   List<Move> _candidateMoves = <Move>[];
   PlayingCard? _humanExchangeChoice;
+  String? _swapFirstPiece;
 
   final HeuristicAi _ai = HeuristicAi();
 
@@ -137,9 +138,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final Player left = state.players[(human.index + 1) % state.players.length];
     final Player right = state.players[(human.index + 3) % state.players.length];
 
-    final Set<String> highlighted = <String>{
-      for (final Move m in _candidateMoves) m.steps.first.pieceId,
-    };
+    final Set<String> highlighted = _highlightSet(state);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0E2A1A),
@@ -176,7 +175,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                                     ? null
                                     : BoardAnimation(_animMoves, _anim.value),
                                 onPieceTap: _animMoves.isEmpty
-                                    ? _handlePieceTap
+                                    ? (id) => _handlePieceTap(state, id)
                                     : null,
                               ),
                               if (_overlayCard != null) _buildOverlay(state),
@@ -347,6 +346,37 @@ class _GameScreenState extends ConsumerState<GameScreen>
     );
   }
 
+  bool _isSwapCard(GameState state, PlayingCard c) {
+    if (c.isExit) return false;
+    final cfg = state.cardRules.forRank(c.rank!);
+    return cfg.swap &&
+        cfg.forwardSteps.isEmpty &&
+        cfg.backwardSteps == null &&
+        cfg.splitTotal == null &&
+        !cfg.exitStart;
+  }
+
+  Set<String> _highlightSet(GameState state) {
+    final card = _selectedCard;
+    if (card != null && _isSwapCard(state, card)) {
+      if (_swapFirstPiece == null) {
+        return <String>{
+          for (final m in _candidateMoves)
+            for (final s in m.steps) s.pieceId,
+        };
+      }
+      final set = <String>{_swapFirstPiece!};
+      for (final m in _candidateMoves) {
+        final ids = m.steps.map((s) => s.pieceId).toList();
+        if (ids.contains(_swapFirstPiece)) {
+          set.addAll(ids.where((id) => id != _swapFirstPiece));
+        }
+      }
+      return set;
+    }
+    return <String>{for (final m in _candidateMoves) m.steps.first.pieceId};
+  }
+
   void _selectCard(PlayingCard c) {
     final state = ref.read(gameProvider);
     final List<Move> moves =
@@ -354,11 +384,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
     setState(() {
       _selectedCard = c;
       _candidateMoves = moves;
+      _swapFirstPiece = null;
     });
   }
 
-  void _handlePieceTap(String pieceId) {
+  void _handlePieceTap(GameState state, String pieceId) {
     if (_selectedCard == null) return;
+    if (_isSwapCard(state, _selectedCard!)) {
+      _handleSwapTap(state, pieceId);
+      return;
+    }
     final List<Move> matching = _candidateMoves
         .where((Move m) => m.steps.first.pieceId == pieceId)
         .toList();
@@ -368,6 +403,51 @@ class _GameScreenState extends ConsumerState<GameScreen>
     } else {
       _showMoveChoice(matching);
     }
+  }
+
+  void _handleSwapTap(GameState state, String pieceId) {
+    if (_swapFirstPiece == null) {
+      final participates =
+          _candidateMoves.any((m) => m.steps.any((s) => s.pieceId == pieceId));
+      if (participates) setState(() => _swapFirstPiece = pieceId);
+      return;
+    }
+    if (pieceId == _swapFirstPiece) {
+      setState(() => _swapFirstPiece = null);
+      return;
+    }
+    Move? found;
+    for (final m in _candidateMoves) {
+      final ids = m.steps.map((s) => s.pieceId).toSet();
+      if (ids.contains(_swapFirstPiece) && ids.contains(pieceId)) {
+        found = m;
+        break;
+      }
+    }
+    if (found != null) _confirmSwap(state, found);
+  }
+
+  Future<void> _confirmSwap(GameState state, Move move) async {
+    final a = state.pieceById(move.steps[0].pieceId);
+    final b = state.pieceById(move.steps[1].pieceId);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Byt brikker?'),
+        content: Text(
+            'Byt ${state.players[a.ownerIndex].name} og ${state.players[b.ownerIndex].name}?'),
+        actions: <Widget>[
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annullér')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Byt')),
+        ],
+      ),
+    );
+    setState(() => _swapFirstPiece = null);
+    if (ok == true) _applyMove(move);
   }
 
   Future<void> _showMoveChoice(List<Move> options) async {

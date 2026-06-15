@@ -22,6 +22,7 @@ class OnlineGameScreen extends ConsumerStatefulWidget {
 class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   PlayingCard? _selectedCard;
   List<Move> _candidateMoves = <Move>[];
+  String? _swapFirstPiece;
   String _lastProcessed = '';
   bool _busy = false;
 
@@ -124,9 +125,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   Widget _buildGame(
       GameState state, int mySeat, Map<int, PlayingCard> lastByPlayer) {
     final int viewer = mySeat >= 0 ? mySeat : 0;
-    final highlighted = <String>{
-      for (final m in _candidateMoves) m.steps.first.pieceId,
-    };
+    final highlighted = _highlightSet(state);
     return SafeArea(
       child: Column(
         children: <Widget>[
@@ -191,18 +190,98 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     );
   }
 
+  bool _isSwapCard(GameState state, PlayingCard c) {
+    if (c.isExit) return false;
+    final cfg = state.cardRules.forRank(c.rank!);
+    return cfg.swap &&
+        cfg.forwardSteps.isEmpty &&
+        cfg.backwardSteps == null &&
+        cfg.splitTotal == null &&
+        !cfg.exitStart;
+  }
+
+  Set<String> _highlightSet(GameState state) {
+    final card = _selectedCard;
+    if (card != null && _isSwapCard(state, card)) {
+      if (_swapFirstPiece == null) {
+        return <String>{
+          for (final m in _candidateMoves)
+            for (final s in m.steps) s.pieceId,
+        };
+      }
+      final set = <String>{_swapFirstPiece!};
+      for (final m in _candidateMoves) {
+        final ids = m.steps.map((s) => s.pieceId).toList();
+        if (ids.contains(_swapFirstPiece)) {
+          set.addAll(ids.where((id) => id != _swapFirstPiece));
+        }
+      }
+      return set;
+    }
+    return <String>{for (final m in _candidateMoves) m.steps.first.pieceId};
+  }
+
   ValueChanged<String>? _handlePieceTap(GameState state, int mySeat) {
     if (mySeat < 0) return null;
     if (state.phase != GamePhase.play || state.currentPlayerIndex != mySeat) {
       return null;
     }
     return (pieceId) {
+      if (_selectedCard != null && _isSwapCard(state, _selectedCard!)) {
+        _handleSwapTap(state, pieceId, mySeat);
+        return;
+      }
       final matching = _candidateMoves
           .where((m) => m.steps.first.pieceId == pieceId)
           .toList();
       if (matching.isEmpty) return;
       _play(matching.first, mySeat);
     };
+  }
+
+  void _handleSwapTap(GameState state, String pieceId, int mySeat) {
+    if (_swapFirstPiece == null) {
+      final participates =
+          _candidateMoves.any((m) => m.steps.any((s) => s.pieceId == pieceId));
+      if (participates) setState(() => _swapFirstPiece = pieceId);
+      return;
+    }
+    if (pieceId == _swapFirstPiece) {
+      setState(() => _swapFirstPiece = null);
+      return;
+    }
+    Move? found;
+    for (final m in _candidateMoves) {
+      final ids = m.steps.map((s) => s.pieceId).toSet();
+      if (ids.contains(_swapFirstPiece) && ids.contains(pieceId)) {
+        found = m;
+        break;
+      }
+    }
+    if (found != null) _confirmSwap(state, found, mySeat);
+  }
+
+  Future<void> _confirmSwap(GameState state, Move move, int mySeat) async {
+    final a = state.pieceById(move.steps[0].pieceId);
+    final b = state.pieceById(move.steps[1].pieceId);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Byt brikker?'),
+        content: Text(
+            'Byt ${state.players[a.ownerIndex].name} og ${state.players[b.ownerIndex].name}?'),
+        actions: <Widget>[
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annullér')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Byt')),
+        ],
+      ),
+    );
+    setState(() => _swapFirstPiece = null);
+    if (ok == true) _play(move, mySeat);
   }
 
   Widget _buildActionArea(GameState state, int mySeat) {
@@ -292,6 +371,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
                         _selectedCard = c;
                         _candidateMoves =
                             rules.legalMoves(state, state.players[mySeat], c);
+                        _swapFirstPiece = null;
                       });
                     }
                   },
