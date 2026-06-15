@@ -108,3 +108,10 @@ jobs:
           firebase deploy --only hosting --project "$FIREBASE_PROJECT_ID" --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
+
+      - name: Deploy Firestore-regler (kræver at Firestore er aktiveret)
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        continue-on-error: true
+        run: firebase deploy --only firestore:rules --project "$FIREBASE_PROJECT_ID" --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json

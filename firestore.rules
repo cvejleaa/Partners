@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Kortregel-konfiguration (admin-skærmen). Åben indtil vi tilføjer login.
+    match /config/{document} {
+      allow read, write: if true;
+    }
+    // Plads til kommende online multiplayer-spil.
+    match /games/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
