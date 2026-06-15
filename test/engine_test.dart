@@ -93,11 +93,14 @@ void main() {
     final engine = GameEngine(state: state, rng: Random(11));
 
     engine.startNewHand();
-    final Map<int, int> deckAfterDeal = <int, int>{};
+    final List<int> deckAfterDeal = <int>[];
     bool everyHandHas4OfEachKind = true;
+    int lastHand = -1;
 
-    void record() {
-      deckAfterDeal[state.handNumber] = state.deck.length;
+    void maybeRecord() {
+      if (state.handNumber == lastHand) return;
+      lastHand = state.handNumber;
+      deckAfterDeal.add(state.deck.length);
       final all = <PlayingCard>[
         ...state.deck,
         ...state.discard,
@@ -114,9 +117,9 @@ void main() {
       }
     }
 
-    record();
+    maybeRecord();
     int guard = 0;
-    while (state.handNumber < 4 && guard++ < 500) {
+    while (deckAfterDeal.length < 4 && guard++ < 500) {
       if (state.phase == GamePhase.exchange) {
         for (int i = 0; i < 4; i++) {
           engine.submitExchangeCard(i, state.players[i].hand.first);
@@ -124,15 +127,15 @@ void main() {
       } else if (state.phase == GamePhase.play) {
         engine.passHand(state.currentPlayerIndex);
       }
-      record();
+      maybeRecord();
     }
 
     // Samme cyklus: deles videre fra de 56 (40 → 24 → 8). Ny starter: blandes
     // om til 56 igen → 40 efter uddeling.
-    expect(deckAfterDeal[1], 40);
-    expect(deckAfterDeal[2], 24);
-    expect(deckAfterDeal[3], 8);
-    expect(deckAfterDeal[4], 40);
+    expect(deckAfterDeal[0], 40);
+    expect(deckAfterDeal[1], 24);
+    expect(deckAfterDeal[2], 8);
+    expect(deckAfterDeal[3], 40);
     expect(everyHandHas4OfEachKind, isTrue);
   });
 
@@ -165,11 +168,17 @@ void main() {
     final engine = GameEngine(state: state, rng: Random(5));
 
     engine.startNewHand();
-    final Map<int, int> starterByHand = <int, int>{};
-    starterByHand[state.handNumber] = state.starterIndex;
+    final List<int> starters = <int>[];
+    int lastHand = -1;
+    void maybeRecord() {
+      if (state.handNumber == lastHand) return;
+      lastHand = state.handNumber;
+      starters.add(state.starterIndex);
+    }
 
+    maybeRecord();
     int guard = 0;
-    while (state.handNumber < 4 && guard++ < 500) {
+    while (starters.length < 4 && guard++ < 500) {
       if (state.phase == GamePhase.exchange) {
         for (int i = 0; i < 4; i++) {
           engine.submitExchangeCard(i, state.players[i].hand.first);
@@ -178,12 +187,13 @@ void main() {
         // Alle passer på skift → runden slutter, og motoren starter næste.
         engine.passHand(state.currentPlayerIndex);
       }
-      starterByHand[state.handNumber] = state.starterIndex;
+      maybeRecord();
     }
-    expect(starterByHand[1], 0);
-    expect(starterByHand[2], 0);
-    expect(starterByHand[3], 0);
-    expect(starterByHand[4], 1);
+    // 3 runder med samme startende, derefter rotation med uret.
+    expect(starters[0], 0);
+    expect(starters[1], 0);
+    expect(starters[2], 0);
+    expect(starters[3], 1);
   });
 
   test('discardCard fjerner kort og avancerer spiller', () {
