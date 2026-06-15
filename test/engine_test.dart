@@ -64,28 +64,76 @@ void main() {
 
   test('flere hænder spilles efter hinanden uden at hænge', () {
     final state = makeState();
-    state.deck.addAll(_freshDeck());
     final engine = GameEngine(state: state, rng: Random(7));
     final ai = HeuristicAi(rng: Random(7));
 
-    for (int hand = 0; hand < 10; hand++) {
-      engine.startNewHand();
-      for (int i = 0; i < 4; i++) {
-        engine.submitExchangeCard(i, ai.chooseExchangeCard(state, i));
-      }
-      int safety = 100;
-      while (state.phase == GamePhase.play && safety-- > 0) {
+    engine.startNewHand();
+    int guard = 0;
+    while (state.handNumber < 6 &&
+        state.phase != GamePhase.gameOver &&
+        guard++ < 3000) {
+      if (state.phase == GamePhase.exchange) {
+        for (int i = 0; i < 4; i++) {
+          engine.submitExchangeCard(i, ai.chooseExchangeCard(state, i));
+        }
+      } else if (state.phase == GamePhase.play) {
         final m = ai.chooseMove(state, state.currentPlayerIndex);
         if (m != null) {
           engine.applyMove(state.currentPlayerIndex, m);
         } else {
-          engine.discardCard(state.currentPlayerIndex,
-              ai.chooseDiscard(state, state.currentPlayerIndex));
+          engine.passHand(state.currentPlayerIndex);
         }
       }
-      expect(safety, greaterThan(0));
-      if (state.phase == GamePhase.gameOver) break;
     }
+    expect(guard, lessThan(3000));
+  });
+
+  test('56 kort pr. kortgiver-cyklus; blandes om når starter skifter', () {
+    final state = makeState();
+    final engine = GameEngine(state: state, rng: Random(11));
+
+    engine.startNewHand();
+    final Map<int, int> deckAfterDeal = <int, int>{};
+    bool everyHandHas4OfEachKind = true;
+
+    void record() {
+      deckAfterDeal[state.handNumber] = state.deck.length;
+      final all = <PlayingCard>[
+        ...state.deck,
+        ...state.discard,
+        ...state.players.expand<PlayingCard>((p) => p.hand),
+      ];
+      if (all.length != 56) everyHandHas4OfEachKind = false;
+      final counts = <String, int>{};
+      for (final c in all) {
+        final key = c.isExit ? 'UD' : c.rank!.name;
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+      if (counts.length != 14 || counts.values.any((v) => v != 4)) {
+        everyHandHas4OfEachKind = false;
+      }
+    }
+
+    record();
+    int guard = 0;
+    while (state.handNumber < 4 && guard++ < 500) {
+      if (state.phase == GamePhase.exchange) {
+        for (int i = 0; i < 4; i++) {
+          engine.submitExchangeCard(i, state.players[i].hand.first);
+        }
+      } else if (state.phase == GamePhase.play) {
+        engine.passHand(state.currentPlayerIndex);
+      }
+      record();
+    }
+
+    // Samme cyklus: deles videre fra de 56 (40 → 24 → 8). Ny starter: blandes
+    // om til 56 igen → 40 efter uddeling.
+    expect(deckAfterDeal[1], 40);
+    expect(deckAfterDeal[2], 24);
+    expect(deckAfterDeal[3], 8);
+    expect(deckAfterDeal[4], 40);
+    expect(everyHandHas4OfEachKind, isTrue);
   });
 
   test('spiller uden lovligt træk smider hånden og sidder over', () {

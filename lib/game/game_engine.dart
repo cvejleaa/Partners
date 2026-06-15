@@ -30,28 +30,27 @@ class GameEngine extends ChangeNotifier {
 
   void startNewHand() {
     state.exchangeBuffer.clear();
-    final List<PlayingCard> all = <PlayingCard>[
-      ...state.deck,
-      ...state.discard,
-      ...state.players.expand<PlayingCard>((Player p) => p.hand),
-    ];
-    state.deck
-      ..clear()
-      ..addAll(all);
-    state.discard.clear();
-    for (final Player p in state.players) {
-      p.hand.clear();
+    // Ny kortgiver-cyklus (samme startende spiller i 3 runder): saml alle 56
+    // kort og bland, så der igen er 4 af hver slags. Inden for en cyklus deles
+    // der videre fra den samme bunke uden at blande om.
+    if (state.starterStreak == 0) {
+      state.deck
+        ..clear()
+        ..addAll(Deck.fresh());
+      state.discard.clear();
+      for (final Player p in state.players) {
+        p.hand.clear();
+      }
+      _deck.shuffle(state.deck);
     }
+    // Nødfald (bør ikke ske i normalt spil med 56 kort til 3 runder).
     if (state.deck.length < state.players.length * handSize) {
-      // Genfyld med et frisk dæk hvis vi mangler kort.
       state.deck.addAll(Deck.fresh());
+      _deck.shuffle(state.deck);
     }
-    _deck.shuffle(state.deck);
     for (int i = 0; i < handSize; i++) {
       for (int p = 0; p < state.players.length; p++) {
-        final Player player =
-            state.players[(state.dealerIndex + 1 + p) % state.players.length];
-        player.hand.add(state.deck.removeLast());
+        state.players[p].hand.add(state.deck.removeLast());
       }
     }
     if (state.starterIndex < state.starterCounts.length) {
