@@ -1,3 +1,4 @@
+import '../game/card_rules.dart';
 import 'board.dart';
 import 'piece.dart';
 import 'player.dart';
@@ -16,8 +17,10 @@ class GameState {
     required this.phase,
     required this.handNumber,
     this.winningTeamIndex,
+    CardRules? cardRules,
     Map<int, PlayingCard?>? exchangeBuffer,
-  }) : exchangeBuffer = exchangeBuffer ?? <int, PlayingCard?>{};
+  })  : cardRules = cardRules ?? CardRules.defaults(),
+        exchangeBuffer = exchangeBuffer ?? <int, PlayingCard?>{};
 
   final List<Player> players;
   final BoardGeometry geometry;
@@ -28,6 +31,9 @@ class GameState {
   GamePhase phase;
   int handNumber;
   int? winningTeamIndex;
+
+  /// Konfigurerbare kortregler (justeres på admin-skærmen).
+  final CardRules cardRules;
 
   /// Gemmer det kort, hver spiller har valgt at bytte med sin partner, indtil
   /// alle har valgt og byttet kan udføres.
@@ -42,6 +48,14 @@ class GameState {
     }
     return null;
   }
+
+  /// Alle brikker på et felt (kan være en stak af egne brikker).
+  List<Piece> piecesAt(PiecePosition position) =>
+      allPieces.where((Piece p) => p.position == position).toList();
+
+  /// Et felt er "beskyttet" (en dobbelt) når der står 2+ brikker på det.
+  /// Beskyttede brikker kan ikke slås hjem eller byttes.
+  bool isProtected(PiecePosition position) => piecesAt(position).length >= 2;
 
   Piece pieceById(String id) =>
       allPieces.firstWhere((Piece p) => p.id == id);

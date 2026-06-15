@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import 'game/card_rules.dart';
 import 'game/deck.dart';
 import 'game/game_engine.dart';
 import 'models/board.dart';
@@ -53,7 +54,7 @@ class GameController extends StateNotifier<GameState> {
     );
   }
 
-  void startGame(List<PlayerSetup> setups) {
+  void startGame(List<PlayerSetup> setups, {CardRules? cardRules}) {
     const BoardGeometry geom = BoardGeometry();
     final List<Player> players = <Player>[
       for (int i = 0; i < setups.length; i++)
@@ -81,6 +82,7 @@ class GameController extends StateNotifier<GameState> {
       currentPlayerIndex: 0,
       phase: GamePhase.setup,
       handNumber: 0,
+      cardRules: cardRules,
     );
     _engine = GameEngine(state: s, rng: _rng);
     state = s;
@@ -130,6 +132,7 @@ class GameController extends StateNotifier<GameState> {
       phase: e.phase,
       handNumber: e.handNumber,
       winningTeamIndex: e.winningTeamIndex,
+      cardRules: e.cardRules,
       exchangeBuffer: Map<int, PlayingCard?>.from(e.exchangeBuffer),
     );
   }

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../utils/palette.dart';
 import '../../app.dart';
+import '../../state/card_rules_controller.dart';
+import 'admin_screen.dart';
 import 'game_screen.dart';
 import 'self_test_screen.dart';
 
@@ -38,6 +40,17 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       appBar: AppBar(
         title: const Text('Partners — Opsætning'),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'Admin — kortfunktioner',
+            icon: const Icon(Icons.tune),
+            onPressed: () {
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AdminScreen(),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Kør selvtest',
             icon: const Icon(Icons.fact_check_outlined),
@@ -96,7 +109,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                               isHuman: i == 0,
                             ),
                         ];
-                        ref.read(gameProvider.notifier).startGame(setups);
+                        ref.read(gameProvider.notifier).startGame(
+                              setups,
+                              cardRules: ref.read(cardRulesProvider),
+                            );
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
                             builder: (_) => const GameScreen(),

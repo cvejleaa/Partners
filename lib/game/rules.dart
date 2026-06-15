@@ -4,12 +4,20 @@ import '../models/move.dart';
 import '../models/piece.dart';
 import '../models/player.dart';
 import '../models/playing_card.dart';
+import 'card_rules.dart';
+
+/// Udfald af at lande på et bane-felt.
+class _Landing {
+  const _Landing(this.legal, [this.capturedId]);
+  final bool legal;
+  final String? capturedId;
+}
 
 /// Regler for Partners.
 ///
 /// Funktionerne her er rene (ingen mutation af [GameState]) — de returnerer
-/// alle gyldige [Move] for et givet kort. Selve eksekveringen sker i
-/// [game_engine.dart].
+/// alle gyldige [Move] for et givet kort. Kortenes funktioner styres af
+/// [GameState.cardRules], så de kan justeres fra admin-skærmen.
 class Rules {
   Rules(this.geometry);
 
@@ -18,35 +26,15 @@ class Rules {
   /// Find alle gyldige [Move] som [player] kan lave med [card] i [state].
   List<Move> legalMoves(GameState state, Player player, PlayingCard card) {
     final List<Move> moves = <Move>[];
+    final CardRuleConfig cfg = state.cardRules.forRank(card.rank);
 
-    // 1) Es/Konge: gå ud af start (hvis brikker venter og udgangsfelt ikke
-    //    er optaget af en egen brik).
-    if (card.canExitStart) {
+    // 1) Gå ud af start (til eget ud-felt).
+    if (cfg.exitStart) {
       moves.addAll(_exitStartMoves(state, player, card));
     }
 
-    // 2) 4'er: 4 frem eller 4 tilbage på alle brikker på banen / hjemstræk.
-    if (card.rank == Rank.four) {
-      for (final Piece p in player.pieces) {
-        if (p.position is StartPosition) continue;
-        final Move? forward = _tryAdvance(state, player, p, 4, card);
-        if (forward != null) moves.add(forward);
-        final Move? backward = _tryReverse(state, p, 4, card);
-        if (backward != null) moves.add(backward);
-      }
-      return moves;
-    }
-
-    // 3) 7'er: total 7 felter splittet over en eller flere af spillerens egne
-    //    brikker (alle frem). Vi genererer alle gyldige split-kombinationer.
-    if (card.rank == Rank.seven) {
-      moves.addAll(_sevenMoves(state, player, card));
-      return moves;
-    }
-
-    // 4) Almindelige fremad-kort: prøv hver mulig værdi (1/11 for Es, 13 for
-    //    Konge, ellers et enkelt antal) på hver brik.
-    for (final int steps in card.forwardSteps) {
+    // 2) Almindelige fremad-skridt.
+    for (final int steps in cfg.forwardSteps) {
       for (final Piece p in player.pieces) {
         if (p.position is StartPosition) continue;
         final Move? m = _tryAdvance(state, player, p, steps, card);
@@ -54,11 +42,47 @@ class Rules {
       }
     }
 
+    // 3) Baglæns (kun på banen).
+    if (cfg.backwardSteps != null) {
+      for (final Piece p in player.pieces) {
+        if (p.position is! TrackPosition) continue;
+        final Move? m = _tryReverse(state, p, cfg.backwardSteps!, card);
+        if (m != null) moves.add(m);
+      }
+    }
+
+    // 4) Split (7'eren): total felter delt over flere egne brikker.
+    if (cfg.splitTotal != null) {
+      moves.addAll(_splitMoves(state, player, card, cfg.splitTotal!));
+    }
+
+    // 5) Byt to brikker (Knægt).
+    if (cfg.swap) {
+      moves.addAll(_swapMoves(state, player, card));
+    }
+
     return moves;
   }
 
   // ---------------------------------------------------------------------------
-  // Hjælpere
+  // Landings-logik (stak + beskyttelse)
+  // ---------------------------------------------------------------------------
+
+  /// Afgør om [ownerIndex] må lande på bane-feltet [to].
+  /// - Tomt felt: ok.
+  /// - Egne brikker: ok (stak ovenpå), intet slag.
+  /// - Præcis 1 modstander: slag.
+  /// - 2+ modstandere (beskyttet dobbelt): ulovligt.
+  _Landing _landing(GameState state, int ownerIndex, TrackPosition to) {
+    final List<Piece> occ = state.piecesAt(to);
+    if (occ.isEmpty) return const _Landing(true);
+    if (occ.first.ownerIndex == ownerIndex) return const _Landing(true);
+    if (occ.length >= 2) return const _Landing(false); // beskyttet
+    return _Landing(true, occ.first.id); // slag på enlig modstander
+  }
+
+  // ---------------------------------------------------------------------------
+  // Ud af start
   // ---------------------------------------------------------------------------
 
   Iterable<Move> _exitStartMoves(
@@ -70,9 +94,11 @@ class Rules {
         player.pieces.where((Piece p) => p.position is StartPosition).toList();
     if (inStart.isEmpty) return;
 
-    final int trackIndex = geometry.startTrackIndexFor(player.index);
-    final Piece? occupier = state.pieceAt(TrackPosition(trackIndex));
-    if (occupier != null && occupier.ownerIndex == player.index) return;
+    // En brik der kommer ud af start lander ALTID på spillerens eget ud-felt.
+    final TrackPosition udFelt =
+        TrackPosition(geometry.startTrackIndexFor(player.index));
+    final _Landing landing = _landing(state, player.index, udFelt);
+    if (!landing.legal) return;
 
     final Piece exiting = inStart.first;
     yield Move(
@@ -82,12 +108,16 @@ class Rules {
         MoveStep(
           pieceId: exiting.id,
           from: exiting.position,
-          to: TrackPosition(trackIndex),
-          capturedPieceId: occupier?.id,
+          to: udFelt,
+          capturedPieceId: landing.capturedId,
         ),
       ],
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Frem / tilbage
+  // ---------------------------------------------------------------------------
 
   Move? _tryAdvance(
     GameState state,
@@ -98,8 +128,17 @@ class Rules {
   ) {
     final PiecePosition? to = _advanceFrom(state, player, piece, steps);
     if (to == null) return null;
-    final Piece? captured = state.pieceAt(to);
-    if (captured != null && captured.ownerIndex == player.index) return null;
+    if (to is HomeStretchPosition) {
+      // Hjemstrækket: _advanceFrom har allerede sikret at felterne er frie.
+      return Move(
+        card: card,
+        steps: <MoveStep>[
+          MoveStep(pieceId: piece.id, from: piece.position, to: to),
+        ],
+      );
+    }
+    final _Landing landing = _landing(state, player.index, to as TrackPosition);
+    if (!landing.legal) return null;
     return Move(
       card: card,
       steps: <MoveStep>[
@@ -107,7 +146,7 @@ class Rules {
           pieceId: piece.id,
           from: piece.position,
           to: to,
-          capturedPieceId: captured?.id,
+          capturedPieceId: landing.capturedId,
         ),
       ],
     );
@@ -121,16 +160,12 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
-    // Bagud kan ikke gå ind i hjemstrækket og kan ikke krydse start-bås.
-    final int newIndex =
-        (pos.index - steps) % geometry.trackLength;
+    final int raw = (pos.index - steps) % geometry.trackLength;
     final int normalised =
-        newIndex < 0 ? newIndex + geometry.trackLength : newIndex;
+        raw < 0 ? raw + geometry.trackLength : raw;
     final TrackPosition target = TrackPosition(normalised);
-    final Piece? blocking = state.pieceAt(target);
-    if (blocking != null && blocking.ownerIndex == piece.ownerIndex) {
-      return null;
-    }
+    final _Landing landing = _landing(state, piece.ownerIndex, target);
+    if (!landing.legal) return null;
     return Move(
       card: card,
       steps: <MoveStep>[
@@ -138,16 +173,14 @@ class Rules {
           pieceId: piece.id,
           from: piece.position,
           to: target,
-          capturedPieceId: blocking?.id,
+          capturedPieceId: landing.capturedId,
         ),
       ],
     );
   }
 
-  /// Beregn ny position når [piece] skal gå [steps] felter frem fra sin
-  /// nuværende position. Returnerer null hvis trækket ikke kan gennemføres
-  /// (fx blokeret af egen brik undervejs i hjemstrækket, eller flere skridt
-  /// end der er plads til).
+  /// Geometrisk fremad-position. Returnerer null hvis trækket ikke er muligt.
+  /// Brikker i hjemstrækket kan KUN rykke længere ind (aldrig ud på banen igen).
   PiecePosition? _advanceFrom(
     GameState state,
     Player player,
@@ -160,24 +193,21 @@ class Rules {
     if (pos is HomeStretchPosition) {
       final int newSlot = pos.slot + steps;
       if (newSlot >= geometry.homeStretchLength) return null;
-      // I hjemstrækket må man ikke springe over egne brikker.
       for (int s = pos.slot + 1; s <= newSlot; s++) {
-        final Piece? blocking =
-            state.pieceAt(HomeStretchPosition(player.index, s));
-        if (blocking != null) return null;
+        if (state.pieceAt(HomeStretchPosition(player.index, s)) != null) {
+          return null;
+        }
       }
       return HomeStretchPosition(player.index, newSlot);
     }
 
     if (pos is TrackPosition) {
       final int entry = geometry.startTrackIndexFor(player.index);
-      // Antal felter frem til (og inkl.) eget udgangsfelt.
       final int distanceToEntry =
           (entry - pos.index - 1 + geometry.trackLength) %
                   geometry.trackLength +
               1;
-      // Hvis brikken ikke er kommet ud af start i denne runde
-      // (hasLeftStart=false) kan den ikke gå i hjemstrækket.
+      // Drej ind i EGET hjemstræk efter at have passeret eget ud-felt.
       if (steps > distanceToEntry && piece.hasLeftStart) {
         final int slot = steps - distanceToEntry - 1;
         if (slot >= geometry.homeStretchLength) return null;
@@ -188,36 +218,60 @@ class Rules {
         }
         return HomeStretchPosition(player.index, slot);
       }
-      // Lander præcis på eget udgangsfelt → bliv på track (brikken har valget
-      // om at fortsætte; for MVP forbliver den på banen).
-      // Eller almindeligt skridt på banen (inkl. forbi entry hvis !hasLeftStart).
-      final int newIndex =
-          (pos.index + steps) % geometry.trackLength;
+      final int newIndex = (pos.index + steps) % geometry.trackLength;
       return TrackPosition(newIndex);
     }
     return null;
   }
 
   // ---------------------------------------------------------------------------
-  // 7'eren — alle splits
+  // Byt to brikker (Knægt)
   // ---------------------------------------------------------------------------
 
-  Iterable<Move> _sevenMoves(
+  Iterable<Move> _swapMoves(
     GameState state,
     Player player,
     PlayingCard card,
+  ) sync* {
+    bool eligible(Piece p) =>
+        p.position is TrackPosition && !state.isProtected(p.position);
+
+    final List<Piece> own =
+        player.pieces.where(eligible).toList();
+    final List<Piece> others = state.allPieces
+        .where((Piece p) => p.ownerIndex != player.index && eligible(p))
+        .toList();
+
+    for (final Piece a in own) {
+      for (final Piece b in others) {
+        yield Move(
+          card: card,
+          steps: <MoveStep>[
+            MoveStep(pieceId: a.id, from: a.position, to: b.position),
+            MoveStep(pieceId: b.id, from: b.position, to: a.position),
+          ],
+        );
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Split (7'eren)
+  // ---------------------------------------------------------------------------
+
+  Iterable<Move> _splitMoves(
+    GameState state,
+    Player player,
+    PlayingCard card,
+    int total,
   ) sync* {
     final List<Piece> movable = player.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
     if (movable.isEmpty) return;
 
-    // Generer alle ordnede tildelinger af 7 totale skridt over op til 4
-    // brikker. For hver tildeling forsøges trækket sekventielt (for at fange
-    // mellemliggende blokeringer); kun tildelinger der lykkes hele vejen
-    // bliver til Moves.
     final List<List<int>> distributions =
-        _compositions(7, movable.length);
+        _compositions(total, movable.length);
     final Set<String> seen = <String>{};
 
     for (final List<int> dist in distributions) {
@@ -227,28 +281,30 @@ class Rules {
       for (int i = 0; i < movable.length; i++) {
         final int n = dist[i];
         if (n == 0) continue;
-        final Piece simPiece =
-            sim.pieceById(movable[i].id);
+        final Piece simPiece = sim.pieceById(movable[i].id);
         final Player simPlayer = sim.players[player.index];
-        final PiecePosition? to =
-            _advanceFrom(sim, simPlayer, simPiece, n);
+        final PiecePosition? to = _advanceFrom(sim, simPlayer, simPiece, n);
         if (to == null) {
           ok = false;
           break;
         }
-        final Piece? captured = sim.pieceAt(to);
-        if (captured != null && captured.ownerIndex == player.index) {
-          ok = false;
-          break;
+        String? capturedId;
+        if (to is TrackPosition) {
+          final _Landing landing = _landing(sim, player.index, to);
+          if (!landing.legal) {
+            ok = false;
+            break;
+          }
+          capturedId = landing.capturedId;
         }
         steps.add(MoveStep(
           pieceId: simPiece.id,
           from: simPiece.position,
           to: to,
-          capturedPieceId: captured?.id,
+          capturedPieceId: capturedId,
         ));
-        // Apply til sim
-        if (captured != null) {
+        if (capturedId != null) {
+          final Piece captured = sim.pieceById(capturedId);
           captured.position = StartPosition(
             captured.ownerIndex,
             _firstFreeStartSlot(sim, captured.ownerIndex),
@@ -276,8 +332,7 @@ class Rules {
 
   int _firstFreeStartSlot(GameState s, int ownerIndex) {
     for (int slot = 0; slot < 4; slot++) {
-      final Piece? occ = s.pieceAt(StartPosition(ownerIndex, slot));
-      if (occ == null) return slot;
+      if (s.pieceAt(StartPosition(ownerIndex, slot)) == null) return slot;
     }
     return 0;
   }
@@ -302,11 +357,11 @@ class Rules {
       phase: src.phase,
       handNumber: src.handNumber,
       winningTeamIndex: src.winningTeamIndex,
+      cardRules: src.cardRules,
     );
   }
 
   /// Alle kompositioner af [total] over [parts] ikke-negative heltal.
-  /// (Inkluderer rækkefølge.) Bruges til 7-split.
   List<List<int>> _compositions(int total, int parts) {
     final List<List<int>> out = <List<int>>[];
     void recurse(List<int> acc, int remaining, int slots) {

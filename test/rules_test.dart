@@ -18,10 +18,10 @@ void main() {
       expect(moves.where((Move m) => m.exitsStart), isNotEmpty);
     });
 
-    test('kan IKKE flytte brik ud af start hvis egen brik blokerer entry', () {
+    test('kan stable på eget ud-felt (egen brik blokerer ikke længere)', () {
       final state = makeState(piecePositions: <List<PiecePosition>>[
         <PiecePosition>[
-          const TrackPosition(0), // egen brik blokerer udgangsfelt
+          const TrackPosition(0), // egen brik står allerede på ud-feltet
           const StartPosition(0, 1),
           const StartPosition(0, 2),
           const StartPosition(0, 3),
@@ -31,7 +31,10 @@ void main() {
       ]);
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.ace, Suit.hearts));
-      expect(moves.where((Move m) => m.exitsStart), isEmpty);
+      final exit = moves.where((Move m) => m.exitsStart);
+      expect(exit, isNotEmpty);
+      // Stak på egen brik → intet slag.
+      expect(exit.first.steps.first.capturedPieceId, isNull);
     });
 
     test('når man slår modstander mens man kommer ud af start', () {
@@ -178,7 +181,7 @@ void main() {
       expect(hit.steps.first.capturedPieceId, isNotNull);
     });
 
-    test('kan ikke lande på egen brik', () {
+    test('kan stable på egen brik (intet slag)', () {
       final positions = <List<PiecePosition>>[
         <PiecePosition>[
           const TrackPosition(10),
@@ -196,6 +199,36 @@ void main() {
         (Move m) =>
             m.steps.first.from is TrackPosition &&
             (m.steps.first.from as TrackPosition).index == 10 &&
+            m.steps.first.to is TrackPosition &&
+            (m.steps.first.to as TrackPosition).index == 15,
+      );
+      expect(landingOn15, isNotEmpty);
+      expect(landingOn15.first.steps.first.capturedPieceId, isNull);
+    });
+
+    test('beskyttet dobbelt kan ikke slås', () {
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(10),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        // To modstanderbrikker på felt 15 = beskyttet dobbelt.
+        <PiecePosition>[
+          const TrackPosition(15),
+          const TrackPosition(15),
+          const StartPosition(1, 2),
+          const StartPosition(1, 3),
+        ],
+        for (int i = 2; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.five, Suit.hearts));
+      final landingOn15 = moves.where(
+        (Move m) =>
             m.steps.first.to is TrackPosition &&
             (m.steps.first.to as TrackPosition).index == 15,
       );

@@ -43,6 +43,20 @@ flutter analyze
 flutter test
 ```
 
+## Admin — justér kortfunktioner
+
+På forsiden er der et **tandhjuls-ikon** (Admin). Her kan du for hvert kort
+markere hvilke funktioner det har: *rykke en brik ud*, *rykke frem* (med antal
+felter, fx `1, 11`), *rykke tilbage*, *7-split (deles)* og *byt to brikker*.
+Ændringer gemmes lokalt og bruges næste gang du starter et spil. Reglerne kan
+nulstilles til standard.
+
+Brikker kan stå flere på samme felt (også ud-feltet). Står der **2+ egne
+brikker** på et felt ude, er det en *beskyttet dobbelt* — de kan ikke slås hjem
+eller byttes (modstandere må gerne passere forbi). Brikker der er nået i mål
+(hjemstrækket) kan ikke komme ud på banen igen, og en brik der kommer ud af
+start lander altid på sit eget ud-felt.
+
 ## Selvtest fra brugerfladen (ingen kode/terminal)
 
 Appen har en indbygget **Selvtest**-skærm. På forsiden (opsætning) er der et
