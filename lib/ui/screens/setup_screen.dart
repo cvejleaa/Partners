@@ -25,6 +25,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
   final List<int> _colorIdx = <int>[0, 1, 2, 3];
 
+  /// Hvilken plads spilleren selv sidder på.
+  int _humanSeat = 0;
+
   @override
   void dispose() {
     for (final TextEditingController c in _names) {
@@ -70,9 +73,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             const Text(
-              'Indtast navn og vælg farve for hver spiller. '
-              'Spiller 1 er menneske; Spiller 3 er din makker. '
-              'Spillere overfor hinanden danner hold.',
+              'Indtast navn og vælg farve for hver spiller. Marker din egen '
+              'plads med radioknappen — brættet roteres så du sidder nederst. '
+              'Pladsen overfor er din makker.',
             ),
             const SizedBox(height: 16),
             for (int i = 0; i < 4; i++) ...<Widget>[
@@ -80,8 +83,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 index: i,
                 nameController: _names[i],
                 colorIdx: _colorIdx[i],
-                onColorChanged: (int c) =>
-                    setState(() => _colorIdx[i] = c),
+                isHuman: i == _humanSeat,
+                onSelectHuman: () => setState(() => _humanSeat = i),
+                onColorChanged: (int c) => setState(() => _colorIdx[i] = c),
               ),
               const SizedBox(height: 8),
             ],
@@ -106,7 +110,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                                   ? 'Spiller ${i + 1}'
                                   : _names[i].text.trim(),
                               color: kPalette[_colorIdx[i]].color,
-                              isHuman: i == 0,
+                              isHuman: i == _humanSeat,
                             ),
                         ];
                         ref.read(gameProvider.notifier).startGame(
@@ -138,21 +142,30 @@ class _PlayerRow extends StatelessWidget {
     required this.index,
     required this.nameController,
     required this.colorIdx,
+    required this.isHuman,
+    required this.onSelectHuman,
     required this.onColorChanged,
   });
 
   final int index;
   final TextEditingController nameController;
   final int colorIdx;
+  final bool isHuman;
+  final VoidCallback onSelectHuman;
   final ValueChanged<int> onColorChanged;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
+        Radio<bool>(
+          value: true,
+          groupValue: isHuman ? true : null,
+          onChanged: (_) => onSelectHuman(),
+        ),
         SizedBox(
-          width: 90,
-          child: Text('Spiller ${index + 1}'),
+          width: 64,
+          child: Text(isHuman ? 'Dig' : 'AI ${index + 1}'),
         ),
         Expanded(
           child: TextField(

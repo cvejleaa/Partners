@@ -7,17 +7,32 @@ import '../../models/game_state.dart';
 import '../../models/piece.dart';
 import '../../models/player.dart';
 
+/// Beskriver brikker der animeres fra ét felt til et andet.
+class BoardAnimation {
+  const BoardAnimation(this.moves, this.progress);
+
+  /// pieceId -> (fra, til)
+  final Map<String, ({PiecePosition from, PiecePosition to})> moves;
+  final double progress;
+}
+
 class BoardView extends StatelessWidget {
   const BoardView({
     super.key,
     required this.state,
+    this.viewerIndex = 0,
     this.highlightedPieceIds = const <String>{},
+    this.animation,
     this.onPieceTap,
   });
 
   final GameState state;
+  final int viewerIndex;
   final Set<String> highlightedPieceIds;
+  final BoardAnimation? animation;
   final ValueChanged<String>? onPieceTap;
+
+  double get _rotation => pi - viewerIndex * (pi / 2);
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +45,9 @@ class BoardView extends StatelessWidget {
             size: Size.square(size),
             painter: _BoardPainter(
               state: state,
+              rotation: _rotation,
               highlighted: highlightedPieceIds,
+              animation: animation,
             ),
           ),
         );
@@ -41,7 +58,7 @@ class BoardView extends StatelessWidget {
   void _handleTap(Offset pos, double size) {
     if (onPieceTap == null) return;
     final List<_PiecePoint> points =
-        _BoardPainter.computePiecePoints(state, size);
+        _BoardPainter.computePiecePoints(state, size, _rotation);
     _PiecePoint? best;
     double bestDist = double.infinity;
     for (final _PiecePoint pp in points) {
@@ -51,7 +68,7 @@ class BoardView extends StatelessWidget {
         best = pp;
       }
     }
-    if (best != null && bestDist <= 28) {
+    if (best != null && bestDist <= 30) {
       onPieceTap!(best.pieceId);
     }
   }
@@ -64,68 +81,100 @@ class _PiecePoint {
   final Color color;
 }
 
+// ---------------------------------------------------------------------------
+// Geometri (statiske, rotation-bevidste hjælpere)
+// ---------------------------------------------------------------------------
+
+Offset _trackPoint(Offset c, double radius, int index, int trackLen, double rot) {
+  final double a = -pi / 2 + 2 * pi * index / trackLen + rot;
+  return Offset(c.dx + radius * cos(a), c.dy + radius * sin(a));
+}
+
+Offset _homePoint(
+    Offset c, double radius, int playerIndex, int slot, int trackLen, double rot) {
+  final int entry = playerIndex * (trackLen ~/ 4);
+  final double a = -pi / 2 + 2 * pi * entry / trackLen + rot;
+  final double r = radius - (slot + 1) * radius * 0.17;
+  return Offset(c.dx + r * cos(a), c.dy + r * sin(a));
+}
+
+Offset _startPoint(
+    Offset c, double radius, int playerIndex, int slot, int trackLen, double rot) {
+  final int entry = playerIndex * (trackLen ~/ 4);
+  final double aEntry = -pi / 2 + 2 * pi * entry / trackLen + rot;
+  final double rOuter = radius + radius * 0.22;
+  final double a = aEntry + (slot - 1.5) * 0.10;
+  return Offset(c.dx + rOuter * cos(a), c.dy + rOuter * sin(a));
+}
+
+Offset _posPoint(
+    PiecePosition pos, Offset c, double radius, int trackLen, double rot) {
+  if (pos is StartPosition) {
+    return _startPoint(c, radius, pos.ownerIndex, pos.slot, trackLen, rot);
+  } else if (pos is TrackPosition) {
+    return _trackPoint(c, radius, pos.index, trackLen, rot);
+  } else if (pos is HomeStretchPosition) {
+    return _homePoint(c, radius, pos.ownerIndex, pos.slot, trackLen, rot);
+  }
+  return c;
+}
+
 class _BoardPainter extends CustomPainter {
-  _BoardPainter({required this.state, required this.highlighted});
+  _BoardPainter({
+    required this.state,
+    required this.rotation,
+    required this.highlighted,
+    this.animation,
+  });
 
   final GameState state;
+  final double rotation;
   final Set<String> highlighted;
+  final BoardAnimation? animation;
 
   @override
   void paint(Canvas canvas, Size size) {
     final double dim = size.shortestSide;
     final Offset center = Offset(dim / 2, dim / 2);
-    final double trackRadius = dim * 0.40;
-    final double cellRadius = dim * 0.022;
+    final double tr = dim * 0.40;
+    final double cr = dim * 0.023;
     final int trackLen = state.geometry.trackLength;
     final int quarter = trackLen ~/ 4;
 
-    canvas.drawRect(
-        Offset.zero & size, Paint()..color = const Color(0xFFF5EAD2));
-
-    // Spor-felter + numre (1..14 mellem ud-felterne, "UD" på ud-felterne).
-    for (int i = 0; i < trackLen; i++) {
-      final Offset p = _trackPoint(center, trackRadius, i, trackLen);
-      final bool isEntry = i % quarter == 0;
-      canvas.drawCircle(p, cellRadius, Paint()..color = Colors.white);
-      canvas.drawCircle(
-        p,
-        cellRadius,
-        Paint()
-          ..color = Colors.black45
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.8,
-      );
-      if (!isEntry) {
-        _drawText(canvas, '${i % quarter}', p, cellRadius * 0.95,
-            Colors.black54);
-      }
-    }
-
-    // Udgangsfelter med farvet ring + "UD".
-    for (final Player pl in state.players) {
-      final int idx = state.geometry.startTrackIndexFor(pl.index);
-      final Offset p = _trackPoint(center, trackRadius, idx, trackLen);
-      canvas.drawCircle(
-        p,
-        cellRadius + 3,
-        Paint()
-          ..color = pl.color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
-      );
-      _drawText(canvas, 'UD', p, cellRadius * 0.8, pl.color);
-    }
+    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF14331F));
+    final Rect boardRect = Rect.fromCircle(center: center, radius: dim * 0.47);
+    canvas.drawCircle(
+      center,
+      dim * 0.47,
+      Paint()
+        ..color = Colors.black.withOpacity(0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
+    );
+    canvas.drawCircle(
+      center,
+      dim * 0.46,
+      Paint()
+        ..shader = const RadialGradient(
+          colors: <Color>[Color(0xFFF7ECD2), Color(0xFFE7D2A6)],
+        ).createShader(boardRect),
+    );
+    canvas.drawCircle(
+      center,
+      dim * 0.46,
+      Paint()
+        ..color = const Color(0xFF8B5E3C)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = dim * 0.012,
+    );
 
     // Hjemstræk.
     for (final Player pl in state.players) {
       for (int slot = 0; slot < state.geometry.homeStretchLength; slot++) {
-        final Offset p =
-            _homeStretchPoint(center, trackRadius, pl.index, slot, trackLen);
-        canvas.drawCircle(
-            p, cellRadius, Paint()..color = pl.color.withOpacity(0.18));
+        final Offset p = _homePoint(center, tr, pl.index, slot, trackLen, rotation);
+        canvas.drawCircle(p, cr, Paint()..color = pl.color.withOpacity(0.22));
         canvas.drawCircle(
           p,
-          cellRadius,
+          cr,
           Paint()
             ..color = pl.color
             ..style = PaintingStyle.stroke
@@ -134,16 +183,47 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
+    // Spor-felter + numre.
+    for (int i = 0; i < trackLen; i++) {
+      final Offset p = _trackPoint(center, tr, i, trackLen, rotation);
+      canvas.drawCircle(p, cr, Paint()..color = Colors.white);
+      canvas.drawCircle(
+        p,
+        cr,
+        Paint()
+          ..color = Colors.black38
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8,
+      );
+      if (i % quarter != 0) {
+        _text(canvas, '${i % quarter}', p, cr * 0.95, Colors.black54);
+      }
+    }
+
+    // Ud-felter.
+    for (final Player pl in state.players) {
+      final int idx = state.geometry.startTrackIndexFor(pl.index);
+      final Offset p = _trackPoint(center, tr, idx, trackLen, rotation);
+      canvas.drawCircle(p, cr + 1.5, Paint()..color = pl.color.withOpacity(0.25));
+      canvas.drawCircle(
+        p,
+        cr + 3,
+        Paint()
+          ..color = pl.color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+      _text(canvas, 'UD', p, cr * 0.8, pl.color);
+    }
+
     // Start-bås.
     for (final Player pl in state.players) {
       for (int slot = 0; slot < 4; slot++) {
-        final Offset p =
-            _startSlotPoint(center, trackRadius, pl.index, slot, trackLen);
-        canvas.drawCircle(
-            p, cellRadius, Paint()..color = pl.color.withOpacity(0.10));
+        final Offset p = _startPoint(center, tr, pl.index, slot, trackLen, rotation);
+        canvas.drawCircle(p, cr, Paint()..color = pl.color.withOpacity(0.12));
         canvas.drawCircle(
           p,
-          cellRadius,
+          cr,
           Paint()
             ..color = pl.color
             ..style = PaintingStyle.stroke
@@ -152,92 +232,111 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
-    // Brikker (stakkede brikker spredes en smule).
-    for (final _PiecePoint pp in computePiecePoints(state, dim)) {
-      final bool hl = highlighted.contains(pp.pieceId);
-      canvas.drawCircle(pp.center, cellRadius * 1.1, Paint()..color = pp.color);
-      canvas.drawCircle(
-        pp.center,
-        cellRadius * 1.1,
+    // Center-emblem.
+    canvas.drawCircle(center, dim * 0.11, Paint()..color = const Color(0xFF8B5E3C));
+    canvas.drawCircle(
+        center,
+        dim * 0.11,
         Paint()
-          ..color = hl ? Colors.amber : Colors.black87
+          ..color = const Color(0xFFEAD9B5)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = hl ? 3.5 : 1.5,
-      );
+          ..strokeWidth = 2);
+    _text(canvas, 'Partners', center, dim * 0.035, const Color(0xFFEAD9B5));
+
+    // Brikker (animeret hvis aktiv).
+    for (final _PiecePoint pp in computePiecePoints(state, dim, rotation)) {
+      Offset c = pp.center;
+      final BoardAnimation? anim = animation;
+      if (anim != null && anim.moves.containsKey(pp.pieceId)) {
+        final m = anim.moves[pp.pieceId]!;
+        final Offset from = _posPoint(m.from, center, tr, trackLen, rotation);
+        final Offset to = _posPoint(m.to, center, tr, trackLen, rotation);
+        c = Offset.lerp(from, to, Curves.easeInOut.transform(anim.progress))!;
+      }
+      _drawPiece(canvas, c, cr, pp.color, highlighted.contains(pp.pieceId));
     }
 
-    // Antal-badge på beskyttede dobbelt-felter (2+ brikker på samme spor-felt).
-    _drawStackBadges(canvas, dim, cellRadius);
-  }
-
-  void _drawStackBadges(Canvas canvas, double dim, double cellRadius) {
-    final Offset center = Offset(dim / 2, dim / 2);
-    final double trackRadius = dim * 0.40;
-    final int trackLen = state.geometry.trackLength;
-    final Map<int, List<Piece>> byTrack = <int, List<Piece>>{};
+    // Antal-badge på dobbelt-felter.
+    final Map<int, int> byTrack = <int, int>{};
     for (final Piece pc in state.allPieces) {
-      final p = pc.position;
-      if (p is TrackPosition) {
-        byTrack.putIfAbsent(p.index, () => <Piece>[]).add(pc);
+      final pos = pc.position;
+      if (pos is TrackPosition) {
+        byTrack[pos.index] = (byTrack[pos.index] ?? 0) + 1;
       }
     }
-    byTrack.forEach((int index, List<Piece> pieces) {
-      if (pieces.length < 2) return;
-      final Offset p = _trackPoint(center, trackRadius, index, trackLen);
-      final Offset badge = p + Offset(cellRadius, -cellRadius);
-      canvas.drawCircle(badge, cellRadius * 0.7, Paint()..color = Colors.black);
-      _drawText(canvas, '${pieces.length}', badge, cellRadius * 0.8,
-          Colors.white);
+    byTrack.forEach((int index, int count) {
+      if (count < 2) return;
+      final Offset p = _trackPoint(center, tr, index, trackLen, rotation);
+      final Offset badge = p + Offset(cr, -cr);
+      canvas.drawCircle(badge, cr * 0.7, Paint()..color = Colors.black);
+      _text(canvas, '$count', badge, cr * 0.8, Colors.white);
     });
   }
 
-  static void _drawText(
+  void _drawPiece(Canvas canvas, Offset c, double r, Color color, bool hl) {
+    final double pr = r * 1.15;
+    canvas.drawCircle(
+        c + const Offset(0, 1.5), pr, Paint()..color = Colors.black.withOpacity(0.3));
+    canvas.drawCircle(
+      c,
+      pr,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.3, -0.4),
+          colors: <Color>[Color.lerp(color, Colors.white, 0.45)!, color],
+        ).createShader(Rect.fromCircle(center: c, radius: pr)),
+    );
+    canvas.drawCircle(
+      c,
+      pr,
+      Paint()
+        ..color = hl ? Colors.amber : Colors.black87
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = hl ? 3.5 : 1.4,
+    );
+  }
+
+  static void _text(
       Canvas canvas, String s, Offset center, double fontSize, Color color) {
     final TextPainter tp = TextPainter(
       text: TextSpan(
         text: s,
         style: TextStyle(
-            fontSize: fontSize, color: color, fontWeight: FontWeight.w600),
+            fontSize: fontSize, color: color, fontWeight: FontWeight.w700),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
   }
 
-  static List<_PiecePoint> computePiecePoints(GameState state, double dim) {
+  static List<_PiecePoint> computePiecePoints(
+      GameState state, double dim, double rotation) {
     final Offset center = Offset(dim / 2, dim / 2);
-    final double trackRadius = dim * 0.40;
+    final double tr = dim * 0.40;
     final int trackLen = state.geometry.trackLength;
     final double spread = dim * 0.016;
 
-    // Saml base-punkter + grupper efter felt (kun spor-felter stakker).
     final List<_PiecePoint> bases = <_PiecePoint>[];
     final List<String> keys = <String>[];
     for (final Player pl in state.players) {
       for (final Piece piece in pl.pieces) {
         final PiecePosition pos = piece.position;
-        final Offset p;
         final String key;
         if (pos is StartPosition) {
-          p = _startSlotPoint(
-              center, trackRadius, pos.ownerIndex, pos.slot, trackLen);
           key = 'S${pos.ownerIndex}.${pos.slot}';
         } else if (pos is TrackPosition) {
-          p = _trackPoint(center, trackRadius, pos.index, trackLen);
           key = 'T${pos.index}';
         } else if (pos is HomeStretchPosition) {
-          p = _homeStretchPoint(
-              center, trackRadius, pos.ownerIndex, pos.slot, trackLen);
           key = 'H${pos.ownerIndex}.${pos.slot}';
         } else {
           continue;
         }
-        bases.add(_PiecePoint(piece.id, p, pl.color));
+        bases.add(_PiecePoint(
+            piece.id, _posPoint(pos, center, tr, trackLen, rotation), pl.color));
         keys.add(key);
       }
     }
 
-    // Tæl pr. felt og tildel offset til stakkede brikker.
     final Map<String, int> counts = <String, int>{};
     for (final String k in keys) {
       counts[k] = (counts[k] ?? 0) + 1;
@@ -254,50 +353,16 @@ class _BoardPainter extends CustomPainter {
         final double angle = 2 * pi * idx / n;
         offset = Offset(cos(angle), sin(angle)) * spread;
       }
-      out.add(_PiecePoint(bases[i].pieceId, bases[i].center + offset,
-          bases[i].color));
+      out.add(_PiecePoint(
+          bases[i].pieceId, bases[i].center + offset, bases[i].color));
     }
     return out;
   }
 
-  static Offset _trackPoint(
-      Offset center, double radius, int index, int trackLen) {
-    final double angle = -pi / 2 + 2 * pi * index / trackLen;
-    return Offset(
-        center.dx + radius * cos(angle), center.dy + radius * sin(angle));
-  }
-
-  static Offset _homeStretchPoint(
-    Offset center,
-    double radius,
-    int playerIndex,
-    int slot,
-    int trackLen,
-  ) {
-    final int entry = playerIndex * (trackLen ~/ 4);
-    final double angle = -pi / 2 + 2 * pi * entry / trackLen;
-    final double r = radius - (slot + 1) * radius * 0.18;
-    return Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
-  }
-
-  static Offset _startSlotPoint(
-    Offset center,
-    double radius,
-    int playerIndex,
-    int slot,
-    int trackLen,
-  ) {
-    final int entry = playerIndex * (trackLen ~/ 4);
-    final double angleEntry = -pi / 2 + 2 * pi * entry / trackLen;
-    final double rOuter = radius + radius * 0.22;
-    final double angle = angleEntry + (slot - 1.5) * 0.10;
-    return Offset(
-      center.dx + rOuter * cos(angle),
-      center.dy + rOuter * sin(angle),
-    );
-  }
-
   @override
   bool shouldRepaint(covariant _BoardPainter old) =>
-      old.state != state || old.highlighted != highlighted;
+      old.state != state ||
+      old.highlighted != highlighted ||
+      old.animation != animation ||
+      old.rotation != rotation;
 }
