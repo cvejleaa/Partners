@@ -32,7 +32,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   Map<String, ({PiecePosition from, PiecePosition to})> _animMoves = {};
   PlayingCard? _overlayCard;
   int? _overlayBy;
-  final Map<int, String> _lastCardByPlayer = <int, String>{};
+  final Map<int, PlayingCard> _lastPlayedCard = <int, PlayingCard>{};
 
   @override
   void initState() {
@@ -61,6 +61,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
   void _scheduleAi() {
     final state = ref.read(gameProvider);
     if (state.phase == GamePhase.exchange) {
+      // Ny runde: ryd forrige spillede kort.
+      _lastPlayedCard.clear();
       final game = ref.read(gameProvider.notifier);
       for (final Player p in state.players) {
         if (!p.isHuman && !state.exchangeBuffer.containsKey(p.index)) {
@@ -80,7 +82,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         if (move != null) {
           _playMove(idx, move);
         } else {
-          setState(() => _lastCardByPlayer[idx] = 'sad over');
+          setState(() => _lastPlayedCard.remove(idx));
           ref.read(gameProvider.notifier).passHand(idx);
           setState(() {});
           _scheduleAi();
@@ -99,7 +101,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     }
     setState(() {
       _animMoves = animMoves;
-      _lastCardByPlayer[idx] = _cardLabel(move.card);
+      _lastPlayedCard[idx] = move.card;
       _overlayCard = isHuman ? null : move.card;
       _overlayBy = isHuman ? null : idx;
       _selectedCard = null;
@@ -116,8 +118,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _scheduleAi();
     });
   }
-
-  String _cardLabel(PlayingCard c) => c.isExit ? 'UD ♥' : c.rankLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -199,6 +199,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   Widget _panel(GameState state, Player p) => PlayerPanel(
         player: p,
+        rules: state.cardRules,
         isCurrent: state.currentPlayerIndex == p.index,
         cardCount: p.hand.length,
         starterCount: p.index < state.starterCounts.length
@@ -206,7 +207,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
             : 0,
         isStarter: state.starterIndex == p.index,
         satOut: state.phase == GamePhase.play && p.hand.isEmpty,
-        lastCardLabel: _lastCardByPlayer[p.index],
+        lastCard: _lastPlayedCard[p.index],
       );
 
   Widget _buildOverlay(GameState state) {
