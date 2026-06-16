@@ -134,14 +134,11 @@ class Rules {
         player.pieces.where((Piece p) => p.position is StartPosition).toList();
     if (inStart.isEmpty) return;
 
-    // En brik der kommer ud af start lander direkte på spillerens første
-    // nummererede felt (felt "1"), dvs. ringindeks playerIndex*14. Ud-feltet
-    // er ikke et felt på ringen og tælles aldrig med.
-    final TrackPosition firstField =
-        TrackPosition(geometry.startTrackIndexFor(player.index));
-    final _Landing landing = _landing(state, player.index, firstField);
-    if (!landing.legal) return;
-
+    // En brik der kommer ud af start lander på spillerens UD-FELT — en sikker
+    // lomme uden for ringen, lige før felt 1. Først ved et efterfølgende
+    // fremad-træk rykker brikken ind på de nummererede felter (ud-felt + 1 =
+    // felt 1). Ud-feltet kan ikke være optaget af modstandere, så ingen
+    // landings-/slag-tjek er nødvendigt.
     final Piece exiting = inStart.first;
     yield Move(
       card: card,
@@ -150,9 +147,7 @@ class Rules {
         MoveStep(
           pieceId: exiting.id,
           from: exiting.position,
-          to: firstField,
-          capturedPieceId: landing.capturedId,
-          burnsMover: landing.burnsMover,
+          to: ExitPosition(player.index),
         ),
       ],
     );
@@ -240,6 +235,21 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is StartPosition) return null;
+
+    if (pos is ExitPosition) {
+      // Fra ud-feltet: felt 1 er første skridt (ud-felt + 1 = felt 1). N skridt
+      // → felt N. Brikken kan aldrig nå hjemstrækket direkte herfra (N er lille).
+      if (steps <= 0) return null;
+      final int len = geometry.trackLength;
+      final int entry = geometry.startTrackIndexFor(piece.ownerIndex);
+      int idx = entry; // efter 1. skridt står brikken på felt 1 (= entry)
+      for (int step = 1; step < steps; step++) {
+        final int next = (idx + 1) % len;
+        if (_entryBlocked(state, next, piece.ownerIndex)) return null;
+        idx = next;
+      }
+      return TrackPosition(idx);
+    }
 
     if (pos is HomeStretchPosition) {
       final int newSlot = pos.slot + steps;

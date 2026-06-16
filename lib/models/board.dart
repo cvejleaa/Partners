@@ -42,6 +42,22 @@ class StartPosition extends PiecePosition {
   int get hashCode => Object.hash('start', ownerIndex, slot);
 }
 
+/// Ud-feltet (udgangsfelt) for en spiller — en lomme UDEN for ringen, lige før
+/// spillerens felt 1. En brik der kommer ud af start lander her. Den er sikker:
+/// andre spillere passerer den ikke og kan ikke slå en brik der. Et fremad-træk
+/// på N rykker brikken fra ud-feltet ind på felt N (ud-felt + 1 = felt 1).
+class ExitPosition extends PiecePosition {
+  const ExitPosition(this.ownerIndex);
+  final int ownerIndex; // 0..3
+
+  @override
+  bool operator ==(Object other) =>
+      other is ExitPosition && other.ownerIndex == ownerIndex;
+
+  @override
+  int get hashCode => Object.hash('exit', ownerIndex);
+}
+
 class TrackPosition extends PiecePosition {
   const TrackPosition(this.index);
   final int index; // 0..trackLength-1

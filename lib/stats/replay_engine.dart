@@ -150,7 +150,8 @@ ReplayResult replayGame({
       }
 
       // Tæl "ud af start" og "ind i hjemstræk"-overgange.
-      if (mover.position is StartPosition && to is TrackPosition) {
+      if (mover.position is StartPosition &&
+          (to is TrackPosition || to is ExitPosition)) {
         fromStart += 1;
       }
       if (mover.position is! HomeStretchPosition && to is HomeStretchPosition) {
@@ -159,7 +160,9 @@ ReplayResult replayGame({
 
       // Anvend selve flytningen.
       mover.position = to;
-      if (mover.position is TrackPosition) mover.hasLeftStart = true;
+      if (mover.position is TrackPosition || mover.position is ExitPosition) {
+        mover.hasLeftStart = true;
+      }
     }
 
     events.add(ReplayEvent(

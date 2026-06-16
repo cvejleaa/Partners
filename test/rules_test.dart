@@ -38,11 +38,14 @@ void main() {
       expect(exit.first.steps.first.capturedPieceId, isNull);
     });
 
-    test('når man slår modstander mens man kommer ud af start', () {
+    test('kommer ud på ud-feltet (ikke felt 1, intet slag)', () {
+      // Selv hvis en modstander står på felt 1 (index 0), lander den
+      // udgående brik på ud-feltet (ExitPosition) — ikke på felt 1 — og slår
+      // derfor ingen.
       final positions = <List<PiecePosition>>[
         <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(0, s)],
         <PiecePosition>[
-          const TrackPosition(0), // modstander på spiller 0's udgangsfelt
+          const TrackPosition(0), // modstander på spiller 0's felt 1
           const StartPosition(1, 1),
           const StartPosition(1, 2),
           const StartPosition(1, 3),
@@ -54,7 +57,59 @@ void main() {
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.king, Suit.hearts));
       final exit = moves.firstWhere((Move m) => m.exitsStart);
-      expect(exit.steps.first.capturedPieceId, isNotNull);
+      expect(exit.steps.first.to, const ExitPosition(0));
+      expect(exit.steps.first.capturedPieceId, isNull);
+    });
+
+    test('slår modstander når man rykker fra ud-feltet ind på felt 1', () {
+      // Egen brik står på ud-feltet; en modstander står på felt 1 (index 0).
+      // Et 1-skridt (Es) rykker fra ud-feltet ind på felt 1 og slår.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const ExitPosition(0),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        <PiecePosition>[
+          const TrackPosition(0), // modstander på spiller 0's felt 1
+          const StartPosition(1, 1),
+          const StartPosition(1, 2),
+          const StartPosition(1, 3),
+        ],
+        for (int i = 2; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.ace, Suit.hearts));
+      final hit = moves.firstWhere((Move m) =>
+          !m.exitsStart &&
+          m.steps.first.to is TrackPosition &&
+          (m.steps.first.to as TrackPosition).index == 0);
+      expect(hit.steps.first.capturedPieceId, isNotNull);
+    });
+
+    test('ud-felt + 7 lander på felt 7', () {
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const ExitPosition(0),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.seven, Suit.hearts));
+      // 7'eren deles; med kun én brik i spil lander den på felt 7 (index 6).
+      final to7 = moves.any((Move m) =>
+          m.steps.length == 1 &&
+          m.steps.first.to is TrackPosition &&
+          (m.steps.first.to as TrackPosition).index == 6);
+      expect(to7, isTrue);
     });
 
     test('1 og 11 frem er gyldige fra banen', () {

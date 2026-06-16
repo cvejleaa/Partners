@@ -125,12 +125,17 @@ class HeuristicAi implements AiPlayer {
         // Slag på makker er en katastrofe — gør det altid uattraktivt.
         score += capturedIsTeammate ? -500 : 100;
       }
-      if (step.from is StartPosition && step.to is TrackPosition) {
+      if (step.from is StartPosition &&
+          (step.to is TrackPosition || step.to is ExitPosition)) {
         // Egen ud-af-start vægter mest; gør lidt mindre for makker.
         score += movedIsTeammate && movedPiece.ownerIndex != me.index ? 40 : 80;
       }
       if (step.to is HomeStretchPosition) {
         score += 50;
+      }
+      // Udvikl brikker fra ud-feltet ind på banen (ellers bliver de stående).
+      if (step.from is ExitPosition && step.to is TrackPosition) {
+        score += movedIsTeammate && movedPiece.ownerIndex != me.index ? 6 : 10;
       }
       // Fremad-progres måles mod brikkens EGEN hjem-indgang.
       if (step.from is TrackPosition && step.to is TrackPosition) {

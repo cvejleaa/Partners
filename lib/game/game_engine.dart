@@ -149,7 +149,8 @@ class GameEngine extends ChangeNotifier {
         captured.hasLeftStart = false;
       }
       moving.position = step.to;
-      if (step.from is StartPosition && step.to is TrackPosition) {
+      if (step.from is StartPosition &&
+          (step.to is TrackPosition || step.to is ExitPosition)) {
         moving.hasLeftStart = true;
       }
     }

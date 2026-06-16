@@ -107,10 +107,20 @@ Offset _startPoint(
   return Offset(c.dx + rOuter * cos(a), c.dy + rOuter * sin(a));
 }
 
+Offset _exitPoint(
+    Offset c, double radius, int playerIndex, int trackLen, double rot) {
+  final int entry = playerIndex * (trackLen ~/ 4);
+  final double a = -pi / 2 + 2 * pi * entry / trackLen + rot;
+  final double r = radius * 1.126; // lige uden for ringen, ved UD-markøren
+  return Offset(c.dx + r * cos(a), c.dy + r * sin(a));
+}
+
 Offset _posPoint(
     PiecePosition pos, Offset c, double radius, int trackLen, double rot) {
   if (pos is StartPosition) {
     return _startPoint(c, radius, pos.ownerIndex, pos.slot, trackLen, rot);
+  } else if (pos is ExitPosition) {
+    return _exitPoint(c, radius, pos.ownerIndex, trackLen, rot);
   } else if (pos is TrackPosition) {
     return _trackPoint(c, radius, pos.index, trackLen, rot);
   } else if (pos is HomeStretchPosition) {
@@ -334,6 +344,8 @@ class _BoardPainter extends CustomPainter {
         final String key;
         if (pos is StartPosition) {
           key = 'S${pos.ownerIndex}.${pos.slot}';
+        } else if (pos is ExitPosition) {
+          key = 'E${pos.ownerIndex}';
         } else if (pos is TrackPosition) {
           key = 'T${pos.index}';
         } else if (pos is HomeStretchPosition) {

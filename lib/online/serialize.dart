@@ -19,6 +19,7 @@ PlayingCard cardFromMap(Map<String, dynamic> m) => m['e'] == true
 
 Map<String, dynamic> posToMap(PiecePosition p) {
   if (p is StartPosition) return {'t': 'start', 'o': p.ownerIndex, 's': p.slot};
+  if (p is ExitPosition) return {'t': 'exit', 'o': p.ownerIndex};
   if (p is TrackPosition) return {'t': 'track', 'i': p.index};
   if (p is HomeStretchPosition) {
     return {'t': 'home', 'o': p.ownerIndex, 's': p.slot};
@@ -30,6 +31,8 @@ PiecePosition posFromMap(Map<String, dynamic> m) {
   switch (m['t'] as String) {
     case 'start':
       return StartPosition((m['o'] as num).toInt(), (m['s'] as num).toInt());
+    case 'exit':
+      return ExitPosition((m['o'] as num).toInt());
     case 'track':
       return TrackPosition((m['i'] as num).toInt());
     case 'home':
