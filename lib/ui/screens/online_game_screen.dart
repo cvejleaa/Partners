@@ -8,6 +8,7 @@ import '../../models/move.dart';
 import '../../models/playing_card.dart';
 import '../../online/online_service.dart';
 import '../../online/serialize.dart';
+import '../../stats/stats_repository.dart';
 import '../widgets/board_view.dart';
 import '../widgets/card_view.dart';
 import '../widgets/player_panel.dart';
@@ -31,6 +32,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   int _replayIndex = 0;
   bool _replayActive = false;
   int _replayTarget = 0;
+
+  // Marker at vi har genberegnet stats for dette spil (ellers fyrer det
+  // hver gang stream'en sender en opdatering efter spillet er over).
+  bool _statsRecomputed = false;
 
   OnlineService get _svc => ref.read(onlineServiceProvider);
 
@@ -70,6 +75,13 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
 
           // Vært driver AI-pladser og AI-bytte (kun når der ikke replayes).
           if (!_replayActive) _maybeHostAct(state, isHost);
+
+          // Når spillet lige er afsluttet: genberegn alles stats én gang.
+          if (state.winningTeamIndex != null && !_statsRecomputed) {
+            _statsRecomputed = true;
+            // ignore: discarded_futures
+            StatsRepository().recomputeAndSave();
+          }
 
           final names = (d['names'] as List).map((e) => e as String).toList();
           return Stack(

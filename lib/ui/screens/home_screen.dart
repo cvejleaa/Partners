@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../online/online_service.dart';
 import 'admin_screen.dart';
 import 'online_screens.dart';
+import 'profile_screen.dart';
 import 'self_test_screen.dart';
 import 'setup_screen.dart';
+import 'site_stats_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -78,6 +80,32 @@ class HomeScreen extends ConsumerWidget {
                     Navigator.of(context).push<void>(MaterialPageRoute<void>(
                         builder: (_) => const OnlineHomeScreen()));
                   }),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: _smallButton(
+                          context,
+                          Icons.person,
+                          'Min profil',
+                          () => Navigator.of(context).push<void>(
+                              MaterialPageRoute<void>(
+                                  builder: (_) => const ProfileScreen())),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _smallButton(
+                          context,
+                          Icons.leaderboard,
+                          'Statistik',
+                          () => Navigator.of(context).push<void>(
+                              MaterialPageRoute<void>(
+                                  builder: (_) => const SiteStatsScreen())),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ],
             ),
@@ -100,6 +128,20 @@ class HomeScreen extends ConsumerWidget {
         icon: Icon(icon),
         label: Text(label, style: const TextStyle(fontSize: 18)),
       ),
+    );
+  }
+
+  Widget _smallButton(
+      BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        foregroundColor: Colors.white,
+        side: const BorderSide(color: Color(0xFF8B5E3C)),
+      ),
+      onPressed: onTap,
+      icon: Icon(icon),
+      label: Text(label),
     );
   }
 }
