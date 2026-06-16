@@ -255,8 +255,8 @@ class Rules {
     }
 
     if (pos is TrackPosition) {
-      // Ren modulo-fremdrift på ringen — hver ringcelle er ét skridt.
-      // Ud-felter findes ikke på ringen og tælles derfor aldrig med.
+      // Modulo-fremdrift på ringen — hver ringcelle (inkl. UD-felter) er ét
+      // skridt. UD-felter er rigtige felter på 60-ringen.
       final int len = geometry.trackLength;
       final int ownEntry = geometry.startTrackIndexFor(player.index);
       int idx = pos.index;
@@ -295,7 +295,12 @@ class Rules {
     bool eligible(Piece p) {
       final PiecePosition pos = p.position;
       if (pos is! TrackPosition) return false;
-      return !state.isProtected(pos);
+      // En beskyttet dobbelt (2+ brikker) kan ikke byttes.
+      if (state.isProtected(pos)) return false;
+      // En brik der står på sit EGET UD-felt er beskyttet (kan hverken slås,
+      // passeres eller byttes) — på samme måde som bevogtnings-reglen.
+      if (_entryOwner(pos.index) == p.ownerIndex) return false;
+      return true;
     }
 
     // Byt to brikker fra FORSKELLIGE spillere (fx makker ↔ modstander).

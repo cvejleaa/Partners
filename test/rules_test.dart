@@ -515,6 +515,41 @@ void main() {
       });
       expect(partnerVsOpp, isTrue);
     });
+
+    test('brik på sit eget UD-felt kan ikke byttes', () {
+      // Spiller 0 har en brik på sit eget UD-felt (index 0) og en på felt 5.
+      // Modstander (1) på felt 35. Et byt må ALDRIG involvere brikken på
+      // UD-feltet — den er beskyttet.
+      final state = makeState(
+        cardRules: swapRules,
+        piecePositions: <List<PiecePosition>>[
+          <PiecePosition>[
+            const TrackPosition(0), // eget UD-felt — beskyttet
+            const TrackPosition(5),
+            const StartPosition(0, 2),
+            const StartPosition(0, 3),
+          ],
+          <PiecePosition>[
+            const TrackPosition(35),
+            const StartPosition(1, 1),
+            const StartPosition(1, 2),
+            const StartPosition(1, 3),
+          ],
+          for (int i = 2; i < 4; i++)
+            <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+        ],
+      );
+      final moves = rules.legalMoves(
+          state, state.players[0], const PlayingCard(Rank.jack, Suit.hearts));
+      // Ingen byt-træk må flytte brikken på UD-feltet (p0.0).
+      final involvesUdFelt = moves.any((Move m) =>
+          m.steps.any((MoveStep s) => s.pieceId == 'p0.0'));
+      expect(involvesUdFelt, isFalse);
+      // Men brikken på felt 5 KAN stadig byttes med modstanderen.
+      final involvesFive = moves.any((Move m) =>
+          m.steps.any((MoveStep s) => s.pieceId == 'p0.1'));
+      expect(involvesFive, isTrue);
+    });
   });
 
   group('Ud-kort', () {
