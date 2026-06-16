@@ -38,8 +38,8 @@ class UserStats {
     this.gamesAsHost = 0,
     this.gamesOnline = 0,
     this.gamesAiOnly = 0,
-    Map<String, _PairStats>? partnerStats,
-    Map<String, _PairStats>? rivalStats,
+    Map<String, PairStats>? partnerStats,
+    Map<String, PairStats>? rivalStats,
     this.totalThinkSeconds = 0,
     this.thinkCount = 0,
     this.fastestThinkSeconds,
@@ -50,8 +50,8 @@ class UserStats {
     this.currentWinStreak = 0,
     this.longestWinStreak = 0,
   })  : favoriteStarter = favoriteStarter ?? <String, int>{},
-        partnerStats = partnerStats ?? <String, _PairStats>{},
-        rivalStats = rivalStats ?? <String, _PairStats>{};
+        partnerStats = partnerStats ?? <String, PairStats>{},
+        rivalStats = rivalStats ?? <String, PairStats>{};
 
   final String uid;
   String displayName;
@@ -82,8 +82,8 @@ class UserStats {
   int gamesAiOnly;
 
   // Makkerskab / rivalitet (key = anden uid)
-  Map<String, _PairStats> partnerStats;
-  Map<String, _PairStats> rivalStats;
+  Map<String, PairStats> partnerStats;
+  Map<String, PairStats> rivalStats;
 
   // Tænketid
   double totalThinkSeconds;
@@ -128,7 +128,7 @@ class UserStats {
     return sorted.first.key;
   }
 
-  MapEntry<String, _PairStats>? get bestPartner {
+  MapEntry<String, PairStats>? get bestPartner {
     if (partnerStats.isEmpty) return null;
     final list = partnerStats.entries
         .where((e) => e.value.games >= 2)
@@ -137,7 +137,7 @@ class UserStats {
     return list.isEmpty ? partnerStats.entries.first : list.first;
   }
 
-  MapEntry<String, _PairStats>? get worstRival {
+  MapEntry<String, PairStats>? get worstRival {
     if (rivalStats.isEmpty) return null;
     final list = rivalStats.entries
         .where((e) => e.value.games >= 2)
@@ -207,12 +207,12 @@ class UserStats {
       gamesAiOnly: (m['gamesAiOnly'] as num?)?.toInt() ?? 0,
       partnerStats: (m['partnerStats'] as Map?)?.map((k, v) =>
               MapEntry(k as String,
-                  _PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
-          <String, _PairStats>{},
+                  PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
+          <String, PairStats>{},
       rivalStats: (m['rivalStats'] as Map?)?.map((k, v) =>
               MapEntry(k as String,
-                  _PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
-          <String, _PairStats>{},
+                  PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
+          <String, PairStats>{},
       totalThinkSeconds: (m['totalThinkSeconds'] as num?)?.toDouble() ?? 0,
       thinkCount: (m['thinkCount'] as num?)?.toInt() ?? 0,
       fastestThinkSeconds: (m['fastestThinkSeconds'] as num?)?.toDouble(),
@@ -227,8 +227,8 @@ class UserStats {
   }
 }
 
-class _PairStats {
-  _PairStats({this.displayName = '', this.games = 0, this.wins = 0});
+class PairStats {
+  PairStats({this.displayName = '', this.games = 0, this.wins = 0});
   String displayName;
   int games;
   int wins;
@@ -240,7 +240,7 @@ class _PairStats {
         'games': games,
         'wins': wins,
       };
-  factory _PairStats.fromJson(Map<String, dynamic> m) => _PairStats(
+  factory PairStats.fromJson(Map<String, dynamic> m) => PairStats(
         displayName: m['displayName'] as String? ?? '',
         games: (m['games'] as num?)?.toInt() ?? 0,
         wins: (m['wins'] as num?)?.toInt() ?? 0,
@@ -495,7 +495,7 @@ void _accumulateGame(
       final partnerUid = uids[partnerSeat] as String?;
       if (partnerUid != null) {
         final ps = s.partnerStats.putIfAbsent(
-            partnerUid, () => _PairStats());
+            partnerUid, () => PairStats());
         ps.displayName = (partnerSeat < names.length
             ? names[partnerSeat] as String
             : ps.displayName);
@@ -506,7 +506,7 @@ void _accumulateGame(
         final rivalUid = uids[rivalSeat] as String?;
         if (rivalUid != null) {
           final rs = s.rivalStats.putIfAbsent(
-              rivalUid, () => _PairStats());
+              rivalUid, () => PairStats());
           rs.displayName = rivalSeat < names.length
               ? names[rivalSeat] as String
               : rs.displayName;
