@@ -30,13 +30,29 @@ class AdminScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final CardRules rules = ref.watch(cardRulesProvider);
+    final ctrl = ref.read(cardRulesProvider.notifier);
+    final String saveErr = ref.watch(cardRulesSaveErrorProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin — Kortfunktioner'),
         actions: <Widget>[
           TextButton.icon(
+            onPressed: () async {
+              await ctrl.retrySave();
+              if (context.mounted) {
+                final err = ref.read(cardRulesSaveErrorProvider);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(err.isEmpty ? 'Gemt' : 'Fejl: $err')),
+                );
+              }
+            },
+            icon: const Icon(Icons.cloud_upload, color: Colors.white),
+            label: const Text('Gem nu', style: TextStyle(color: Colors.white)),
+          ),
+          TextButton.icon(
             onPressed: () {
-              ref.read(cardRulesProvider.notifier).resetDefaults();
+              ctrl.resetDefaults();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Nulstillet til standardregler')),
               );
@@ -49,11 +65,39 @@ class AdminScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: <Widget>[
+          if (saveErr.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(10),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                border: Border.all(color: Colors.red),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text(
+                    'Kunne ikke gemme i databasen',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.red),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(saveErr, style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Indstillingen virker stadig lokalt indtil næste deploy '
+                    'eller anden enhed.',
+                    style: TextStyle(fontSize: 11, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
             child: Text(
               'Marker hvilke funktioner hvert kort skal have. Ændringer gemmes '
-              'automatisk og bruges næste gang du starter et spil.',
+              'automatisk i Firebase.',
             ),
           ),
           for (final Rank r in _order)
