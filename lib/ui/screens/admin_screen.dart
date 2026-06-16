@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/card_rules.dart';
 import '../../models/playing_card.dart';
+import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
 
 class AdminScreen extends ConsumerWidget {
@@ -29,6 +30,31 @@ class AdminScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    if (!isAdmin(user)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Admin')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.lock, size: 56, color: Colors.red),
+                const SizedBox(height: 12),
+                Text(
+                  user == null
+                      ? 'Du skal være logget ind som admin.'
+                      : 'Kun admin kan ændre kortfunktioner.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final CardRules rules = ref.watch(cardRulesProvider);
     final ctrl = ref.read(cardRulesProvider.notifier);
     final String saveErr = ref.watch(cardRulesSaveErrorProvider);

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../game/card_rules.dart';
 import '../models/playing_card.dart';
+import '../online/online_service.dart';
 
 /// Aktuelle (eventuelt brugerjusterede) kortregler.
 ///
@@ -50,7 +51,7 @@ class CardRulesController extends StateNotifier<CardRules> {
 
   DocumentReference<Map<String, dynamic>>? get _doc {
     try {
-      return FirebaseFirestore.instance.collection('config').doc('cardRules');
+      return firestore.collection('config').doc('cardRules');
     } catch (_) {
       return null;
     }

@@ -24,10 +24,18 @@
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
         ]
+      },
+      {
+        "source": "**/*",
+        "headers": [
+          { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" },
+          { "key": "Cross-Origin-Embedder-Policy", "value": "unsafe-none" }
+        ]
       }
     ]
   },
   "firestore": {
+    "database": "partners",
     "rules": "firestore.rules"
   }
 }

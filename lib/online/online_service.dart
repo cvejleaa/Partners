@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,6 +17,26 @@ import '../models/piece.dart';
 import '../models/player.dart';
 import '../models/playing_card.dart';
 import 'serialize.dart';
+
+/// Navnet på Firestore-databasen i projekt partners-8d4aa.
+/// (Standardværdien er "(default)" — vores database er oprettet med navn
+/// "partners", så vi targeter den eksplicit).
+const String firestoreDatabaseId = 'partners';
+
+/// Fælles Firestore-instans der targeter den navngivne database.
+FirebaseFirestore get firestore =>
+    FirebaseFirestore.instanceFor(
+        app: Firebase.app(), databaseId: firestoreDatabaseId);
+
+/// Email-adresser der har admin-rettigheder (kan ændre kortregler).
+const Set<String> kAdminEmails = <String>{
+  'cvejleaa@gmail.com',
+};
+
+bool isAdmin(User? user) {
+  final email = user?.email?.toLowerCase();
+  return email != null && kAdminEmails.contains(email);
+}
 
 final onlineServiceProvider = Provider<OnlineService>((ref) => OnlineService());
 
@@ -46,7 +67,7 @@ final HeuristicAi onlineAi = HeuristicAi();
 
 class OnlineService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  FirebaseFirestore get _db => firestore;
 
   CollectionReference<Map<String, dynamic>> get _games => _db.collection('games');
   CollectionReference<Map<String, dynamic>> get _users => _db.collection('users');
