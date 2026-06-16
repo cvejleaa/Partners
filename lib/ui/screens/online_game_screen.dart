@@ -211,6 +211,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
       _lastProcessed = sig;
       final idx = state.currentPlayerIndex;
       final Move? m = onlineAi.chooseMove(state, idx);
+      final int discardedCount = state.players[idx].hand.length;
       Future<void>.delayed(const Duration(milliseconds: 600), () {
         _run(() => _svc.mutate(widget.code, (engine, s) {
               if (m != null) {
@@ -218,7 +219,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
               } else {
                 engine.passHand(idx);
               }
-            }, logEntry: m == null ? null : moveLogEntry(idx, m)));
+            },
+            logEntry: m != null
+                ? moveLogEntry(idx, m)
+                : passLogEntry(idx, discardedCount)));
       });
     }
   }
@@ -438,8 +442,14 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
               FilledButton.icon(
                 icon: const Icon(Icons.block),
                 label: const Text('Smid kortene og sid over'),
-                onPressed: () => _run(() => _svc.mutate(
-                    widget.code, (e, s) => e.passHand(mySeat))),
+                onPressed: () {
+                  final int discarded = state.players[mySeat].hand.length;
+                  _run(() => _svc.mutate(
+                        widget.code,
+                        (e, s) => e.passHand(mySeat),
+                        logEntry: passLogEntry(mySeat, discarded),
+                      ));
+                },
               ),
             ],
           ),

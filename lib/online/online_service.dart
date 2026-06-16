@@ -315,12 +315,23 @@ class OnlineService {
       final d = snap.data()!;
       final state =
           gameStateFromMap(Map<String, dynamic>.from(d['state'] as Map));
+      final wasOver = state.winningTeamIndex != null;
       final engine = GameEngine(state: state);
       action(engine, state);
       final upd = <String, dynamic>{'state': gameStateToMap(state)};
-      if (state.winningTeamIndex != null) upd['status'] = 'over';
+      if (state.winningTeamIndex != null) {
+        upd['status'] = 'over';
+        if (!wasOver) {
+          upd['finishedAt'] = FieldValue.serverTimestamp();
+          upd['winningTeamIndex'] = state.winningTeamIndex;
+        }
+      }
       if (logEntry != null) {
-        upd['log'] = FieldValue.arrayUnion(<dynamic>[logEntry]);
+        // Tilføj klient-side timestamp (server-timestamp virker ikke inde i
+        // array-elementer — vi accepterer mindre clock-skew for stats-formål).
+        final entry = Map<String, dynamic>.from(logEntry);
+        entry['t'] = Timestamp.now();
+        upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
       }
       tx.update(ref, upd);
     });
@@ -338,4 +349,20 @@ Map<String, dynamic> moveLogEntry(int seat, Move move) => <String, dynamic>{
                 'to': posToMap(s.to),
               })
           .toList(),
+    };
+
+/// Log-entry for når en spiller smider hånden og sidder over runden.
+Map<String, dynamic> passLogEntry(int seat, int cardsDiscarded) =>
+    <String, dynamic>{
+      'player': seat,
+      'type': 'pass',
+      'cardsDiscarded': cardsDiscarded,
+    };
+
+/// Log-entry for kortbytte mellem partnere ved rundens start.
+Map<String, dynamic> exchangeLogEntry(int seat, PlayingCard givenCard) =>
+    <String, dynamic>{
+      'player': seat,
+      'type': 'exchange',
+      'card': cardToMap(givenCard),
     };
