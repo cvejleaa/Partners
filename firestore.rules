@@ -11,11 +11,12 @@ service cloud.firestore {
         ];
     }
 
-    // Kortregel-konfiguration: alle kan læse (så spillet kan starte med
-    // gemte regler), kun admin kan skrive.
+    // Kortregel-konfiguration: alle kan læse. Indtil admin-flowet er
+    // bekræftet (oprette konto + logge ind som admin) tillader vi at alle
+    // indloggede brugere kan skrive. Strammes til isAdmin() når flow er ok.
     match /config/{document} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isSignedIn();
     }
 
     // Brugerprofiler.

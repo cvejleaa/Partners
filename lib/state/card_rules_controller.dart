@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -92,6 +93,11 @@ class CardRulesController extends StateNotifier<CardRules> {
       debugPrint('[cardRules] prefs write fail: $e');
     }
     // Database — fejl rapporteres til UI.
+    if (FirebaseAuth.instance.currentUser == null) {
+      _setError(
+          'Du er ikke logget ind — skrivning til database kræver login.');
+      return;
+    }
     try {
       final doc = _doc;
       if (doc == null) {
