@@ -309,9 +309,25 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Widget _buildHumanArea(GameState state, Player human) {
-    if (state.phase == GamePhase.exchange) return _buildExchangeArea(state, human);
-    if (state.phase == GamePhase.play) return _buildPlayArea(state, human);
-    return const SizedBox(height: 90);
+    // Vis altid panel for menneske-spilleren (samme info som de andre
+    // spillere får): starter-flag, kort på hånd, brikker i start, sidste
+    // spillede kort. Panelet placeres mellem brættet og hånd-området.
+    final Widget panel = Padding(
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+      child: Center(child: _panel(state, human)),
+    );
+    Widget body;
+    if (state.phase == GamePhase.exchange) {
+      body = _buildExchangeArea(state, human);
+    } else if (state.phase == GamePhase.play) {
+      body = _buildPlayArea(state, human);
+    } else {
+      body = const SizedBox(height: 16);
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[panel, body],
+    );
   }
 
   Widget _buildExchangeArea(GameState state, Player human) {
