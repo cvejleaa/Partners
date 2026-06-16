@@ -46,6 +46,19 @@ jobs:
       - name: Unit & engine tests (5 hele spil + regler)
         run: flutter test --reporter expanded
 
+      - name: Generér PNG-ikoner fra SVG (favicon + PWA-ikoner)
+        # SVG-kilderne ligger i repoet; her rasteres de binære PNG'er som
+        # manifest.json og index.html refererer (se docs/branding.md).
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 192 -h 192 web/icons/Icon.svg -o web/icons/Icon-192.png
+          rsvg-convert -w 512 -h 512 web/icons/Icon.svg -o web/icons/Icon-512.png
+          rsvg-convert -w 192 -h 192 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-192.png
+          rsvg-convert -w 512 -h 512 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-512.png
+          rsvg-convert -w 64  -h 64  web/favicon.svg -o web/favicon.png
+          echo "Genererede ikoner:" && ls -la web/icons/*.png web/favicon.png
+
       - name: Byg web (release)
         run: flutter build web --release --base-href "/"
 
