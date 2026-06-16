@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../online/online_service.dart';
+import '../../stats/badges.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
+import '../widgets/badge_chip.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -186,6 +188,7 @@ class _StatsBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: <Widget>[
+        if (!singleGame) _BadgesSection(stats: s),
         _section('Sejre & resultater', <Widget>[
           _statRow(singleGame ? 'Resultat' : 'Vundne spil',
               singleGame
@@ -298,6 +301,60 @@ class _StatsBody extends StatelessWidget {
           Expanded(child: Text(label)),
           Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
         ],
+      ),
+    );
+  }
+}
+
+/// Viser optjente badges som farverige chips og låste badges nedtonet,
+/// grupperet pr. kategori. En lille tæller i toppen viser fremgangen.
+class _BadgesSection extends StatelessWidget {
+  const _BadgesSection({required this.stats});
+  final UserStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final unlocked = unlockedBadgeCount(stats);
+    final total = kAllBadges.length;
+    final groups = badgesByCategory();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                const Text('Badges 🏆',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+                Text('$unlocked/$total',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('Optjen badges ved at spille og udvikle din stil.',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+            for (final entry in groups.entries) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(entry.key.label,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  for (final badge in entry.value)
+                    BadgeChip(badge: badge, stats: stats),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../online/online_service.dart';
+import 'records.dart';
 import 'user_stats.dart';
 
 class StatsRepository {
@@ -82,6 +83,20 @@ class StatsRepository {
     final latest = docs.first;
     final stats = computeAllStats(<Map<String, dynamic>>[latest]);
     return stats[uid];
+  }
+
+  /// Find personlige rekorder som [uid] satte i sit seneste afsluttede spil.
+  ///
+  /// Henter både brugerens aggregerede (gemte) stats og stats for det seneste
+  /// spil, og sammenligner dem via [recordsFromLastGame]. Returnerer en tom
+  /// liste hvis der mangler data (fx ingen færdige spil eller ingen cache) —
+  /// kalderen kan dermed bare vise den normale skærm.
+  Future<List<GameRecord>> lastGameRecordsFor(String uid) async {
+    final last = await lastGameStatsFor(uid);
+    if (last == null) return const <GameRecord>[];
+    final aggregate = await get(uid);
+    if (aggregate == null) return const <GameRecord>[];
+    return recordsFromLastGame(aggregate: aggregate, lastGame: last);
   }
 
   static int? _ts(dynamic v) {

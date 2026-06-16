@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../online/online_service.dart';
+import '../../stats/badges.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 
@@ -121,6 +122,14 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
                         '🏠 Flest brikker i mål',
                         _topBy((s) => s.homeStretchEntries.toDouble(),
                             (s) => '${s.homeStretchEntries}')),
+                    _ranking(
+                        '🏆 Flest badges',
+                        _topBy(
+                            (s) => unlockedBadgeCount(s) > 0
+                                ? unlockedBadgeCount(s).toDouble()
+                                : -1,
+                            (s) =>
+                                '${unlockedBadgeCount(s)}/${kAllBadges.length}')),
                   ],
                 ),
     );
