@@ -57,4 +57,36 @@ class StatsRepository {
       return d == null ? null : UserStats.fromJson(Map<String, dynamic>.from(d));
     });
   }
+
+  /// Beregn stats for KUN det seneste afsluttede spil hvor [uid] var med.
+  ///
+  /// Bruges af profilskærmen til at vise "sidste spil" ved siden af det
+  /// samlede billede. Returnerer null hvis spilleren ikke har færdige spil.
+  Future<UserStats?> lastGameStatsFor(String uid) async {
+    final snap = await _db
+        .collection('games')
+        .where('status', isEqualTo: 'over')
+        .get();
+    final docs = snap.docs
+        .map((d) => Map<String, dynamic>.from(d.data()))
+        .where((g) {
+      final uids = (g['uids'] as List?)?.cast<dynamic>() ?? const <dynamic>[];
+      return uids.contains(uid);
+    }).toList();
+    if (docs.isEmpty) return null;
+    docs.sort((a, b) {
+      final ta = _ts(a['finishedAt']) ?? _ts(a['createdAt']) ?? 0;
+      final tb = _ts(b['finishedAt']) ?? _ts(b['createdAt']) ?? 0;
+      return tb.compareTo(ta); // nyeste først
+    });
+    final latest = docs.first;
+    final stats = computeAllStats(<Map<String, dynamic>>[latest]);
+    return stats[uid];
+  }
+
+  static int? _ts(dynamic v) {
+    if (v is Timestamp) return v.millisecondsSinceEpoch;
+    if (v is int) return v;
+    return null;
+  }
 }
