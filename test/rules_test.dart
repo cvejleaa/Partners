@@ -209,7 +209,9 @@ void main() {
       expect(landingOn13.first.steps.first.capturedPieceId, isNull);
     });
 
-    test('beskyttet dobbelt kan ikke slås', () {
+    test('lande på modstander-dobbelt brænder egen brik hjem', () {
+      // To modstanderbrikker på felt 13 (en dobbelt). Spiller 0 fra 10 med en
+      // 3'er kan godt lande, men egen brik slås hjem (burnsMover), ingen slag.
       final positions = <List<PiecePosition>>[
         <PiecePosition>[
           const TrackPosition(10),
@@ -217,7 +219,6 @@ void main() {
           const StartPosition(0, 2),
           const StartPosition(0, 3),
         ],
-        // To modstanderbrikker på felt 13 = beskyttet dobbelt.
         <PiecePosition>[
           const TrackPosition(13),
           const TrackPosition(13),
@@ -230,17 +231,18 @@ void main() {
       final state = makeState(piecePositions: positions);
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.three, Suit.hearts));
-      final landingOn13 = moves.where(
+      final landingOn13 = moves.firstWhere(
         (Move m) =>
             m.steps.first.to is TrackPosition &&
             (m.steps.first.to as TrackPosition).index == 13,
       );
-      expect(landingOn13, isEmpty);
+      expect(landingOn13.steps.first.burnsMover, isTrue);
+      expect(landingOn13.steps.first.capturedPieceId, isNull);
     });
 
-    test('kan lande på modstander der står på sit eget første felt (slag)', () {
-      // Ud-felter er ikke ringfelter mere: spiller 1's brik på sit felt 1
-      // (index 14) kan nu slås af spiller 0. Fra 11 + tre = 14 → slag.
+    test('bevogtet udgangsfelt kan ikke slås', () {
+      // Spiller 1's brik står på sit eget udgangsfelt (index 14) → bevogtet.
+      // Spiller 0 fra 11 med en 3'er kan derfor IKKE lande på 14 og slå den.
       final positions = <List<PiecePosition>>[
         <PiecePosition>[
           const TrackPosition(11),
@@ -260,15 +262,15 @@ void main() {
       final state = makeState(piecePositions: positions);
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.three, Suit.hearts));
-      final hit = moves.firstWhere((Move m) =>
+      final landingOn14 = moves.where((Move m) =>
           m.steps.first.to is TrackPosition &&
           (m.steps.first.to as TrackPosition).index == 14);
-      expect(hit.steps.first.capturedPieceId, isNotNull);
+      expect(landingOn14, isEmpty);
     });
 
-    test('kan passere et felt hvor en modstander står (ingen ud-felt-spær)', () {
-      // Tidligere spærrede et besat ud-felt for passage; det gør det ikke mere.
-      // Spiller 1 på 14 (sit felt 1); spiller 0 på 13 med en femmer → 18.
+    test('bevogtet udgangsfelt spærrer for passage', () {
+      // Spiller 1's brik på sit udgangsfelt (14). Spiller 0 fra 13 med en
+      // femmer ville passere 14 og er derfor blokeret.
       final positions = <List<PiecePosition>>[
         <PiecePosition>[
           const TrackPosition(13),
@@ -278,6 +280,34 @@ void main() {
         ],
         <PiecePosition>[
           const TrackPosition(14),
+          const StartPosition(1, 1),
+          const StartPosition(1, 2),
+          const StartPosition(1, 3),
+        ],
+        for (int i = 2; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.five, Suit.hearts));
+      final fromThirteen = moves.where((Move m) =>
+          m.steps.first.from is TrackPosition &&
+          (m.steps.first.from as TrackPosition).index == 13);
+      expect(fromThirteen, isEmpty);
+    });
+
+    test('ubevogtet felt kan passeres (enlig brik væk fra udgangsfelt)', () {
+      // Spiller 1's brik på felt 15 (IKKE et udgangsfelt). Spiller 0 fra 13
+      // med en femmer passerer 14/15 og lander på 18.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(13),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        <PiecePosition>[
+          const TrackPosition(15),
           const StartPosition(1, 1),
           const StartPosition(1, 2),
           const StartPosition(1, 3),

@@ -8,6 +8,7 @@ class MoveStep {
     required this.from,
     required this.to,
     this.capturedPieceId,
+    this.burnsMover = false,
   });
 
   final String pieceId;
@@ -16,6 +17,12 @@ class MoveStep {
 
   /// Hvis dette step slår en modstanderbrik retur, sættes ID'et her.
   final String? capturedPieceId;
+
+  /// Sand hvis dette step lander på en modstander-"dobbelt" (2+ brikker):
+  /// da slås den FLYTTENDE brik selv hjem ([to] er det felt den forsøgte at
+  /// lande på, men brikken ender i sin egen startcirkel). Ingen modstander
+  /// slås i dette tilfælde.
+  final bool burnsMover;
 }
 
 /// Et komplet træk fra ét kort. Indeholder en eller flere steps. For 7'eren

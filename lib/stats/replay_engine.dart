@@ -118,18 +118,33 @@ ReplayResult replayGame({
       final pieceId = step['pieceId'] as String;
       final mover = state.allPieces.firstWhere((p) => p.id == pieceId);
 
-      // Capture-check: er der en modstanderbrik på target?
+      // Modstander-brikker på target.
       final occupants = state.piecesAt(to);
-      for (final occ in occupants) {
-        if (occ.ownerIndex != mover.ownerIndex) {
-          captured.add(occ.id);
-          // Send tilbage til start (første ledige slot).
-          for (int slot = 0; slot < 4; slot++) {
-            if (state.pieceAt(StartPosition(occ.ownerIndex, slot)) == null) {
-              occ.position = StartPosition(occ.ownerIndex, slot);
-              occ.hasLeftStart = false;
-              break;
-            }
+      final enemies = occupants
+          .where((occ) => occ.ownerIndex != mover.ownerIndex)
+          .toList();
+
+      // Selv-brænd: 2+ modstandere (en dobbelt) → den flyttende brik slås selv
+      // hjem; ingen modstander slås.
+      if (enemies.length >= 2) {
+        for (int slot = 0; slot < 4; slot++) {
+          if (state.pieceAt(StartPosition(mover.ownerIndex, slot)) == null) {
+            mover.position = StartPosition(mover.ownerIndex, slot);
+            mover.hasLeftStart = false;
+            break;
+          }
+        }
+        continue;
+      }
+
+      // Slag på enlig modstander: send hjem (første ledige slot).
+      for (final occ in enemies) {
+        captured.add(occ.id);
+        for (int slot = 0; slot < 4; slot++) {
+          if (state.pieceAt(StartPosition(occ.ownerIndex, slot)) == null) {
+            occ.position = StartPosition(occ.ownerIndex, slot);
+            occ.hasLeftStart = false;
+            break;
           }
         }
       }

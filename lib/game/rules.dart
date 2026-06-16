@@ -8,9 +8,13 @@ import 'card_rules.dart';
 
 /// Udfald af at lande på et bane-felt.
 class _Landing {
-  const _Landing(this.legal, [this.capturedId]);
+  const _Landing(this.legal, {this.capturedId, this.burnsMover = false});
   final bool legal;
   final String? capturedId;
+
+  /// Sand når feltet har en modstander-"dobbelt" (2+ brikker): det er lovligt
+  /// at lande, men den flyttende brik slås selv hjem.
+  final bool burnsMover;
 }
 
 /// Regler for Partners.
@@ -84,17 +88,37 @@ class Rules {
   /// Afgør om [ownerIndex] må lande på bane-feltet [to].
   /// - Tomt felt: ok.
   /// - Egne brikker: ok (stak ovenpå), intet slag.
-  /// - Præcis 1 modstander: slag.
-  /// - 2+ modstandere (beskyttet dobbelt): ulovligt.
-  ///
-  /// Ud-felterne er ikke felter på ringen, så der findes ingen særregel for
-  /// at lande på "andres ud-felt" længere.
+  /// - Præcis 1 anden brik: slag (også makkerens — det er tilladt, om end
+  ///   sjældent klogt).
+  /// - 2+ andre brikker (en dobbelt): lovligt at lande, men den flyttende brik
+  ///   slås selv hjem (dobbelten "brænder" angriberen). Bemærk: et bevogtet
+  ///   udgangsfelt blokeres allerede i passage-/landingstjekket, så det case
+  ///   når ikke hertil.
   _Landing _landing(GameState state, int ownerIndex, TrackPosition to) {
     final List<Piece> occ = state.piecesAt(to);
     if (occ.isEmpty) return const _Landing(true);
     if (occ.first.ownerIndex == ownerIndex) return const _Landing(true);
-    if (occ.length >= 2) return const _Landing(false); // beskyttet
-    return _Landing(true, occ.first.id); // slag på enlig modstander
+    if (occ.length >= 2) return const _Landing(true, burnsMover: true);
+    return _Landing(true, capturedId: occ.first.id); // slag på enlig brik
+  }
+
+  /// Ejeren af et udgangsfelt (felt 1) for et ringindeks, eller null hvis
+  /// indekset ikke er et udgangsfelt (0, 14, 28, 42 på en 56-ring).
+  int? _entryOwner(int trackIndex) {
+    final int q = geometry.trackLength ~/ 4;
+    return trackIndex % q == 0 ? trackIndex ~/ q : null;
+  }
+
+  /// Sandt hvis udgangsfeltet [idx] er BEVOGTET mod spilleren [moverOwner]:
+  /// der står mindst én af feltejerens egne brikker på selve udgangsfeltet, og
+  /// spilleren er ikke selv feltejeren. Et bevogtet udgangsfelt spærrer for
+  /// både passage og landing (i begge retninger) for alle andre end ejeren.
+  bool _entryBlocked(GameState state, int idx, int moverOwner) {
+    final int? owner = _entryOwner(idx);
+    if (owner == null || owner == moverOwner) return false;
+    return state
+        .piecesAt(TrackPosition(idx))
+        .any((Piece p) => p.ownerIndex == owner);
   }
 
   // ---------------------------------------------------------------------------
@@ -128,6 +152,7 @@ class Rules {
           from: exiting.position,
           to: firstField,
           capturedPieceId: landing.capturedId,
+          burnsMover: landing.burnsMover,
         ),
       ],
     );
@@ -165,6 +190,7 @@ class Rules {
           from: piece.position,
           to: to,
           capturedPieceId: landing.capturedId,
+          burnsMover: landing.burnsMover,
         ),
       ],
     );
@@ -178,9 +204,15 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
-    // Ren modulo-fremdrift baglæns; ud-felter findes ikke på ringen.
+    // Modulo-fremdrift baglæns, ét felt ad gangen, så et bevogtet udgangsfelt
+    // kan spærre for passage også imod urets retning.
     final int len = geometry.trackLength;
-    final int idx = (pos.index - steps % len + len) % len;
+    int idx = pos.index;
+    for (int step = 0; step < steps; step++) {
+      final int next = (idx - 1 + len) % len;
+      if (_entryBlocked(state, next, piece.ownerIndex)) return null;
+      idx = next;
+    }
     final TrackPosition target = TrackPosition(idx);
     final _Landing landing = _landing(state, piece.ownerIndex, target);
     if (!landing.legal) return null;
@@ -192,6 +224,7 @@ class Rules {
           from: piece.position,
           to: target,
           capturedPieceId: landing.capturedId,
+          burnsMover: landing.burnsMover,
         ),
       ],
     );
@@ -239,6 +272,8 @@ class Rules {
           }
           return HomeStretchPosition(player.index, slot);
         }
+        // Et bevogtet udgangsfelt spærrer for passage (og landing).
+        if (_entryBlocked(state, next, piece.ownerIndex)) return null;
         idx = next;
       }
       return TrackPosition(idx);
@@ -290,9 +325,19 @@ class Rules {
     PlayingCard card,
     int total,
   ) sync* {
-    final List<Piece> movable = player.pieces
+    // De 7 træk fordeles normalt KUN over egne brikker i spil. Undtagelse:
+    // hvis man undervejs får ALLE sine egne brikker låst fast (i hjemstrækket),
+    // må de overskydende træk lægges på makkerens brikker. Vi simulerer derfor
+    // egne brikker først; partner-brikker må kun bruges når alle egne er låst.
+    final List<Piece> ownMovable = player.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
+    final Player partner = state.players[player.partnerIndex];
+    final List<Piece> partnerMovable = partner.pieces
+        .where((Piece p) => p.position is! StartPosition)
+        .toList();
+    final int ownCount = ownMovable.length;
+    final List<Piece> movable = <Piece>[...ownMovable, ...partnerMovable];
     if (movable.isEmpty) return;
 
     final List<List<int>> distributions =
@@ -306,28 +351,50 @@ class Rules {
       for (int i = 0; i < movable.length; i++) {
         final int n = dist[i];
         if (n == 0) continue;
+        final bool isPartnerPiece = i >= ownCount;
+        // Partner-brik må kun flyttes når alle egne brikker er i hjemstræk.
+        if (isPartnerPiece) {
+          final bool allOwnLocked = sim.players[player.index].pieces
+              .every((Piece p) => p.position is HomeStretchPosition);
+          if (!allOwnLocked) {
+            ok = false;
+            break;
+          }
+        }
+        final int moverIndex = isPartnerPiece ? partner.index : player.index;
         final Piece simPiece = sim.pieceById(movable[i].id);
-        final Player simPlayer = sim.players[player.index];
+        final Player simPlayer = sim.players[moverIndex];
         final PiecePosition? to = _advanceFrom(sim, simPlayer, simPiece, n);
         if (to == null) {
           ok = false;
           break;
         }
         String? capturedId;
+        bool burns = false;
         if (to is TrackPosition) {
-          final _Landing landing = _landing(sim, player.index, to);
+          final _Landing landing = _landing(sim, moverIndex, to);
           if (!landing.legal) {
             ok = false;
             break;
           }
           capturedId = landing.capturedId;
+          burns = landing.burnsMover;
         }
         steps.add(MoveStep(
           pieceId: simPiece.id,
           from: simPiece.position,
           to: to,
           capturedPieceId: capturedId,
+          burnsMover: burns,
         ));
+        if (burns) {
+          simPiece.position = StartPosition(
+            simPiece.ownerIndex,
+            _firstFreeStartSlot(sim, simPiece.ownerIndex),
+          );
+          simPiece.hasLeftStart = false;
+          continue;
+        }
         if (capturedId != null) {
           final Piece captured = sim.pieceById(capturedId);
           captured.position = StartPosition(
@@ -340,7 +407,8 @@ class Rules {
       }
       if (!ok || steps.isEmpty) continue;
       final String key = steps
-          .map((MoveStep s) => '${s.pieceId}->${_posKey(s.to)}')
+          .map((MoveStep s) =>
+              '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')
           .join('|');
       if (seen.add(key)) {
         yield Move(card: card, steps: steps);

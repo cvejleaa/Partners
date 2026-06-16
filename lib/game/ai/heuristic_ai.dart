@@ -111,6 +111,13 @@ class HeuristicAi implements AiPlayer {
       final bool movedIsTeammate =
           state.players[movedPiece.ownerIndex].teamIndex == me.teamIndex;
 
+      // Selv-brænd (landing på en modstander-dobbelt) sender egen brik hjem —
+      // stærkt uattraktivt; undgå medmindre det er eneste lovlige træk.
+      if (step.burnsMover) {
+        score -= 400;
+        continue;
+      }
+
       if (step.capturedPieceId != null) {
         final Piece captured = state.pieceById(step.capturedPieceId!);
         final bool capturedIsTeammate =

@@ -311,7 +311,7 @@ List<CheckResult> _ruleChecks() {
     out.add(CheckResult('Kan stable på egen brik', canStack));
   }
 
-  // Beskyttet dobbelt kan ikke slås
+  // Lande på modstander-dobbelt brænder egen brik hjem (lovligt, intet slag)
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
@@ -329,10 +329,39 @@ List<CheckResult> _ruleChecks() {
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
         s, s.players[0], const PlayingCard(Rank.three, Suit.hearts));
-    final landsOn13 = moves.any((Move m) =>
+    final landing = moves.where((Move m) =>
         m.steps.first.to is TrackPosition &&
         (m.steps.first.to as TrackPosition).index == 13);
-    out.add(CheckResult('Beskyttet dobbelt kan ikke slås', !landsOn13));
+    final burns = landing.isNotEmpty &&
+        landing.first.steps.first.burnsMover &&
+        landing.first.steps.first.capturedPieceId == null;
+    out.add(CheckResult('Lande på dobbelt brænder egen brik', burns));
+  }
+
+  // Bevogtet udgangsfelt spærrer for modstandere (passage + landing)
+  {
+    final positions = _allStart();
+    positions[0] = <PiecePosition>[
+      const TrackPosition(13),
+      const StartPosition(0, 1),
+      const StartPosition(0, 2),
+      const StartPosition(0, 3),
+    ];
+    // Spiller 1's brik på sit eget udgangsfelt (index 14) bevogter feltet.
+    positions[1] = <PiecePosition>[
+      const TrackPosition(14),
+      const StartPosition(1, 1),
+      const StartPosition(1, 2),
+      const StartPosition(1, 3),
+    ];
+    final s = _stateWith(positions);
+    final moves = rules.legalMoves(
+        s, s.players[0], const PlayingCard(Rank.five, Suit.hearts));
+    // Femmer fra 13 ville passere det bevogtede felt 14 → ingen træk fra 13.
+    final fromThirteen = moves.any((Move m) =>
+        m.steps.first.from is TrackPosition &&
+        (m.steps.first.from as TrackPosition).index == 13);
+    out.add(CheckResult('Bevogtet udgangsfelt spærrer passage', !fromThirteen));
   }
 
   // 4 baglæns wrap-around (56-ring, ud-felter findes ikke på ringen)

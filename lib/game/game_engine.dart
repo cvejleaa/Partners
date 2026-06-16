@@ -128,6 +128,17 @@ class GameEngine extends ChangeNotifier {
   void applyMove(int playerIndex, Move move) {
     final Player player = state.players[playerIndex];
     for (final MoveStep step in move.steps) {
+      final Piece moving = state.pieceById(step.pieceId);
+      // Selv-brænd: landede på en modstander-dobbelt → den flyttende brik
+      // slås selv hjem til en fri start-slot. Ingen modstander slås.
+      if (step.burnsMover) {
+        moving.position = StartPosition(
+          moving.ownerIndex,
+          _firstFreeStartSlot(moving.ownerIndex),
+        );
+        moving.hasLeftStart = false;
+        continue;
+      }
       // Slag — den slåede brik returnerer til en fri start-slot.
       if (step.capturedPieceId != null) {
         final Piece captured = state.pieceById(step.capturedPieceId!);
@@ -137,7 +148,6 @@ class GameEngine extends ChangeNotifier {
         );
         captured.hasLeftStart = false;
       }
-      final Piece moving = state.pieceById(step.pieceId);
       moving.position = step.to;
       if (step.from is StartPosition && step.to is TrackPosition) {
         moving.hasLeftStart = true;
