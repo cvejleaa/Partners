@@ -72,7 +72,7 @@ Hver kort-konfiguration har disse knapper i admin: `exitStart` (ud af start),
 - For at få en brik ud af start skal du spille et **UD-kort, Es eller Konge**
   (alt med `exitStart`).
 - Brikken sættes på **dit eget UD-felt** (indeks `15·p`).
-- Hvis dit UD-felt er optaget: egne brikker stables (ok); en enlig modstander
+- Hvis dit UD-felt er optaget: egne brikker stables (ok) **ÆNDRING:** **det næste skal slettes, en modstander kan aldrig stå på feltet**; en enlig modstander
   slås hjem; 2+ modstandere ⇒ se "brænd" (afsnit 8). *(I praksis kan modstandere
   sjældent stå på dit UD-felt, jf. afsnit 6.)*
 - 🔧 KODE: `Rules._exitStartMoves`.
@@ -87,7 +87,7 @@ Hver kort-konfiguration har disse knapper i admin: `exitStart` (ud af start),
 - En anden spiller kan derfor **aldrig lande på** eller **blive blokeret af** et
   fremmed UD-felt — det er som om feltet ikke findes for dem.
 - **Ejeren** bruger sit eget UD-felt helt normalt: kommer ud på det, kan stå på
-  det, tæller det med når egne brikker bevæger sig, og **drejer ind i
+  det, **ÆNDRING:** **feltet tæller ikke med, det bruges kun i forbindelse med at komme ud med sine brikker**tæller det med når egne brikker bevæger sig, og **drejer ind i
   hjemstrækket** når brikken når tilbage til det efter en omgang.
 - Konsekvens: en brik der står på sit eget UD-felt er reelt **sikker** (ingen
   andre kan ramme den, for de springer feltet over).
