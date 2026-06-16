@@ -576,18 +576,63 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final List<MapEntry<String, Move>> entries = byEffect.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
 
-    final Move? chosen = await showDialog<Move>(
+    // Brug en bottom-sheet i stedet for centreret dialog: alle valg er
+    // synlige også på små mobilskærme, listen kan scrolles hvis der er
+    // mange muligheder, og bruges knapperne sidder tæt på tommelfingeren.
+    final Move? chosen = await showModalBottomSheet<Move>(
       context: context,
-      builder: (BuildContext ctx) => SimpleDialog(
-        title: const Text('Vælg træk'),
-        children: <Widget>[
-          for (final MapEntry<String, Move> e in entries)
-            SimpleDialogOption(
-              onPressed: () => Navigator.of(ctx).pop(e.value),
-              child: Text(e.key),
-            ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      builder: (BuildContext ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Text(
+                    'Vælg træk',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: entries.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1),
+                    itemBuilder: (BuildContext _, int i) {
+                      final MapEntry<String, Move> e = entries[i];
+                      return ListTile(
+                        title: Text(e.key),
+                        onTap: () => Navigator.of(ctx).pop(e.value),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
     if (chosen != null) _applyMove(chosen);
   }
