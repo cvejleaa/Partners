@@ -111,7 +111,6 @@ jobs:
 
       - name: Deploy Firestore-regler til navngivet database 'partners'
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
-        continue-on-error: true
         run: |
           # Eksplicit target navngivet database — CLI'en deployer ellers til (default).
           firebase deploy \
