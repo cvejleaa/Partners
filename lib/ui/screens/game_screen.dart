@@ -9,6 +9,7 @@ import '../../models/move.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../widgets/board_view.dart';
+import '../widgets/card_counter_panel.dart';
 import '../widgets/card_view.dart';
 import '../widgets/player_panel.dart';
 import 'win_screen.dart';
@@ -26,6 +27,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   List<Move> _candidateMoves = <Move>[];
   PlayingCard? _humanExchangeChoice;
   String? _swapFirstPiece;
+  bool _showCardCounter = false;
 
   final HeuristicAi _ai = HeuristicAi();
 
@@ -146,14 +148,36 @@ class _GameScreenState extends ConsumerState<GameScreen>
         backgroundColor: const Color(0xFF8B5E3C),
         foregroundColor: Colors.white,
         title: Text('Hånd #${state.handNumber}  •  ${_phaseLabel(state.phase)}'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: _showCardCounter
+                ? 'Skjul kort-tæller'
+                : 'Vis kort-tæller (3-runders cyklus)',
+            icon: Icon(_showCardCounter ? Icons.visibility_off : Icons.poll),
+            onPressed: () =>
+                setState(() => _showCardCounter = !_showCardCounter),
+          ),
+        ],
       ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, c) {
             final bool isMobile = c.maxWidth < 720;
-            return isMobile
+            final body = isMobile
                 ? _buildMobile(state, human, partner, left, right, highlighted)
                 : _buildWide(state, human, partner, left, right, highlighted);
+            if (!_showCardCounter) return body;
+            return Stack(
+              children: <Widget>[
+                body,
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  width: isMobile ? 220 : 280,
+                  child: CardCounterPanel(state: state),
+                ),
+              ],
+            );
           },
         ),
       ),
