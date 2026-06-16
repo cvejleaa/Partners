@@ -43,10 +43,9 @@ class CardRulesController extends StateNotifier<CardRules> {
     errorSink?.call(s);
   }
 
-  /// Sand så længe vi henter eksisterende regler fra DB. Når true, ignorerer
-  /// _load eventuelle ændringer brugeren har lavet imens (undgår at en sen
-  /// hentet remote-værdi overskriver et frisk lokalt valg).
-  bool _loading = true;
+  /// Når true, ignorerer _load eventuelle ændringer brugeren har lavet imens
+  /// vi hentede regler (undgår at en sen hentet remote-værdi overskriver et
+  /// frisk lokalt valg).
   bool _userTouched = false;
 
   DocumentReference<Map<String, dynamic>>? get _doc {
@@ -80,8 +79,6 @@ class CardRulesController extends StateNotifier<CardRules> {
       }
     } catch (e) {
       debugPrint('[cardRules] firestore read fail: $e');
-    } finally {
-      _loading = false;
     }
   }
 
