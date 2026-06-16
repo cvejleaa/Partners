@@ -141,8 +141,10 @@ class _BoardPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final double dim = size.shortestSide;
     final Offset center = Offset(dim / 2, dim / 2);
-    final double tr = dim * 0.40;
-    final double cr = dim * 0.023;
+    final double tr = dim * 0.405;
+    // 60 celler rundt: hold cellerne små nok til ikke at overlappe hinanden
+    // (omkreds/60 ≈ 0.042·dim pr. celle; diameter 2·cr ≈ 0.038·dim < det).
+    final double cr = dim * 0.0188;
     final int trackLen = state.geometry.trackLength;
     final int quarter = trackLen ~/ 4;
 
@@ -317,9 +319,9 @@ class _BoardPainter extends CustomPainter {
   static List<_PiecePoint> computePiecePoints(
       GameState state, double dim, double rotation) {
     final Offset center = Offset(dim / 2, dim / 2);
-    final double tr = dim * 0.40;
+    final double tr = dim * 0.405;
     final int trackLen = state.geometry.trackLength;
-    final double spread = dim * 0.016;
+    final double spread = dim * 0.014;
 
     final List<_PiecePoint> bases = <_PiecePoint>[];
     final List<String> keys = <String>[];

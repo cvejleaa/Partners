@@ -234,58 +234,63 @@ class _GameScreenState extends ConsumerState<GameScreen>
     Player right,
     Set<String> highlighted,
   ) {
-    // Mobil: 4 panel-info'er sidder i hjørnerne over de tomme strimler om
-    // den runde bane, så selve brættet kan blive markant større. Brikkerne
-    // står på selve ringen — panelerne overlapper aldrig spilleflade.
-    return Column(
-      children: <Widget>[
-        Expanded(
-          child: Stack(
-            children: <Widget>[
-              Positioned.fill(
-                child: _boardArea(state, human, highlighted),
+    // Mobil: brættet får en FAST størrelse (bredden, eller højst ~58% af
+    // højden) så der ikke opstår tom luft mellem bræt og hånd. De 4 paneler
+    // sidder i hjørnerne over brættets tomme strimler. Hånd-blokken fylder
+    // resten af skærmen (Expanded) — så kortene kan være store og læsbare.
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints c) {
+        final double byHeight = c.maxHeight * 0.58;
+        final double boardSize =
+            c.maxWidth < byHeight ? c.maxWidth : byHeight;
+        return Column(
+          children: <Widget>[
+            SizedBox(
+              height: boardSize,
+              width: double.infinity,
+              child: Stack(
+                children: <Widget>[
+                  Positioned.fill(
+                    child: _boardArea(state, human, highlighted),
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    child: SizedBox(
+                        width: 100,
+                        child: _panel(state, partner, compact: true)),
+                  ),
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: SizedBox(
+                        width: 100,
+                        child: _panel(state, right, compact: true)),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    child: SizedBox(
+                        width: 100,
+                        child: _panel(state, left, compact: true)),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: SizedBox(
+                        width: 100,
+                        child: _panel(state, human, compact: true)),
+                  ),
+                ],
               ),
-              // Top-venstre: makker (sidder visuelt over toppen af brættet).
-              Positioned(
-                top: 0,
-                left: 0,
-                child: SizedBox(
-                  width: 100,
-                  child: _panel(state, partner, compact: true),
-                ),
-              ),
-              // Top-højre: højre modstander.
-              Positioned(
-                top: 0,
-                right: 0,
-                child: SizedBox(
-                  width: 100,
-                  child: _panel(state, right, compact: true),
-                ),
-              ),
-              // Bund-venstre: venstre modstander.
-              Positioned(
-                bottom: 0,
-                left: 0,
-                child: SizedBox(
-                  width: 100,
-                  child: _panel(state, left, compact: true),
-                ),
-              ),
-              // Bund-højre: dig selv — tæt på hånden i bunden.
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: SizedBox(
-                  width: 100,
-                  child: _panel(state, human, compact: true),
-                ),
-              ),
-            ],
-          ),
-        ),
-        _buildHumanArea(state, human, showPanel: false),
-      ],
+            ),
+            Expanded(
+              child: _buildHumanArea(state, human,
+                  showPanel: false, fill: true),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -355,16 +360,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Widget _buildHumanArea(GameState state, Player human,
-      {bool showPanel = true}) {
+      {bool showPanel = true, bool fill = false}) {
     // Når [showPanel] er true vises menneske-spillerens panel (starter-flag,
     // kort på hånd, brikker i start, sidste spillede kort) over hånd-området.
     // På mobil sidder dette panel allerede i et bund-hjørne, så vi springer
-    // det over her.
+    // det over her. [fill] = true når området skal udfylde en Expanded
+    // (mobil) med større kort.
     Widget body;
     if (state.phase == GamePhase.exchange) {
-      body = _buildExchangeArea(state, human);
+      body = _buildExchangeArea(state, human, fill: fill);
     } else if (state.phase == GamePhase.play) {
-      body = _buildPlayArea(state, human);
+      body = _buildPlayArea(state, human, fill: fill);
     } else {
       body = const SizedBox(height: 16);
     }
@@ -379,103 +385,111 @@ class _GameScreenState extends ConsumerState<GameScreen>
     );
   }
 
-  Widget _buildExchangeArea(GameState state, Player human) {
+  Widget _buildExchangeArea(GameState state, Player human, {bool fill = false}) {
     final bool humanDone = state.exchangeBuffer.containsKey(human.index);
+    final double cardW = fill ? 78 : 54;
+    final double rowH = fill ? 120 : 84;
+    final Widget cards = SizedBox(
+      height: rowH,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        children: <Widget>[
+          for (final PlayingCard c in human.hand)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: CardView(
+                card: c,
+                rules: state.cardRules,
+                width: cardW,
+                selected: _humanExchangeChoice == c,
+                onTap: humanDone
+                    ? null
+                    : () => setState(() => _humanExchangeChoice = c),
+              ),
+            ),
+        ],
+      ),
+    );
+    final Widget cardRow = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        Expanded(child: cards),
+        if (!humanDone) ...<Widget>[
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: _humanExchangeChoice == null
+                ? null
+                : () {
+                    ref.read(gameProvider.notifier).submitExchange(
+                          human.index,
+                          _humanExchangeChoice!,
+                        );
+                    setState(() => _humanExchangeChoice = null);
+                    _scheduleAi();
+                  },
+            child:
+                const Text('Bekræft\nbytte', textAlign: TextAlign.center),
+          ),
+        ],
+      ],
+    );
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       color: const Color(0xFF14331F),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisAlignment:
+            fill ? MainAxisAlignment.center : MainAxisAlignment.start,
         children: <Widget>[
           Text(
             humanDone
                 ? 'Venter på de andre…'
                 : 'Vælg ét kort til din makker (skjult bytte)',
-            style: const TextStyle(color: Colors.white, fontSize: 12),
+            style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
-          const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Expanded(
-                child: SizedBox(
-                  height: 84,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    children: <Widget>[
-                      for (final PlayingCard c in human.hand)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3),
-                          child: CardView(
-                            card: c,
-                            rules: state.cardRules,
-                            width: 54,
-                            selected: _humanExchangeChoice == c,
-                            onTap: humanDone
-                                ? null
-                                : () =>
-                                    setState(() => _humanExchangeChoice = c),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              if (!humanDone) ...<Widget>[
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _humanExchangeChoice == null
-                      ? null
-                      : () {
-                          ref.read(gameProvider.notifier).submitExchange(
-                                human.index,
-                                _humanExchangeChoice!,
-                              );
-                          setState(() => _humanExchangeChoice = null);
-                          _scheduleAi();
-                        },
-                  child: const Text('Bekræft\nbytte', textAlign: TextAlign.center),
-                ),
-              ],
-            ],
-          ),
+          const SizedBox(height: 8),
+          cardRow,
         ],
       ),
     );
   }
 
-  Widget _buildPlayArea(GameState state, Player human) {
+  Widget _buildPlayArea(GameState state, Player human, {bool fill = false}) {
     final bool humanTurn = state.currentPlayerIndex == human.index;
     final bool busy = _animMoves.isNotEmpty;
     final bool humanCanPlay = humanTurn &&
         !busy &&
         ref.read(gameProvider.notifier).canPlay(human.index);
+    final double cardW = fill ? 78 : 54;
+    final double rowH = fill ? 120 : 84;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       color: const Color(0xFF14331F),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisAlignment:
+            fill ? MainAxisAlignment.center : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           if (!humanTurn)
             Text('${state.currentPlayer.name} spiller…',
-                style: const TextStyle(color: Colors.white, fontSize: 12)),
+                style: const TextStyle(color: Colors.white, fontSize: 13)),
           if (humanTurn && humanCanPlay)
             Text(
               _selectedCard == null
                   ? 'Vælg et kort'
                   : 'Vælg en brik (gult = lovligt træk)',
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
             ),
           if (humanTurn && !humanCanPlay && !busy)
             Text('Du kan ikke rykke nogen brik',
-                style: TextStyle(color: Colors.red.shade300, fontSize: 12)),
-          const SizedBox(height: 4),
+                style: TextStyle(color: Colors.red.shade300, fontSize: 13)),
+          const SizedBox(height: 8),
           SizedBox(
-            height: 84,
+            height: rowH,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -487,7 +501,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                       card: c,
                       rules: state.cardRules,
                       faceUp: humanTurn,
-                      width: 54,
+                      width: cardW,
                       selected: _selectedCard == c,
                       onTap: (!humanTurn || !humanCanPlay)
                           ? null
@@ -499,7 +513,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
           ),
           if (humanTurn && !humanCanPlay && !busy)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 8),
               child: FilledButton.icon(
                 onPressed: _humanPass,
                 icon: const Icon(Icons.block, size: 18),

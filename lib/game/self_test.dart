@@ -338,7 +338,7 @@ List<CheckResult> _ruleChecks() {
     out.add(CheckResult('Lande på dobbelt brænder egen brik', burns));
   }
 
-  // Bevogtet UD-felt spærrer for modstandere (passage + landing)
+  // Andre spillere springer fremmed UD-felt over (14 → 1 direkte)
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
@@ -347,7 +347,7 @@ List<CheckResult> _ruleChecks() {
       const StartPosition(0, 2),
       const StartPosition(0, 3),
     ];
-    // Spiller 1's brik på sit eget UD-felt (index 15) bevogter feltet.
+    // Spiller 1's brik på sit eget UD-felt (index 15).
     positions[1] = <PiecePosition>[
       const TrackPosition(15),
       const StartPosition(1, 1),
@@ -357,11 +357,15 @@ List<CheckResult> _ruleChecks() {
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
         s, s.players[0], const PlayingCard(Rank.five, Suit.hearts));
-    // Femmer fra 13 ville passere det bevogtede UD-felt 15 → ingen træk.
-    final fromThirteen = moves.any((Move m) =>
-        m.steps.first.from is TrackPosition &&
-        (m.steps.first.from as TrackPosition).index == 13);
-    out.add(CheckResult('Bevogtet UD-felt spærrer passage', !fromThirteen));
+    // Femmer fra 13 springer UD-felt 15 over → lander på 19 (ikke 18), og
+    // lander ALDRIG på selve UD-feltet (15).
+    final to19 = moves.any((Move m) =>
+        m.steps.first.to is TrackPosition &&
+        (m.steps.first.to as TrackPosition).index == 19);
+    final onUd = moves.any((Move m) =>
+        m.steps.first.to is TrackPosition &&
+        (m.steps.first.to as TrackPosition).index == 15);
+    out.add(CheckResult('Andre springer fremmed UD-felt over', to19 && !onUd));
   }
 
   // 4 baglæns wrap-around (60-ring)

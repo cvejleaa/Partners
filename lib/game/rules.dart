@@ -103,22 +103,11 @@ class Rules {
   }
 
   /// Ejeren af et UD-felt for et ringindeks, eller null hvis indekset ikke er
-  /// et UD-felt (0, 15, 30, 45 på en 60-ring).
+  /// et UD-felt (0, 15, 30, 45 på en 60-ring). UD-felter er "lommer" der kun
+  /// tilhører deres ejer; alle andre springer dem over under bevægelse.
   int? _entryOwner(int trackIndex) {
     final int q = geometry.trackLength ~/ 4;
     return trackIndex % q == 0 ? trackIndex ~/ q : null;
-  }
-
-  /// Sandt hvis udgangsfeltet [idx] er BEVOGTET mod spilleren [moverOwner]:
-  /// der står mindst én af feltejerens egne brikker på selve udgangsfeltet, og
-  /// spilleren er ikke selv feltejeren. Et bevogtet udgangsfelt spærrer for
-  /// både passage og landing (i begge retninger) for alle andre end ejeren.
-  bool _entryBlocked(GameState state, int idx, int moverOwner) {
-    final int? owner = _entryOwner(idx);
-    if (owner == null || owner == moverOwner) return false;
-    return state
-        .piecesAt(TrackPosition(idx))
-        .any((Piece p) => p.ownerIndex == owner);
   }
 
   // ---------------------------------------------------------------------------
@@ -206,14 +195,20 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
-    // Modulo-fremdrift baglæns, ét felt ad gangen, så et bevogtet udgangsfelt
-    // kan spærre for passage også imod urets retning.
+    // Baglæns: fremmede UD-felter springes også over uden at tælle (1 → 14
+    // direkte imod urets retning).
     final int len = geometry.trackLength;
     int idx = pos.index;
-    for (int step = 0; step < steps; step++) {
+    int remaining = steps;
+    while (remaining > 0) {
       final int next = (idx - 1 + len) % len;
-      if (_entryBlocked(state, next, piece.ownerIndex)) return null;
+      final int? udOwner = _entryOwner(next);
+      if (udOwner != null && udOwner != piece.ownerIndex) {
+        idx = next;
+        continue;
+      }
       idx = next;
+      remaining--;
     }
     final TrackPosition target = TrackPosition(idx);
     final _Landing landing = _landing(state, piece.ownerIndex, target);
@@ -255,17 +250,20 @@ class Rules {
     }
 
     if (pos is TrackPosition) {
-      // Modulo-fremdrift på ringen — hver ringcelle (inkl. UD-felter) er ét
-      // skridt. UD-felter er rigtige felter på 60-ringen.
+      // UD-felter er "lommer" der KUN tilhører deres ejer. Alle andre spillere
+      // springer et fremmed UD-felt over UDEN at tælle det (felt 14 → felt 1
+      // direkte). Ejeren bruger sit eget UD-felt normalt (kommer ud på det og
+      // drejer ind i hjemstrækket når man når tilbage til det efter en omgang).
       final int len = geometry.trackLength;
-      final int ownEntry = geometry.startTrackIndexFor(player.index);
+      final int ownUd = geometry.startTrackIndexFor(player.index);
       int idx = pos.index;
-      for (int step = 0; step < steps; step++) {
+      int remaining = steps;
+      while (remaining > 0) {
         final int next = (idx + 1) % len;
-        // Drej ind i EGET hjemstræk når man (efter en hel omgang) når tilbage
-        // til sit eget første felt.
-        if (next == ownEntry && piece.hasLeftStart) {
-          final int slot = (steps - step) - 1;
+        // Drej ind i EGET hjemstræk når man (efter en omgang) når sit eget
+        // UD-felt.
+        if (next == ownUd && piece.hasLeftStart) {
+          final int slot = remaining - 1;
           if (slot >= geometry.homeStretchLength) return null;
           for (int s = 0; s <= slot; s++) {
             if (state.pieceAt(HomeStretchPosition(player.index, s)) != null) {
@@ -274,9 +272,14 @@ class Rules {
           }
           return HomeStretchPosition(player.index, slot);
         }
-        // Et bevogtet udgangsfelt spærrer for passage (og landing).
-        if (_entryBlocked(state, next, piece.ownerIndex)) return null;
+        // Fremmed UD-felt: ryk forbi uden at tælle skridtet (14 → 1 direkte).
+        final int? udOwner = _entryOwner(next);
+        if (udOwner != null && udOwner != player.index) {
+          idx = next;
+          continue;
+        }
         idx = next;
+        remaining--;
       }
       return TrackPosition(idx);
     }

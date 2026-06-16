@@ -108,15 +108,16 @@ void main() {
           .where((Move m) => !m.exitsStart && m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      // 5+1=6; 5+11=16. På 60-ringen er TrackPosition(15) UD-felt for
-      // spiller 1 — det krydses, men ingen bevogter det her, så passage ok.
-      expect(targets, containsAll(<int>[6, 16]));
+      // 5+1=6. 5+11: krydser spiller 1's UD-felt (idx 15) som springes over
+      // (tæller ikke), så 11 tællende skridt fra idx 5 lander på idx 17.
+      expect(targets, containsAll(<int>[6, 17]));
     });
   });
 
   group('Konge', () {
     test('13 frem er gyldigt fra banen', () {
-      // Start på 3, 13 frem (ren ring) → 16.
+      // Start på idx 3, 13 frem. Krydser spiller 1's UD-felt (idx 15) som
+      // springes over → 13 tællende skridt lander på idx 17.
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(3)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.king, Suit.spades));
@@ -124,7 +125,7 @@ void main() {
           .where((Move m) => !m.exitsStart && m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      expect(targets, contains(16));
+      expect(targets, contains(17));
     });
   });
 
@@ -284,9 +285,9 @@ void main() {
       expect(landingOn13.steps.first.capturedPieceId, isNull);
     });
 
-    test('bevogtet UD-felt kan ikke slås', () {
-      // Spiller 1's brik står på sit eget UD-felt (index 15) → bevogtet.
-      // Spiller 0 fra 12 med en 3'er kan derfor IKKE lande på 15 og slå den.
+    test('andre spillere kan ikke lande på et fremmed UD-felt', () {
+      // Spiller 1's brik står på sit eget UD-felt (index 15). Spiller 0 kan
+      // ALDRIG lande på idx 15 — UD-felter springes over af alle andre.
       final positions = <List<PiecePosition>>[
         <PiecePosition>[
           const TrackPosition(12),
@@ -304,17 +305,23 @@ void main() {
           <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
       ];
       final state = makeState(piecePositions: positions);
-      final moves = rules.legalMoves(state, state.players[0],
-          const PlayingCard(Rank.three, Suit.hearts));
-      final landingOn15 = moves.where((Move m) =>
-          m.steps.first.to is TrackPosition &&
-          (m.steps.first.to as TrackPosition).index == 15);
-      expect(landingOn15, isEmpty);
+      // Prøv alle korttal: ingen forward-distance lander spiller 0 på idx 15.
+      for (final Rank r in <Rank>[
+        Rank.two, Rank.three, Rank.four, Rank.five, Rank.six
+      ]) {
+        final moves = rules.legalMoves(
+            state, state.players[0], PlayingCard(r, Suit.hearts));
+        final onUd = moves.where((Move m) =>
+            m.steps.first.to is TrackPosition &&
+            (m.steps.first.to as TrackPosition).index == 15);
+        expect(onUd, isEmpty, reason: 'kort $r landede på fremmed UD-felt');
+      }
     });
 
-    test('bevogtet UD-felt spærrer for passage', () {
-      // Spiller 1's brik på sit UD-felt (15). Spiller 0 fra 13 med en
-      // femmer ville passere 14 og 15 (15 bevogtet) → blokeret.
+    test('andre spillere springer fremmed UD-felt over (14 → 1 direkte)', () {
+      // Spiller 1's brik på sit UD-felt (15). Spiller 0 fra 13 med en femmer
+      // SPRINGER idx 15 over (tæller ikke) → 5 tællende skridt lander på 19,
+      // ikke 18. Passage er tilladt (ikke blokeret).
       final positions = <List<PiecePosition>>[
         <PiecePosition>[
           const TrackPosition(13),
@@ -334,26 +341,25 @@ void main() {
       final state = makeState(piecePositions: positions);
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.five, Suit.hearts));
-      final fromThirteen = moves.where((Move m) =>
+      final to19 = moves.where((Move m) =>
           m.steps.first.from is TrackPosition &&
-          (m.steps.first.from as TrackPosition).index == 13);
-      expect(fromThirteen, isEmpty);
+          (m.steps.first.from as TrackPosition).index == 13 &&
+          m.steps.first.to is TrackPosition &&
+          (m.steps.first.to as TrackPosition).index == 19);
+      expect(to19, isNotEmpty);
     });
 
-    test('felt 1 (efter UD) kan passeres uden bevogtning', () {
-      // Spiller 1's brik på felt 1 (TrackPosition(16)) — IKKE UD-feltet.
-      // Spiller 0 fra 13 med en femmer passerer 14, 15, 16, 17 og lander på 18.
-      // UD-feltet (15) er ubevogtet (ingen brik der), felt 1 har en enlig brik
-      // som godt må passeres.
+    test('ejeren bruger sit eget UD-felt normalt (tæller med)', () {
+      // Spiller 1's egen brik på idx 14 (sit felt 14) med en 2'er: 14 → 15
+      // (eget UD) → ... Faktisk: ejeren TÆLLER sit eget UD-felt. Fra idx 16
+      // (spiller 1 felt 1) er det lettere at vise: spiller 1 på idx 29
+      // (felt 14) + 2 = idx 30? Nej — idx 30 er spiller 2's UD (springes).
+      // Test i stedet at spiller 1 fra sit UD (15) + 1 = felt 1 (idx 16).
       final positions = <List<PiecePosition>>[
+        for (int i = 0; i < 1; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(0, s)],
         <PiecePosition>[
-          const TrackPosition(13),
-          const StartPosition(0, 1),
-          const StartPosition(0, 2),
-          const StartPosition(0, 3),
-        ],
-        <PiecePosition>[
-          const TrackPosition(16),
+          const TrackPosition(15), // spiller 1 på eget UD-felt
           const StartPosition(1, 1),
           const StartPosition(1, 2),
           const StartPosition(1, 3),
@@ -362,14 +368,13 @@ void main() {
           <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
       ];
       final state = makeState(piecePositions: positions);
-      final moves = rules.legalMoves(state, state.players[0],
-          const PlayingCard(Rank.five, Suit.hearts));
-      final toEighteen = moves.where((Move m) =>
-          m.steps.first.from is TrackPosition &&
-          (m.steps.first.from as TrackPosition).index == 13 &&
+      final moves = rules.legalMoves(state, state.players[1],
+          const PlayingCard(Rank.ace, Suit.hearts));
+      final to16 = moves.any((Move m) =>
+          !m.exitsStart &&
           m.steps.first.to is TrackPosition &&
-          (m.steps.first.to as TrackPosition).index == 18);
-      expect(toEighteen, isNotEmpty);
+          (m.steps.first.to as TrackPosition).index == 16);
+      expect(to16, isTrue);
     });
   });
 
