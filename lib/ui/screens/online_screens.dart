@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -180,6 +182,23 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 class OnlineHomeScreen extends ConsumerWidget {
   const OnlineHomeScreen({super.key});
 
+  Widget _gameTile(BuildContext context, GameSummary g) => Card(
+        child: ListTile(
+          leading: Icon(g.isPlaying ? Icons.play_circle : Icons.meeting_room),
+          title: Text('Spil ${g.code}  ·  vært: ${g.hostName}'),
+          subtitle: Text(g.isLobby
+              ? 'Venter i lobby'
+              : (g.isPlaying ? 'Tryk for at genindtræde' : 'I gang')),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                builder: (_) => g.isLobby
+                    ? LobbyScreen(code: g.code)
+                    : OnlineGameScreen(code: g.code)));
+          },
+        ),
+      );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final svc = ref.read(onlineServiceProvider);
@@ -223,29 +242,38 @@ class OnlineHomeScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             Expanded(
               child: games.when(
-                data: (list) => list.isEmpty
-                    ? const Text('Ingen aktive spil endnu.')
-                    : ListView(
-                        children: <Widget>[
-                          for (final g in list)
-                            Card(
-                              child: ListTile(
-                                title: Text('Spil ${g.code}  ·  vært: ${g.hostName}'),
-                                subtitle: Text(g.status == 'lobby'
-                                    ? 'Venter i lobby'
-                                    : 'I gang'),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () {
-                                  Navigator.of(context).push<void>(
-                                      MaterialPageRoute<void>(
-                                          builder: (_) => g.status == 'lobby'
-                                              ? LobbyScreen(code: g.code)
-                                              : OnlineGameScreen(code: g.code)));
-                                },
-                              ),
-                            ),
-                        ],
-                      ),
+                data: (list) {
+                  if (list.isEmpty) {
+                    return const Text('Ingen aktive spil endnu.');
+                  }
+                  // Igangværende spil først (så man hurtigt kan genindtræde),
+                  // dernæst lobbyer der venter.
+                  final playing = list.where((g) => g.isPlaying).toList();
+                  final lobbies = list.where((g) => !g.isPlaying).toList();
+                  return ListView(
+                    children: <Widget>[
+                      if (playing.isNotEmpty) ...<Widget>[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Text('Igangværende spil',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                        for (final g in playing) _gameTile(context, g),
+                        const SizedBox(height: 12),
+                      ],
+                      if (lobbies.isNotEmpty) ...<Widget>[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Text('Venter i lobby',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                        for (final g in lobbies) _gameTile(context, g),
+                      ],
+                    ],
+                  );
+                },
                 loading: () =>
                     const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Text('Fejl: $e'),
@@ -262,12 +290,40 @@ class OnlineHomeScreen extends ConsumerWidget {
 // Lobby: pladser, invitér spillere, start
 // ---------------------------------------------------------------------------
 
-class LobbyScreen extends ConsumerWidget {
+class LobbyScreen extends ConsumerStatefulWidget {
   const LobbyScreen({super.key, required this.code});
   final String code;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LobbyScreen> createState() => _LobbyScreenState();
+}
+
+class _LobbyScreenState extends ConsumerState<LobbyScreen> {
+  Timer? _heartbeat;
+  bool _navigatedToGame = false;
+
+  String get code => widget.code;
+
+  @override
+  void initState() {
+    super.initState();
+    final svc = ref.read(onlineServiceProvider);
+    // ignore: discarded_futures
+    svc.heartbeat(code);
+    _heartbeat = Timer.periodic(kPresenceInterval, (_) {
+      // ignore: discarded_futures
+      svc.heartbeat(code);
+    });
+  }
+
+  @override
+  void dispose() {
+    _heartbeat?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final svc = ref.read(onlineServiceProvider);
     final snap = ref.watch(gameStreamProvider(code));
     return Scaffold(
@@ -278,8 +334,10 @@ class LobbyScreen extends ConsumerWidget {
         data: (doc) {
           final d = doc.data();
           if (d == null) return const Center(child: Text('Spillet findes ikke'));
-          if (d['status'] == 'playing') {
+          if (d['status'] == 'playing' && !_navigatedToGame) {
+            _navigatedToGame = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
               Navigator.of(context).pushReplacement<void, void>(
                   MaterialPageRoute<void>(
                       builder: (_) => OnlineGameScreen(code: code)));
@@ -289,10 +347,29 @@ class LobbyScreen extends ConsumerWidget {
           final uids = d['uids'] as List;
           final colors =
               (d['colors'] as List).map((e) => (e as num).toInt()).toList();
+          final ready = (d['ready'] as Map?) ?? const <String, dynamic>{};
+          final aiSeats = (d['aiSeats'] as List?) ??
+              const <dynamic>[false, false, false, false];
           final bool isHost = d['hostUid'] == svc.uid;
-          final int? mySeat = uids.indexOf(svc.uid) == -1
-              ? null
-              : uids.indexOf(svc.uid);
+          final int seatOfMe = uids.indexOf(svc.uid);
+          final int? mySeat = seatOfMe == -1 ? null : seatOfMe;
+          final bool iAmReady =
+              svc.uid != null && (ready[svc.uid] as bool? ?? false);
+
+          // Antal optagne pladser (mennesker + AI-markerede).
+          final int filledSeats = <int>[
+            for (int i = 0; i < 4; i++)
+              if (uids[i] != null ||
+                  (i < aiSeats.length && aiSeats[i] == true))
+                i,
+          ].length;
+          // Alle menneskelige deltagere skal være klar før start.
+          final bool allHumansReady = <bool>[
+            for (int i = 0; i < 4; i++)
+              if (uids[i] != null) (ready[uids[i]] as bool? ?? false),
+          ].every((r) => r);
+          final bool canStart = filledSeats >= 2 && allHumansReady;
+
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -301,24 +378,15 @@ class LobbyScreen extends ConsumerWidget {
                 Text('Del koden $code, eller invitér spillere på email.'),
                 const SizedBox(height: 12),
                 for (int i = 0; i < 4; i++)
-                  Card(
-                    child: ListTile(
-                      leading: CircleAvatar(backgroundColor: Color(colors[i])),
-                      title: Text(uids[i] != null ? names[i] : 'Åben plads'),
-                      subtitle: Text(uids[i] != null
-                          ? (i == 0 ? 'Vært' : 'Tilsluttet')
-                          : 'Bliver AI hvis ingen tager pladsen'),
-                      trailing: (uids[i] == null && mySeat == null)
-                          ? TextButton(
-                              onPressed: () => svc.joinGame(
-                                  code: code,
-                                  seat: i,
-                                  colorValue: colors[i]),
-                              child: const Text('Tag plads'),
-                            )
-                          : null,
-                    ),
-                  ),
+                  _seatCard(context, svc,
+                      seat: i,
+                      names: names,
+                      uids: uids,
+                      colors: colors,
+                      ready: ready,
+                      aiSeats: aiSeats,
+                      isHost: isHost,
+                      mySeat: mySeat),
                 const SizedBox(height: 12),
                 if (isHost)
                   OutlinedButton.icon(
@@ -326,16 +394,102 @@ class LobbyScreen extends ConsumerWidget {
                     label: const Text('Invitér spiller (email)'),
                     onPressed: () => _invite(context, svc),
                   ),
+                if (mySeat != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  FilledButton.tonalIcon(
+                    icon: Icon(iAmReady ? Icons.check_circle : Icons.schedule),
+                    label: Text(iAmReady ? 'Du er klar' : 'Marker klar'),
+                    onPressed: () => svc.setReady(code, !iAmReady),
+                  ),
+                ],
                 const Spacer(),
                 if (isHost)
                   FilledButton(
-                    onPressed: () => svc.start(code),
-                    child: const Text('Start spil'),
+                    onPressed: canStart ? () => svc.startGameFromLobby(code) : null,
+                    child: Text(canStart
+                        ? 'Start spil'
+                        : (filledSeats < 2
+                            ? 'Mindst 2 pladser kræves'
+                            : 'Venter på at alle er klar…')),
+                  ),
+                if (isHost && filledSeats < 4)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Tomme pladser bliver til computer-spillere ved start.',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade600),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _seatCard(
+    BuildContext context,
+    OnlineService svc, {
+    required int seat,
+    required List<String> names,
+    required List uids,
+    required List<int> colors,
+    required Map ready,
+    required List aiSeats,
+    required bool isHost,
+    required int? mySeat,
+  }) {
+    final bool isAi = seat < aiSeats.length && aiSeats[seat] == true;
+    final bool occupied = uids[seat] != null;
+    final bool isReady =
+        occupied ? (ready[uids[seat]] as bool? ?? false) : false;
+    final String subtitle;
+    if (occupied) {
+      subtitle = seat == 0
+          ? (isReady ? 'Vært · klar' : 'Vært')
+          : (isReady ? 'Tilsluttet · klar' : 'Tilsluttet · ikke klar');
+    } else if (isAi) {
+      subtitle = 'Computer-spiller';
+    } else {
+      subtitle = 'Åben plads';
+    }
+
+    Widget? trailing;
+    if (!occupied && !isAi && mySeat == null) {
+      trailing = TextButton(
+        onPressed: () =>
+            svc.joinGame(code: code, seat: seat, colorValue: colors[seat]),
+        child: const Text('Tag plads'),
+      );
+    } else if (!occupied && isHost) {
+      // Vært kan slå AI til/fra på tomme pladser.
+      trailing = TextButton(
+        onPressed: () => svc.fillSeatWithAi(code, seat, ai: !isAi),
+        child: Text(isAi ? 'Gør åben' : 'Fyld med AI'),
+      );
+    } else if (occupied) {
+      trailing = Icon(
+        isReady ? Icons.check_circle : Icons.schedule,
+        color: isReady ? Colors.green : Colors.grey,
+      );
+    }
+
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Color(colors[seat]),
+          child: isAi
+              ? const Icon(Icons.smart_toy, size: 18, color: Colors.white)
+              : null,
+        ),
+        title: Text(occupied
+            ? names[seat]
+            : (isAi ? 'Computer' : 'Åben plads')),
+        subtitle: Text(subtitle),
+        trailing: trailing,
       ),
     );
   }

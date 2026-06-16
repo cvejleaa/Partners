@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -37,7 +39,32 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   // hver gang stream'en sender en opdatering efter spillet er over).
   bool _statsRecomputed = false;
 
+  // Heartbeat: holder vores "presence"-stempel friskt, så andre kan se at vi
+  // er til stede (og ikke fejlagtigt lader AI overtage vores tur).
+  Timer? _heartbeat;
+  // Tidspunkt (ms siden epoch) hvor vi sidst forsøgte en AI-overtagelse for en
+  // bestemt signatur — undgår at spamme transaktioner mens vi venter.
+  String _lastTakeoverSig = '';
+
   OnlineService get _svc => ref.read(onlineServiceProvider);
+
+  @override
+  void initState() {
+    super.initState();
+    // Send et første heartbeat og derefter periodisk.
+    // ignore: discarded_futures
+    _svc.heartbeat(widget.code);
+    _heartbeat = Timer.periodic(kPresenceInterval, (_) {
+      // ignore: discarded_futures
+      _svc.heartbeat(widget.code);
+    });
+  }
+
+  @override
+  void dispose() {
+    _heartbeat?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +101,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
           _maybeStartReplay(state, log, mySeen);
 
           // Vært driver AI-pladser og AI-bytte (kun når der ikke replayes).
-          if (!_replayActive) _maybeHostAct(state, isHost);
+          if (!_replayActive) _maybeHostAct(state, isHost, d);
 
           // Når spillet lige er afsluttet: genberegn alles stats én gang.
           if (state.winningTeamIndex != null && !_statsRecomputed) {
@@ -86,7 +113,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
           final names = (d['names'] as List).map((e) => e as String).toList();
           return Stack(
             children: <Widget>[
-              _buildGame(state, mySeat, lastByPlayer),
+              _buildGame(state, mySeat, lastByPlayer, d),
               if (_replayActive) _replayOverlay(log, names, state),
             ],
           );
@@ -199,13 +226,16 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     return out;
   }
 
-  void _maybeHostAct(GameState state, bool isHost) {
+  void _maybeHostAct(GameState state, bool isHost, Map<String, dynamic> d) {
+    // Kun værten driver AI-pladser og AI-overtagelser. Dette giver os ÉN
+    // deterministisk skribent og forhindrer at to klienter skriver samme træk.
     if (!isHost || _busy) return;
+    if (state.winningTeamIndex != null) return;
     final sig =
         '${state.handNumber}:${state.phase.name}:${state.currentPlayerIndex}:${state.exchangeBuffer.length}';
-    if (sig == _lastProcessed) return;
 
     if (state.phase == GamePhase.exchange) {
+      if (sig == _lastProcessed) return;
       final missingAi = <int>[
         for (int i = 0; i < state.players.length; i++)
           if (!state.players[i].isHuman && !state.exchangeBuffer.containsKey(i))
@@ -218,24 +248,59 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
               engine.submitExchangeCard(i, onlineAi.chooseExchangeCard(s, i));
             }
           }));
-    } else if (state.phase == GamePhase.play &&
-        !state.currentPlayer.isHuman) {
-      _lastProcessed = sig;
+    } else if (state.phase == GamePhase.play) {
       final idx = state.currentPlayerIndex;
-      final Move? m = onlineAi.chooseMove(state, idx);
-      final int discardedCount = state.players[idx].hand.length;
-      Future<void>.delayed(const Duration(milliseconds: 600), () {
-        _run(() => _svc.mutate(widget.code, (engine, s) {
-              if (m != null) {
-                engine.applyMove(idx, m);
-              } else {
-                engine.passHand(idx);
-              }
-            },
-            logEntry: m != null
-                ? moveLogEntry(idx, m)
-                : passLogEntry(idx, discardedCount)));
-      });
+      final bool isAiSeat = !state.currentPlayer.isHuman;
+
+      // AI-OVERTAGELSE: en menneskelig spiller er ved tur, men er væk og har
+      // ikke handlet inden for timeout-perioden. Værten tager trækket for dem.
+      bool takeover = false;
+      if (!isAiSeat) {
+        final since = OnlineService.timeSinceLastAction(d);
+        final away = OnlineService.seatLooksAway(d, idx);
+        // Kræv BÅDE at pladsen ser fraværende ud OG at der er gået for lang tid
+        // siden seneste handling — så aktive, men langsomme, spillere ikke
+        // bliver overtaget.
+        if (away && since != null && since > kAiTakeoverTimeout) {
+          takeover = true;
+        }
+      }
+
+      if (!isAiSeat && !takeover) return;
+
+      if (isAiSeat) {
+        // Almindelig AI-plads: brug signaturen til at undgå dobbelt-fyring.
+        if (sig == _lastProcessed) return;
+        _lastProcessed = sig;
+        final Move? m = onlineAi.chooseMove(state, idx);
+        final int discardedCount = state.players[idx].hand.length;
+        Future<void>.delayed(const Duration(milliseconds: 600), () {
+          _run(() => _svc.mutate(widget.code, (engine, s) {
+                if (m != null) {
+                  engine.applyMove(idx, m);
+                } else {
+                  engine.passHand(idx);
+                }
+              },
+              logEntry: m != null
+                  ? moveLogEntry(idx, m)
+                  : passLogEntry(idx, discardedCount)));
+        });
+      } else {
+        // AI-OVERTAGELSE af en fraværende menneskelig spiller. Brug en separat
+        // nøgle, så vi prøver igen ved næste snapshot hvis intet skete, men
+        // ikke spammer transaktioner. Selve beslutningen tages inde i
+        // transaktionen (aiTakeoverMove) og skriver kun hvis det stadig er
+        // spillerens tur — så aktive spillere aldrig overtages.
+        if (sig == _lastTakeoverSig) return;
+        _lastTakeoverSig = sig;
+        _run(() async {
+          final acted = await _svc.aiTakeoverMove(widget.code, idx);
+          // Hvis intet skete (fx spilleren handlede selv, eller transient
+          // fejl), tillad et nyt forsøg ved næste snapshot.
+          if (!acted && mounted) _lastTakeoverSig = '';
+        });
+      }
     }
   }
 
@@ -248,8 +313,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     }
   }
 
-  Widget _buildGame(
-      GameState state, int mySeat, Map<int, PlayingCard> lastByPlayer) {
+  Widget _buildGame(GameState state, int mySeat,
+      Map<int, PlayingCard> lastByPlayer, Map<String, dynamic> d) {
     final int viewer = mySeat >= 0 ? mySeat : 0;
     final highlighted = _highlightSet(state);
     return SafeArea(
@@ -324,7 +389,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
               );
             }),
           ),
-          _buildActionArea(state, mySeat),
+          _buildActionArea(state, mySeat, d),
         ],
       ),
     );
@@ -424,7 +489,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     if (ok == true) _play(move, mySeat);
   }
 
-  Widget _buildActionArea(GameState state, int mySeat) {
+  Widget _buildActionArea(
+      GameState state, int mySeat, Map<String, dynamic> d) {
     if (mySeat < 0) {
       return _bar('Du ser med (ikke din plads).');
     }
@@ -436,6 +502,13 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     }
     if (state.phase == GamePhase.play) {
       if (state.currentPlayerIndex != mySeat) {
+        final int cur = state.currentPlayerIndex;
+        // Vis hvis den nuværende spiller er væk (og en AI snart overtager).
+        if (state.currentPlayer.isHuman &&
+            OnlineService.seatLooksAway(d, cur)) {
+          return _bar(
+              '${state.currentPlayer.name} er væk — en computer overtager snart…');
+        }
         return _bar('${state.currentPlayer.name} spiller…');
       }
       final rules = Rules(state.geometry);
