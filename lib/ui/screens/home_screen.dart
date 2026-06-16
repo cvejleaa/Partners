@@ -6,6 +6,7 @@ import 'admin_screen.dart';
 import 'online_screens.dart';
 import 'profile_screen.dart';
 import 'self_test_screen.dart';
+import 'settings_screen.dart';
 import 'setup_screen.dart';
 import 'site_stats_screen.dart';
 import 'tutorial_screen.dart';
@@ -39,6 +40,12 @@ class HomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.fact_check_outlined),
             onPressed: () => Navigator.of(context).push<void>(
                 MaterialPageRoute<void>(builder: (_) => const SelfTestScreen())),
+          ),
+          IconButton(
+            tooltip: 'Indstillinger',
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => const SettingsScreen())),
           ),
           if (loggedIn)
             IconButton(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../online/online_service.dart';
+import '../../services/feedback_service.dart';
 import '../../stats/records.dart';
 import '../../stats/stats_repository.dart';
 
@@ -23,6 +24,11 @@ class _WinScreenState extends ConsumerState<WinScreen> {
   void initState() {
     super.initState();
     _loadRecords();
+    // Sejrs-feedback (lyd/haptik) når skærmen vises — styret af indstillinger.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(feedbackProvider).win();
+    });
   }
 
   Future<void> _loadRecords() async {

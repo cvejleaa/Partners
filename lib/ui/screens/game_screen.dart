@@ -8,6 +8,7 @@ import '../../models/game_state.dart';
 import '../../models/move.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
+import '../../services/feedback_service.dart';
 import '../widgets/board_view.dart';
 import '../widgets/card_counter_panel.dart';
 import '../widgets/card_view.dart';
@@ -111,6 +112,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _candidateMoves = <Move>[];
     });
     ref.read(gameProvider.notifier).applyMove(idx, move);
+    // Lyd/haptisk feedback (styret af brugerindstillinger). Slag prioriteres
+    // over bytte, som prioriteres over et almindeligt (diskret) træk.
+    final feedback = ref.read(feedbackProvider);
+    final bool captured =
+        move.steps.any((MoveStep s) => s.capturedPieceId != null);
+    if (captured) {
+      feedback.capture();
+    } else if (_isSwapCard(state, move.card)) {
+      feedback.swap();
+    } else {
+      feedback.move();
+    }
     _anim.forward(from: 0).whenComplete(() {
       if (!mounted) return;
       setState(() {

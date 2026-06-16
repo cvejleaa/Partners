@@ -17,6 +17,7 @@ import 'models/player.dart';
 import 'models/playing_card.dart';
 import 'online/online_service.dart';
 import 'online/serialize.dart';
+import 'state/settings_controller.dart';
 import 'stats/stats_repository.dart';
 import 'ui/screens/home_screen.dart';
 
@@ -215,17 +216,31 @@ class GameController extends StateNotifier<GameState> {
   }
 }
 
-class PartnersApp extends StatelessWidget {
+class PartnersApp extends ConsumerWidget {
   const PartnersApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeMode themeMode = ref.watch(
+      settingsProvider.select((Settings s) => s.themeMode),
+    );
     return MaterialApp(
       title: 'Partners',
       theme: ThemeData(
         colorSchemeSeed: const Color(0xFF8B5E3C),
+        brightness: Brightness.light,
         useMaterial3: true,
       ),
+      darkTheme: ThemeData(
+        // Behold den brune/grønne identitet i en mørk variant.
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF8B5E3C),
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: const Color(0xFF0E2A1A),
+        useMaterial3: true,
+      ),
+      themeMode: themeMode,
       home: const HomeScreen(),
     );
   }
