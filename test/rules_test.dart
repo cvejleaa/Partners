@@ -72,7 +72,7 @@ void main() {
 
   group('Konge', () {
     test('13 frem er gyldigt fra banen', () {
-      // Start på 3, 13 frem springer over ud-felt 15 → 17.
+      // Start på 3, 13 frem (ud-felter tæller med) → 16.
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(3)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.king, Suit.spades));
@@ -80,7 +80,7 @@ void main() {
           .where((Move m) => !m.exitsStart && m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      expect(targets, contains(17));
+      expect(targets, contains(16));
     });
   });
 
@@ -96,8 +96,8 @@ void main() {
       expect(targets, containsAll(<int>[24, 16]));
     });
 
-    test('4 baglæns springer over ud-felt 0 (wrap-around)', () {
-      // Brik på 2 — 4 baglæns springer over ud-felt 0 → 57.
+    test('4 baglæns wrap-around (ud-felter tæller med)', () {
+      // Brik på 2 — 4 baglæns krydser felt 0 → 58.
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(2)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.four, Suit.clubs));
@@ -105,7 +105,7 @@ void main() {
           .where((Move m) => m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      expect(targets, contains(57));
+      expect(targets, contains(58));
     });
   });
 
@@ -480,6 +480,38 @@ void main() {
       );
       // (state bruges ikke yderligere)
       expect(state.players[0].pieces.length, 4);
+    });
+  });
+
+  group('Spil på makker når egne brikker er i mål', () {
+    test('spiller flytter makkerens brik når alle 4 egne er hjemme', () {
+      // Spiller 0 har alle 4 brikker i hjemstrækket. Makker (P2) har én brik
+      // på banen. Med et kort der ellers ikke ville give træk (alle egne i
+      // mål er færdige), skal vi nu kunne rykke makkerens brik.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const HomeStretchPosition(0, 0),
+          const HomeStretchPosition(0, 1),
+          const HomeStretchPosition(0, 2),
+          const HomeStretchPosition(0, 3),
+        ],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(1, s)],
+        <PiecePosition>[
+          const TrackPosition(35),
+          const StartPosition(2, 1),
+          const StartPosition(2, 2),
+          const StartPosition(2, 3),
+        ],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(3, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.three, Suit.hearts));
+      // Trækket må flytte makkerens (P2's) brik p2.0 fra 35 til 38.
+      expect(moves, isNotEmpty);
+      final m = moves.first;
+      expect(m.steps.first.pieceId, 'p2.0');
+      expect(m.steps.first.to, const TrackPosition(38));
     });
   });
 }

@@ -369,8 +369,7 @@ List<CheckResult> _ruleChecks() {
         .where((Move m) => m.steps.first.to is TrackPosition)
         .map((Move m) => (m.steps.first.to as TrackPosition).index)
         .toSet();
-    out.add(CheckResult('4 baglæns springer over ud-felt 0 (→57)',
-        targets.contains(57)));
+    out.add(CheckResult('4 baglæns wrap-around (→58)', targets.contains(58)));
   }
 
   // Hjemstræk-indgang

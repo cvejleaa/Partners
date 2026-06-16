@@ -25,9 +25,17 @@ class Rules {
 
   /// Find alle gyldige [Move] som [player] kan lave med [card] i [state].
   List<Move> legalMoves(GameState state, Player player, PlayingCard card) {
+    // Når alle spillerens egne brikker er kommet i mål (hjemstrækket), spiller
+    // man videre på makkerens brikker indtil holdet har alle 8 hjem.
+    final bool allOwnHome = player.pieces
+        .every((Piece p) => p.position is HomeStretchPosition);
+    final Player active = allOwnHome
+        ? state.players[player.partnerIndex]
+        : player;
+
     // Rene ud-kort kan kun rykke en brik ud.
     if (card.isExit) {
-      return _exitStartMoves(state, player, card).toList();
+      return _exitStartMoves(state, active, card).toList();
     }
 
     final List<Move> moves = <Move>[];
@@ -35,33 +43,33 @@ class Rules {
 
     // 1) Gå ud af start (til eget ud-felt).
     if (cfg.exitStart) {
-      moves.addAll(_exitStartMoves(state, player, card));
+      moves.addAll(_exitStartMoves(state, active, card));
     }
 
     // 2) Almindelige fremad-skridt.
     for (final int steps in cfg.forwardSteps) {
-      for (final Piece p in player.pieces) {
+      for (final Piece p in active.pieces) {
         if (p.position is StartPosition) continue;
-        final Move? m = _tryAdvance(state, player, p, steps, card);
+        final Move? m = _tryAdvance(state, active, p, steps, card);
         if (m != null) moves.add(m);
       }
     }
 
     // 3) Baglæns (kun på banen).
     if (cfg.backwardSteps != null) {
-      for (final Piece p in player.pieces) {
+      for (final Piece p in active.pieces) {
         if (p.position is! TrackPosition) continue;
         final Move? m = _tryReverse(state, p, cfg.backwardSteps!, card);
         if (m != null) moves.add(m);
       }
     }
 
-    // 4) Split (7'eren): total felter delt over flere egne brikker.
+    // 4) Split (7'eren): total felter delt over flere af [active]s brikker.
     if (cfg.splitTotal != null) {
-      moves.addAll(_splitMoves(state, player, card, cfg.splitTotal!));
+      moves.addAll(_splitMoves(state, active, card, cfg.splitTotal!));
     }
 
-    // 5) Byt to brikker (Knægt).
+    // 5) Byt to brikker (Knægt) — forbliver mellem to FORSKELLIGE spillere.
     if (cfg.swap) {
       moves.addAll(_swapMoves(state, player, card));
     }
@@ -177,19 +185,16 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
-    // Tæl kun nummererede felter baglæns; ud-felter springes over (besat spærrer).
+    // Hver felt tæller — også ud-felter. Et besat ud-felt spærrer for passage.
     final int len = geometry.trackLength;
     int idx = pos.index;
-    int counted = 0;
-    while (counted < steps) {
+    for (int step = 0; step < steps; step++) {
       final int next = (idx - 1 + len) % len;
-      if (_entryOwner(next) != null) {
-        if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
-        idx = next;
-        continue;
+      if (_entryOwner(next) != null &&
+          state.piecesAt(TrackPosition(next)).isNotEmpty) {
+        return null;
       }
       idx = next;
-      counted++;
     }
     final TrackPosition target = TrackPosition(idx);
     final _Landing landing = _landing(state, piece.ownerIndex, target);
@@ -230,17 +235,18 @@ class Rules {
     }
 
     if (pos is TrackPosition) {
-      // Tæl kun nummererede felter — ud-felter tælles ALDRIG med, man kan ikke
-      // stoppe på dem, og et besat ud-felt spærrer for passage.
+      // Ud-felter tæller med som almindelige felter, men man kan ikke lande på
+      // andres ud-felt (_landing håndterer det), og et besat ud-felt spærrer
+      // for passage.
       final int len = geometry.trackLength;
       final int ownEntry = geometry.startTrackIndexFor(player.index);
       int idx = pos.index;
-      int counted = 0;
-      while (counted < steps) {
+      for (int step = 0; step < steps; step++) {
         final int next = (idx + 1) % len;
-        // Drej ind i EGET hjemstræk når man når sit eget ud-felt (efter en omgang).
+        // Drej ind i EGET hjemstræk når man når sit eget ud-felt
+        // (efter en omgang).
         if (next == ownEntry && piece.hasLeftStart) {
-          final int slot = (steps - counted) - 1;
+          final int slot = (steps - step) - 1;
           if (slot >= geometry.homeStretchLength) return null;
           for (int s = 0; s <= slot; s++) {
             if (state.pieceAt(HomeStretchPosition(player.index, s)) != null) {

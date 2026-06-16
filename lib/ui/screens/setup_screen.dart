@@ -102,7 +102,13 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: unique
-                    ? () {
+                    ? () async {
+                        // Hent altid friske kortregler fra Firestore inden
+                        // spillet starter, så admin-ændringer slår igennem.
+                        await ref
+                            .read(cardRulesProvider.notifier)
+                            .refresh();
+                        if (!context.mounted) return;
                         final List<PlayerSetup> setups = <PlayerSetup>[
                           for (int i = 0; i < 4; i++)
                             PlayerSetup(

@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -13,6 +15,9 @@ import 'models/move.dart';
 import 'models/piece.dart';
 import 'models/player.dart';
 import 'models/playing_card.dart';
+import 'online/online_service.dart';
+import 'online/serialize.dart';
+import 'stats/stats_repository.dart';
 import 'ui/screens/home_screen.dart';
 
 class PlayerSetup {
@@ -37,6 +42,13 @@ class GameController extends StateNotifier<GameState> {
   GameEngine? _engine;
   final Uuid _uuid = const Uuid();
   final Random _rng = Random();
+
+  // Træk-log for AI-spil (svarende til online-spillets log).
+  final List<Map<String, dynamic>> _aiLog = <Map<String, dynamic>>[];
+  String? _aiGameCode;
+  bool _aiSavedAtEnd = false;
+  String? _aiHostUid;
+  String? _aiHostName;
 
   /// Offentlig adgang til den aktuelle state (StateNotifier.state er protected).
   GameState get currentState => state;
@@ -66,7 +78,7 @@ class GameController extends StateNotifier<GameState> {
           pieces: <Piece>[
             for (int s = 0; s < 4; s++)
               Piece(
-                id: _uuid.v4(),
+                id: 'p$i.$s',
                 ownerIndex: i,
                 position: StartPosition(i, s),
               ),
@@ -85,6 +97,12 @@ class GameController extends StateNotifier<GameState> {
       cardRules: cardRules,
     );
     _engine = GameEngine(state: s, rng: _rng);
+    _aiLog.clear();
+    _aiGameCode = 'AI-${_uuid.v4().substring(0, 6).toUpperCase()}';
+    _aiSavedAtEnd = false;
+    final fbUser = FirebaseAuth.instance.currentUser;
+    _aiHostUid = fbUser?.uid;
+    _aiHostName = fbUser?.displayName ?? fbUser?.email ?? 'Spiller';
     state = s;
   }
 
@@ -105,6 +123,7 @@ class GameController extends StateNotifier<GameState> {
 
   void applyMove(int playerIndex, Move move) {
     _engine?.applyMove(playerIndex, move);
+    _aiLog.add(_withTimestamp(moveLogEntry(playerIndex, move)));
     _bump();
   }
 
@@ -116,8 +135,51 @@ class GameController extends StateNotifier<GameState> {
   bool canPlay(int playerIndex) => _engine?.canPlay(playerIndex) ?? false;
 
   void passHand(int playerIndex) {
+    final int discarded = _engine?.state.players[playerIndex].hand.length ?? 0;
     _engine?.passHand(playerIndex);
+    _aiLog.add(_withTimestamp(passLogEntry(playerIndex, discarded)));
     _bump();
+  }
+
+  Map<String, dynamic> _withTimestamp(Map<String, dynamic> entry) {
+    return <String, dynamic>{...entry, 't': Timestamp.now()};
+  }
+
+  Future<void> _persistFinishedAiGame() async {
+    if (_aiSavedAtEnd) return;
+    if (_engine == null) return;
+    final s = _engine!.state;
+    if (s.winningTeamIndex == null) return;
+    final uid = _aiHostUid;
+    if (uid == null) return; // ikke logget ind → kan ikke skrive
+    _aiSavedAtEnd = true;
+    try {
+      final code = _aiGameCode ?? 'AI-${_uuid.v4().substring(0, 6)}';
+      await firestore.collection('games').doc(code).set(<String, dynamic>{
+        'status': 'over',
+        'hostUid': uid,
+        'hostName': _aiHostName,
+        'names': s.players.map((p) => p.name).toList(),
+        'colors': s.players.map((p) => p.color.toARGB32()).toList(),
+        // Kun værten har en uid; AI-pladserne er null.
+        'uids':
+            s.players.map((p) => p.isHuman ? uid : null).toList(),
+        'members': <String>[uid],
+        'invitedUids': <String>[],
+        'cardRules': s.cardRules.toJson(),
+        'state': gameStateToMap(s),
+        'log': _aiLog,
+        'winningTeamIndex': s.winningTeamIndex,
+        'createdAt': FieldValue.serverTimestamp(),
+        'finishedAt': FieldValue.serverTimestamp(),
+        'mode': 'ai',
+      });
+      // Genberegn stats-cachen så profilen opdaterer sig.
+      // ignore: discarded_futures
+      StatsRepository().recomputeAndSave();
+    } catch (e) {
+      debugPrint('[AI persist] $e');
+    }
   }
 
   void reset() {
@@ -145,6 +207,11 @@ class GameController extends StateNotifier<GameState> {
       cardRules: e.cardRules,
       exchangeBuffer: Map<int, PlayingCard?>.from(e.exchangeBuffer),
     );
+    // Når spillet lige er afsluttet, persistér det til Firestore for stats.
+    if (e.winningTeamIndex != null) {
+      // ignore: discarded_futures
+      _persistFinishedAiGame();
+    }
   }
 }
 
