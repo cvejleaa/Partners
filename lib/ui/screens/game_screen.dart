@@ -395,43 +395,52 @@ class _GameScreenState extends ConsumerState<GameScreen>
             style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
           const SizedBox(height: 4),
-          SizedBox(
-            height: 84,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              children: <Widget>[
-                for (final PlayingCard c in human.hand)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: CardView(
-                      card: c,
-                      rules: state.cardRules,
-                      width: 54,
-                      selected: _humanExchangeChoice == c,
-                      onTap: humanDone
-                          ? null
-                          : () => setState(() => _humanExchangeChoice = c),
-                    ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Expanded(
+                child: SizedBox(
+                  height: 84,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    children: <Widget>[
+                      for (final PlayingCard c in human.hand)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: CardView(
+                            card: c,
+                            rules: state.cardRules,
+                            width: 54,
+                            selected: _humanExchangeChoice == c,
+                            onTap: humanDone
+                                ? null
+                                : () =>
+                                    setState(() => _humanExchangeChoice = c),
+                          ),
+                        ),
+                    ],
                   ),
+                ),
+              ),
+              if (!humanDone) ...<Widget>[
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _humanExchangeChoice == null
+                      ? null
+                      : () {
+                          ref.read(gameProvider.notifier).submitExchange(
+                                human.index,
+                                _humanExchangeChoice!,
+                              );
+                          setState(() => _humanExchangeChoice = null);
+                          _scheduleAi();
+                        },
+                  child: const Text('Bekræft\nbytte', textAlign: TextAlign.center),
+                ),
               ],
-            ),
+            ],
           ),
-          const SizedBox(height: 6),
-          if (!humanDone)
-            FilledButton(
-              onPressed: _humanExchangeChoice == null
-                  ? null
-                  : () {
-                      ref.read(gameProvider.notifier).submitExchange(
-                            human.index,
-                            _humanExchangeChoice!,
-                          );
-                      setState(() => _humanExchangeChoice = null);
-                      _scheduleAi();
-                    },
-              child: const Text('Bekræft bytte'),
-            ),
         ],
       ),
     );
