@@ -255,14 +255,12 @@ class Rules {
           }
           return HomeStretchPosition(player.index, slot);
         }
-        if (_entryOwner(next) != null) {
-          // Ud-felt: kan ikke passere hvis besat; ellers passeres det uden at tælle.
-          if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
-          idx = next;
-          continue;
+        // Besat ud-felt spærrer for passage.
+        if (_entryOwner(next) != null &&
+            state.piecesAt(TrackPosition(next)).isNotEmpty) {
+          return null;
         }
         idx = next;
-        counted++;
       }
       return TrackPosition(idx);
     }
