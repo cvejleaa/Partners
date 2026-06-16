@@ -1,25 +1,147 @@
 <!DOCTYPE html>
-<html>
+<html lang="da">
 <head>
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Partners - klassisk dansk brætspil">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Partners — det klassiske danske brætspil. Spil mod tre AI-modstandere eller online mod venner. Gratis i din browser.">
 
-  <!-- iOS meta tags & icons -->
+  <!-- Tema -->
+  <meta name="theme-color" content="#8B5E3C">
+
+  <!-- iOS / Apple web app -->
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Partners">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" href="icons/Icon.svg">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Partners">
+  <meta property="og:title" content="Partners">
+  <meta property="og:description" content="Det klassiske danske brætspil — spil mod AI eller online mod venner.">
+  <meta property="og:image" content="icons/Icon.svg">
+  <meta property="og:locale" content="da_DK">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Partners">
+  <meta name="twitter:description" content="Det klassiske danske brætspil — spil mod AI eller online mod venner.">
+  <meta name="twitter:image" content="icons/Icon.svg">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="mask-icon" href="favicon.svg" color="#8B5E3C">
 
   <title>Partners</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #0E2A1A;
+    }
+
+    /* Loading-overlay vises mens Flutter loader, og fjernes ved 'flutter-first-frame'. */
+    #loading {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      background:
+        radial-gradient(circle at 50% 38%, #15412a 0%, #0E2A1A 70%);
+      color: #F5EAD2;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      transition: opacity 0.45s ease;
+    }
+
+    #loading.loaded {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #loading .brand {
+      width: 96px;
+      height: 96px;
+      filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.45));
+    }
+
+    #loading .title {
+      font-size: 2.1rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #F5EAD2;
+      margin: 0;
+    }
+
+    #loading .subtitle {
+      margin: -14px 0 0;
+      font-size: 0.95rem;
+      color: #C9B896;
+      letter-spacing: 0.04em;
+    }
+
+    #loading .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(245, 234, 210, 0.25);
+      border-top-color: #8B5E3C;
+      border-radius: 50%;
+      animation: partners-spin 0.9s linear infinite;
+    }
+
+    @keyframes partners-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #loading .spinner { animation-duration: 2.4s; }
+      #loading { transition: none; }
+    }
+  </style>
 </head>
 <body>
+  <!-- Loading-overlay (dansk). Skjules naar Flutter har tegnet foerste frame. -->
+  <div id="loading" role="status" aria-live="polite" aria-label="Indlæser Partners">
+    <svg class="brand" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="64" height="64" rx="14" fill="#8B5E3C"/>
+      <circle cx="32" cy="32" r="8.5" fill="none" stroke="#F5EAD2" stroke-width="3"/>
+      <circle cx="32" cy="13" r="6.5" fill="#E53935" stroke="#F5EAD2" stroke-width="1.5"/>
+      <circle cx="51" cy="32" r="6.5" fill="#1E88E5" stroke="#F5EAD2" stroke-width="1.5"/>
+      <circle cx="32" cy="51" r="6.5" fill="#43A047" stroke="#F5EAD2" stroke-width="1.5"/>
+      <circle cx="13" cy="32" r="6.5" fill="#FDD835" stroke="#F5EAD2" stroke-width="1.5"/>
+    </svg>
+    <h1 class="title">Partners</h1>
+    <p class="subtitle">Indlæser spillet …</p>
+    <div class="spinner" aria-hidden="true"></div>
+  </div>
+
+  <script>
+    // Fjern loading-overlay naar Flutter har tegnet sin foerste frame.
+    (function () {
+      function hideLoading() {
+        var el = document.getElementById('loading');
+        if (!el) return;
+        el.classList.add('loaded');
+        window.setTimeout(function () {
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+        }, 600);
+      }
+      window.addEventListener('flutter-first-frame', hideLoading);
+      // Sikkerheds-fallback: skjul efter 20s hvis eventet udebliver.
+      window.setTimeout(hideLoading, 20000);
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
