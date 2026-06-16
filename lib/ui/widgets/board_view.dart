@@ -109,12 +109,13 @@ Offset _startPoint(
 
 Offset _exitPoint(
     Offset c, double radius, int playerIndex, int trackLen, double rot) {
-  // Ud-feltet ligger PÅ ringen, præcis mellem den forrige spillers felt 14
-  // (index entry-1) og spillerens eget felt 1 (index entry) — dvs. ved
-  // vinklen for entry - 0.5.
+  // Ud-feltet ligger mellem den forrige spillers felt 14 og spillerens eget
+  // felt 1 — dvs. ved vinklen entry - 0.5. For ikke at overlappe selve
+  // ringens celler trækkes det let indad (radius * 0.90), så det sidder som
+  // en lille lomme på indersiden af ringen mellem de to felter.
   final int entry = playerIndex * (trackLen ~/ 4);
   final double a = -pi / 2 + 2 * pi * (entry - 0.5) / trackLen + rot;
-  return Offset(c.dx + radius * cos(a), c.dy + radius * sin(a));
+  return Offset(c.dx + radius * 0.90 * cos(a), c.dy + radius * 0.90 * sin(a));
 }
 
 Offset _posPoint(
@@ -218,22 +219,24 @@ class _BoardPainter extends CustomPainter {
           isFirstField ? state.players[ownerOfFirst].color : Colors.black54);
     }
 
-    // Ud-felterne tegnes PÅ ringen, mellem den forrige spillers felt 14 og
-    // spillerens eget felt 1. Logisk er de stadig en separat ExitPosition —
-    // brikker passerer dem aldrig på ringen — men visuelt ligger de der hvor
-    // man intuitivt forventer dem.
+    // Ud-felterne tegnes som en lille lomme på INDERSIDEN af ringen, præcis
+    // mellem den forrige spillers felt 14 og spillerens eget felt 1. Logisk er
+    // de stadig en separat ExitPosition — brikker passerer dem aldrig på
+    // ringen — men visuelt ligger de der hvor man intuitivt forventer dem.
+    final double udR = cr * 1.05;
     for (final Player pl in state.players) {
       final Offset p = _exitPoint(center, tr, pl.index, trackLen, rotation);
-      canvas.drawCircle(p, cr, Paint()..color = pl.color.withValues(alpha: 0.25));
+      canvas.drawCircle(
+          p, udR, Paint()..color = pl.color.withValues(alpha: 0.30));
       canvas.drawCircle(
         p,
-        cr,
+        udR,
         Paint()
           ..color = pl.color
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.2,
       );
-      _text(canvas, 'UD', p, cr * 0.7, pl.color);
+      _text(canvas, 'UD', p, cr * 0.75, pl.color);
     }
 
     // Start-bås.

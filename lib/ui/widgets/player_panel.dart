@@ -36,14 +36,17 @@ class PlayerPanel extends StatelessWidget {
     final double countSize = compact ? 11 : 13;
     final double cardW = compact ? 30 : 38;
     final double cardSlot = compact ? 46 : 58;
+    // Baggrund: spillerens egen farve som let gennemsigtig "frosted" struktur
+    // (kraftigere når det er deres tur). Det gør panelerne lette at kende selv
+    // når de sidder oven på det grønne bord-tæppe.
     return Container(
       padding: EdgeInsets.all(compact ? 5 : 8),
       decoration: BoxDecoration(
-        color: isCurrent ? player.color.withValues(alpha: 0.22) : Colors.white,
+        color: player.color.withValues(alpha: isCurrent ? 0.55 : 0.28),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isCurrent ? player.color : Colors.black26,
-          width: isCurrent ? 2.5 : 1,
+          color: player.color,
+          width: isCurrent ? 2.5 : 1.2,
         ),
         boxShadow: isCurrent
             ? <BoxShadow>[
