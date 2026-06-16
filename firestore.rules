@@ -29,5 +29,13 @@ service cloud.firestore {
     match /games/{game} {
       allow read, write: if isSignedIn();
     }
+
+    // Stats-cache pr. bruger: alle indloggede må læse (profilskærmen viser
+    // andres stats); skrivning sker fra klienten der lige har afsluttet et
+    // spil (foreløbig: alle indloggede må skrive).
+    match /userStats/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
   }
 }
