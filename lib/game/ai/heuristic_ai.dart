@@ -107,21 +107,30 @@ class HeuristicAi implements AiPlayer {
   double _scoreMove(GameState state, Player me, Move move) {
     double score = 0;
     for (final MoveStep step in move.steps) {
+      final Piece movedPiece = state.pieceById(step.pieceId);
+      final bool movedIsTeammate =
+          state.players[movedPiece.ownerIndex].teamIndex == me.teamIndex;
+
       if (step.capturedPieceId != null) {
-        score += 100;
+        final Piece captured = state.pieceById(step.capturedPieceId!);
+        final bool capturedIsTeammate =
+            state.players[captured.ownerIndex].teamIndex == me.teamIndex;
+        // Slag på makker er en katastrofe — gør det altid uattraktivt.
+        score += capturedIsTeammate ? -500 : 100;
       }
       if (step.from is StartPosition && step.to is TrackPosition) {
-        score += 80;
+        // Egen ud-af-start vægter mest; gør lidt mindre for makker.
+        score += movedIsTeammate && movedPiece.ownerIndex != me.index ? 40 : 80;
       }
       if (step.to is HomeStretchPosition) {
         score += 50;
       }
-      // Forsøg at flytte fremad på banen
+      // Fremad-progres måles mod brikkens EGEN hjem-indgang.
       if (step.from is TrackPosition && step.to is TrackPosition) {
         final int from = (step.from as TrackPosition).index;
         final int to = (step.to as TrackPosition).index;
         final int entry =
-            state.geometry.startTrackIndexFor(me.index);
+            state.geometry.startTrackIndexFor(movedPiece.ownerIndex);
         final int distFrom =
             (entry - from - 1 + state.geometry.trackLength) %
                     state.geometry.trackLength +
@@ -130,7 +139,11 @@ class HeuristicAi implements AiPlayer {
             (entry - to - 1 + state.geometry.trackLength) %
                     state.geometry.trackLength +
                 1;
-        score += (distFrom - distTo).toDouble();
+        final double progress = (distFrom - distTo).toDouble();
+        // Tæl makker-progres lidt mindre end egen — men stadig positivt.
+        score += movedIsTeammate && movedPiece.ownerIndex != me.index
+            ? progress * 0.6
+            : progress;
       }
     }
     score += _rng.nextDouble() * 5 - 2.5;

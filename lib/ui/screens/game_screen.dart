@@ -538,15 +538,24 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _showMoveChoice(List<Move> options) async {
+    // Konsolider identiske split-effekter (når flere brikker står på samme
+    // felt er fx [6,1,0] og [6,0,1] visuelt det samme træk).
+    final Map<String, Move> byEffect = <String, Move>{};
+    for (final Move m in options) {
+      byEffect.putIfAbsent(_describeMove(m), () => m);
+    }
+    final List<MapEntry<String, Move>> entries = byEffect.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
     final Move? chosen = await showDialog<Move>(
       context: context,
       builder: (BuildContext ctx) => SimpleDialog(
         title: const Text('Vælg træk'),
         children: <Widget>[
-          for (final Move m in options)
+          for (final MapEntry<String, Move> e in entries)
             SimpleDialogOption(
-              onPressed: () => Navigator.of(ctx).pop(m),
-              child: Text(_describeMove(m)),
+              onPressed: () => Navigator.of(ctx).pop(e.value),
+              child: Text(e.key),
             ),
         ],
       ),
@@ -555,16 +564,28 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   String _describeMove(Move m) {
-    final MoveStep s = m.steps.first;
     if (m.exitsStart) return 'Gå ud af start';
+    if (m.steps.length == 1) return _describeStep(m.steps.first);
+    // Split (fx 7'eren): beskriv ALLE skridt så brugeren ser at flere
+    // brikker rykker. Sorter efter længst frem først for læselighed.
+    final List<String> parts =
+        m.steps.map(_describeStep).toList()..sort((a, b) => b.compareTo(a));
+    return parts.join(' + ');
+  }
+
+  String _describeStep(MoveStep s) {
     final from = s.from;
     final to = s.to;
+    if (from is StartPosition && to is TrackPosition) return 'ud af start';
+    if (to is HomeStretchPosition) return 'hjem (felt ${to.slot + 1})';
     if (from is TrackPosition && to is TrackPosition) {
-      final int delta = to.index - from.index;
-      return delta > 0 ? '$delta felter frem' : '${-delta} felter tilbage';
+      final int len = ref.read(gameProvider).geometry.trackLength;
+      final int fwd = (to.index - from.index + len) % len;
+      final int back = (from.index - to.index + len) % len;
+      if (fwd == 0) return 'bliv stå';
+      return fwd <= back ? '$fwd frem' : '$back tilbage';
     }
-    if (to is HomeStretchPosition) return 'Gå i hjemstrækket';
-    return 'Træk';
+    return 'træk';
   }
 
   void _applyMove(Move move) {
