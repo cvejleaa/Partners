@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -40,6 +42,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final svc = ref.read(onlineServiceProvider);
     try {
       if (_signup) {
+        if (_name.text.trim().isEmpty) {
+          throw 'Skriv et vist navn';
+        }
+        if (_pass.text.length < 6) {
+          throw 'Adgangskode skal være mindst 6 tegn';
+        }
         await svc.signUp(_email.text, _pass.text, _name.text);
       } else {
         await svc.signIn(_email.text, _pass.text);
@@ -47,10 +55,58 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       if (!mounted) return;
       Navigator.of(context).pushReplacement<void, void>(
           MaterialPageRoute<void>(builder: (_) => const OnlineHomeScreen()));
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = _humanAuthError(e));
     } catch (e) {
       setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _google() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (!kIsWeb) {
+        throw 'Google-login er kun aktiveret på web i denne version.';
+      }
+      await ref.read(onlineServiceProvider).signInWithGoogleViaPopup();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement<void, void>(
+          MaterialPageRoute<void>(builder: (_) => const OnlineHomeScreen()));
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = _humanAuthError(e));
+    } catch (e) {
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _humanAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return 'Email er allerede i brug — log ind i stedet.';
+      case 'invalid-email':
+        return 'Ugyldig email-adresse.';
+      case 'weak-password':
+        return 'For svag adgangskode (mindst 6 tegn).';
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Forkert email eller adgangskode.';
+      case 'user-not-found':
+        return 'Ingen konto med den email — opret en konto.';
+      case 'network-request-failed':
+        return 'Netværksfejl — tjek internet og prøv igen.';
+      case 'operation-not-allowed':
+        return 'Login-metoden er ikke aktiveret i Firebase.';
+      case 'popup-closed-by-user':
+        return 'Google-vinduet blev lukket.';
+      default:
+        return '${e.code}: ${e.message ?? 'ukendt fejl'}';
     }
   }
 
@@ -93,6 +149,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               child: FilledButton(
                 onPressed: _busy ? null : _submit,
                 child: Text(_signup ? 'Opret konto' : 'Log ind'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _google,
+                icon: const Icon(Icons.account_circle),
+                label: const Text('Fortsæt med Google'),
               ),
             ),
             TextButton(

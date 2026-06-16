@@ -62,18 +62,57 @@ class OnlineService {
   Future<void> signUp(String email, String password, String displayName) async {
     final cred = await _auth.createUserWithEmailAndPassword(
         email: email.trim(), password: password);
-    await cred.user!.updateDisplayName(displayName.trim());
-    await _users.doc(cred.user!.uid).set(<String, dynamic>{
-      'displayName': displayName.trim(),
-      'emailLower': email.trim().toLowerCase(),
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    final user = cred.user!;
+    try {
+      await user.updateDisplayName(displayName.trim());
+      await _writeProfile(user.uid,
+          displayName: displayName.trim(), email: email.trim());
+    } catch (e) {
+      // Profilen kunne ikke skrives — slet auth-brugeren igen, så samme
+      // email kan bruges til at prøve igen (i stedet for at sidde fast i
+      // "email already in use" uden profil).
+      try {
+        await user.delete();
+      } catch (_) {}
+      rethrow;
+    }
   }
 
-  Future<void> signIn(String email, String password) =>
-      _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
+  Future<void> signIn(String email, String password) async {
+    final cred = await _auth.signInWithEmailAndPassword(
+        email: email.trim(), password: password);
+    // Backfill profil hvis den mangler (fx hvis en tidligere signup fejlede
+    // efter Auth blev oprettet, eller hvis brugeren blev oprettet i konsollen).
+    await _ensureProfile(cred.user!);
+  }
+
+  Future<UserCredential> signInWithGoogleViaPopup() async {
+    final provider = GoogleAuthProvider();
+    final cred = await _auth.signInWithPopup(provider);
+    await _ensureProfile(cred.user!);
+    return cred;
+  }
 
   Future<void> signOut() => _auth.signOut();
+
+  Future<void> _ensureProfile(User user) async {
+    final doc = await _users.doc(user.uid).get();
+    if (doc.exists) return;
+    final email = user.email ?? '';
+    final name = (user.displayName ?? '').isNotEmpty
+        ? user.displayName!
+        : (email.isNotEmpty ? email.split('@').first : 'Spiller');
+    await _writeProfile(user.uid, displayName: name, email: email);
+  }
+
+  Future<void> _writeProfile(String uid,
+      {required String displayName, required String email}) async {
+    await _users.doc(uid).set(<String, dynamic>{
+      'displayName': displayName,
+      'emailLower': email.toLowerCase(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 
   Future<String> myDisplayName() async {
     final u = _auth.currentUser;
