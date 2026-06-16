@@ -513,6 +513,48 @@ void main() {
       expect(m.steps.first.pieceId, 'p2.0');
       expect(m.steps.first.to, const TrackPosition(38));
     });
+
+    test('Knægt-byt kan stadig bruges når mine brikker er færdige', () {
+      // Spiller 0 alle hjemme. Modstander (P1) og makker (P2) har én brik
+      // hver på banen. Knægt med swap=true skal give byt-træk.
+      final swapRules = CardRules.defaults()
+          .withRank(Rank.jack, const CardRuleConfig(swap: true));
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const HomeStretchPosition(0, 0),
+          const HomeStretchPosition(0, 1),
+          const HomeStretchPosition(0, 2),
+          const HomeStretchPosition(0, 3),
+        ],
+        <PiecePosition>[
+          const TrackPosition(20),
+          const StartPosition(1, 1),
+          const StartPosition(1, 2),
+          const StartPosition(1, 3),
+        ],
+        <PiecePosition>[
+          const TrackPosition(40),
+          const StartPosition(2, 1),
+          const StartPosition(2, 2),
+          const StartPosition(2, 3),
+        ],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(3, s)],
+      ];
+      final state = makeState(
+        piecePositions: positions,
+        cardRules: swapRules,
+      );
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.jack, Suit.hearts));
+      expect(moves, isNotEmpty);
+      // Træk har 2 steps og involverer to forskellige ejere (P1+P2).
+      final m = moves.first;
+      expect(m.steps.length, 2);
+      final owners = m.steps
+          .map((s) => state.pieceById(s.pieceId).ownerIndex)
+          .toSet();
+      expect(owners, containsAll(<int>[1, 2]));
+    });
   });
 }
 
