@@ -8,6 +8,7 @@ import 'profile_screen.dart';
 import 'self_test_screen.dart';
 import 'setup_screen.dart';
 import 'site_stats_screen.dart';
+import 'tutorial_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -64,6 +65,18 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
                 _LoginIndicator(user: user, admin: admin),
                 const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: _smallButton(
+                    context,
+                    Icons.school,
+                    'Sådan spiller du',
+                    () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const TutorialScreen())),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 if (!loggedIn)
                   _bigButton(context, Icons.login, 'Log ind / opret konto',
                       () {
