@@ -85,23 +85,43 @@ class _PiecePoint {
 // Geometri (statiske, rotation-bevidste hjælpere)
 // ---------------------------------------------------------------------------
 
+// Visuelt fylder ringen 4 × (kvarter + 1) positioner: 14 nummererede felter +
+// 1 UD-felt pr. spiller. UD-feltet sidder DER hvor felt 1 visuelt var — felt
+// 1..14 fittes ind imellem som de næste 14 positioner.
+
+int _visualPosForTrack(int index, int trackLen) {
+  final int q = trackLen ~/ 4;
+  return 15 * (index ~/ q) + (index % q) + 1;
+}
+
+int _visualPosForExit(int playerIndex, int trackLen) =>
+    15 * playerIndex;
+
+int _visualTotal(int trackLen) => 4 * ((trackLen ~/ 4) + 1);
+
+double _angleForVisual(int vp, int trackLen, double rot) =>
+    -pi / 2 + 2 * pi * vp / _visualTotal(trackLen) + rot;
+
 Offset _trackPoint(Offset c, double radius, int index, int trackLen, double rot) {
-  final double a = -pi / 2 + 2 * pi * index / trackLen + rot;
+  final double a =
+      _angleForVisual(_visualPosForTrack(index, trackLen), trackLen, rot);
   return Offset(c.dx + radius * cos(a), c.dy + radius * sin(a));
 }
 
 Offset _homePoint(
     Offset c, double radius, int playerIndex, int slot, int trackLen, double rot) {
-  final int entry = playerIndex * (trackLen ~/ 4);
-  final double a = -pi / 2 + 2 * pi * entry / trackLen + rot;
+  // Hjemstrækket peger fra UD-feltets retning radielt ind mod centrum.
+  final double a =
+      _angleForVisual(_visualPosForExit(playerIndex, trackLen), trackLen, rot);
   final double r = radius - (slot + 1) * radius * 0.17;
   return Offset(c.dx + r * cos(a), c.dy + r * sin(a));
 }
 
 Offset _startPoint(
     Offset c, double radius, int playerIndex, int slot, int trackLen, double rot) {
-  final int entry = playerIndex * (trackLen ~/ 4);
-  final double aEntry = -pi / 2 + 2 * pi * entry / trackLen + rot;
+  // Start-båsen ligger uden for ringen ud for UD-feltet.
+  final double aEntry =
+      _angleForVisual(_visualPosForExit(playerIndex, trackLen), trackLen, rot);
   final double rOuter = radius + radius * 0.22;
   final double a = aEntry + (slot - 1.5) * 0.10;
   return Offset(c.dx + rOuter * cos(a), c.dy + rOuter * sin(a));
@@ -109,13 +129,11 @@ Offset _startPoint(
 
 Offset _exitPoint(
     Offset c, double radius, int playerIndex, int trackLen, double rot) {
-  // Ud-feltet ligger mellem den forrige spillers felt 14 og spillerens eget
-  // felt 1 — dvs. ved vinklen entry - 0.5. For ikke at overlappe selve
-  // ringens celler trækkes det let indad (radius * 0.90), så det sidder som
-  // en lille lomme på indersiden af ringen mellem de to felter.
-  final int entry = playerIndex * (trackLen ~/ 4);
-  final double a = -pi / 2 + 2 * pi * (entry - 0.5) / trackLen + rot;
-  return Offset(c.dx + radius * 0.90 * cos(a), c.dy + radius * 0.90 * sin(a));
+  // Ud-feltet sidder PÅ ringen, dér hvor felt 1 visuelt var — som ét felt
+  // mere på ringen. Felt 1..14 er fittet ind i de næste 14 positioner.
+  final double a =
+      _angleForVisual(_visualPosForExit(playerIndex, trackLen), trackLen, rot);
+  return Offset(c.dx + radius * cos(a), c.dy + radius * sin(a));
 }
 
 Offset _posPoint(
@@ -219,24 +237,22 @@ class _BoardPainter extends CustomPainter {
           isFirstField ? state.players[ownerOfFirst].color : Colors.black54);
     }
 
-    // Ud-felterne tegnes som en lille lomme på INDERSIDEN af ringen, præcis
-    // mellem den forrige spillers felt 14 og spillerens eget felt 1. Logisk er
-    // de stadig en separat ExitPosition — brikker passerer dem aldrig på
-    // ringen — men visuelt ligger de der hvor man intuitivt forventer dem.
-    final double udR = cr * 1.05;
+    // Ud-felterne er et FELT på ringen, dér hvor felt 1 visuelt var. De er
+    // samme størrelse som de øvrige celler, så ringen er et regelmæssigt
+    // mønster af 4 UD-felter + 14 nummererede pr. spiller.
     for (final Player pl in state.players) {
       final Offset p = _exitPoint(center, tr, pl.index, trackLen, rotation);
       canvas.drawCircle(
-          p, udR, Paint()..color = pl.color.withValues(alpha: 0.30));
+          p, cr, Paint()..color = pl.color.withValues(alpha: 0.30));
       canvas.drawCircle(
         p,
-        udR,
+        cr,
         Paint()
           ..color = pl.color
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.2,
+          ..strokeWidth = 2.0,
       );
-      _text(canvas, 'UD', p, cr * 0.75, pl.color);
+      _text(canvas, 'UD', p, cr * 0.7, pl.color);
     }
 
     // Start-bås.
