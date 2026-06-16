@@ -234,24 +234,57 @@ class _GameScreenState extends ConsumerState<GameScreen>
     Player right,
     Set<String> highlighted,
   ) {
+    // Mobil: 4 panel-info'er sidder i hjørnerne over de tomme strimler om
+    // den runde bane, så selve brættet kan blive markant større. Brikkerne
+    // står på selve ringen — panelerne overlapper aldrig spilleflade.
     return Column(
       children: <Widget>[
-        // Kompakt række med modstandere/makker øverst.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(6, 4, 6, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Expanded(
+          child: Stack(
             children: <Widget>[
-              Expanded(child: _panel(state, left, compact: true)),
-              const SizedBox(width: 4),
-              Expanded(child: _panel(state, partner, compact: true)),
-              const SizedBox(width: 4),
-              Expanded(child: _panel(state, right, compact: true)),
+              Positioned.fill(
+                child: _boardArea(state, human, highlighted),
+              ),
+              // Top-venstre: makker (sidder visuelt over toppen af brættet).
+              Positioned(
+                top: 4,
+                left: 4,
+                child: SizedBox(
+                  width: 110,
+                  child: _panel(state, partner, compact: true),
+                ),
+              ),
+              // Top-højre: højre modstander.
+              Positioned(
+                top: 4,
+                right: 4,
+                child: SizedBox(
+                  width: 110,
+                  child: _panel(state, right, compact: true),
+                ),
+              ),
+              // Bund-venstre: venstre modstander.
+              Positioned(
+                bottom: 4,
+                left: 4,
+                child: SizedBox(
+                  width: 110,
+                  child: _panel(state, left, compact: true),
+                ),
+              ),
+              // Bund-højre: dig selv — tæt på hånden i bunden.
+              Positioned(
+                bottom: 4,
+                right: 4,
+                child: SizedBox(
+                  width: 110,
+                  child: _panel(state, human, compact: true),
+                ),
+              ),
             ],
           ),
         ),
-        Expanded(child: _boardArea(state, human, highlighted)),
-        _buildHumanArea(state, human),
+        _buildHumanArea(state, human, showPanel: false),
       ],
     );
   }
@@ -321,14 +354,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
     );
   }
 
-  Widget _buildHumanArea(GameState state, Player human) {
-    // Vis altid panel for menneske-spilleren (samme info som de andre
-    // spillere får): starter-flag, kort på hånd, brikker i start, sidste
-    // spillede kort. Panelet placeres mellem brættet og hånd-området.
-    final Widget panel = Padding(
-      padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-      child: Center(child: _panel(state, human)),
-    );
+  Widget _buildHumanArea(GameState state, Player human,
+      {bool showPanel = true}) {
+    // Når [showPanel] er true vises menneske-spillerens panel (starter-flag,
+    // kort på hånd, brikker i start, sidste spillede kort) over hånd-området.
+    // På mobil sidder dette panel allerede i et bund-hjørne, så vi springer
+    // det over her.
     Widget body;
     if (state.phase == GamePhase.exchange) {
       body = _buildExchangeArea(state, human);
@@ -337,6 +368,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
     } else {
       body = const SizedBox(height: 16);
     }
+    if (!showPanel) return body;
+    final Widget panel = Padding(
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+      child: Center(child: _panel(state, human)),
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[panel, body],
