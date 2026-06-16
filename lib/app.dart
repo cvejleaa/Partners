@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'game/card_rules.dart';
@@ -21,6 +23,22 @@ import 'state/settings_controller.dart';
 import 'stats/stats_repository.dart';
 import 'ui/screens/home_screen.dart';
 
+/// Letvægts-info om et gemt, igangværende spil — bruges af forsiden til at
+/// vise en "Fortsæt spil"-knap uden at genskabe hele [GameState].
+class SavedGameInfo {
+  SavedGameInfo({
+    required this.names,
+    required this.handNumber,
+    required this.savedAt,
+    required this.raw,
+  });
+
+  final List<String> names;
+  final int handNumber;
+  final DateTime savedAt;
+  final Map<String, dynamic> raw;
+}
+
 class PlayerSetup {
   PlayerSetup({
     required this.name,
@@ -36,6 +54,12 @@ final StateNotifierProvider<GameController, GameState> gameProvider =
     StateNotifierProvider<GameController, GameState>(
   (ref) => GameController(),
 );
+
+/// Kigger efter et gemt, igangværende lokalt spil (til "Fortsæt spil" på
+/// forsiden). Invalidér provideren efter at have startet/genoptaget et spil
+/// for at få frisk status.
+final FutureProvider<SavedGameInfo?> savedGameProvider =
+    FutureProvider<SavedGameInfo?>((ref) => GameController.peekSavedGame());
 
 class GameController extends StateNotifier<GameState> {
   GameController() : super(_emptyState());
@@ -53,6 +77,9 @@ class GameController extends StateNotifier<GameState> {
 
   /// Offentlig adgang til den aktuelle state (StateNotifier.state er protected).
   GameState get currentState => state;
+
+  /// Nøgle til lokal autosave af et igangværende AI-/lokalt spil.
+  static const String _saveKey = 'saved_game_v1';
 
   static GameState _emptyState() {
     return GameState(
@@ -186,6 +213,94 @@ class GameController extends StateNotifier<GameState> {
   void reset() {
     _engine = null;
     state = _emptyState();
+    // ignore: discarded_futures
+    _clearSave();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Autosave / genoptag (kun lokale AI-spil)
+  // ---------------------------------------------------------------------------
+
+  /// Log-indlæg gøres JSON-venligt til lokal lagring (Timestamp → millis).
+  /// Ved genskab læses 't' som int; stats-modulet håndterer både int og
+  /// Timestamp, så det er sikkert at blande gamle og nye indlæg.
+  Map<String, dynamic> _logEntryForStorage(Map<String, dynamic> e) {
+    final Map<String, dynamic> copy = Map<String, dynamic>.from(e);
+    final t = copy['t'];
+    if (t is Timestamp) copy['t'] = t.millisecondsSinceEpoch;
+    return copy;
+  }
+
+  /// Gem det aktuelle spil lokalt, så det kan genoptages. Gemmer kun spil der
+  /// reelt er i gang (ikke opsætning eller afsluttet). Fejler stille.
+  void _autosave() {
+    final GameEngine? e = _engine;
+    if (e == null) return;
+    final GameState s = e.state;
+    if (s.phase == GamePhase.setup || s.winningTeamIndex != null) return;
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'state': gameStateToMap(s),
+      'log': _aiLog.map(_logEntryForStorage).toList(),
+      'code': _aiGameCode,
+      'hostUid': _aiHostUid,
+      'hostName': _aiHostName,
+      'savedAt': DateTime.now().millisecondsSinceEpoch,
+    };
+    SharedPreferences.getInstance().then((sp) {
+      sp.setString(_saveKey, jsonEncode(payload));
+    }).catchError((Object e) {
+      debugPrint('[autosave] $e');
+    });
+  }
+
+  Future<void> _clearSave() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.remove(_saveKey);
+    } catch (_) {
+      // Ligegyldigt hvis det fejler — et forældet save overskrives ved næste spil.
+    }
+  }
+
+  /// Kig efter et gemt, igangværende spil (uden at genskabe det). Returnerer
+  /// null hvis der ikke findes et brugbart save.
+  static Future<SavedGameInfo?> peekSavedGame() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final String? raw = sp.getString(_saveKey);
+      if (raw == null) return null;
+      final Map<String, dynamic> map =
+          Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final Map<String, dynamic> state =
+          Map<String, dynamic>.from(map['state'] as Map);
+      final List<dynamic> players = state['pl'] as List;
+      final List<String> names =
+          players.map((p) => (p as Map)['n'] as String).toList();
+      final int hn = (state['hn'] as num?)?.toInt() ?? 0;
+      final DateTime savedAt = DateTime.fromMillisecondsSinceEpoch(
+          (map['savedAt'] as num?)?.toInt() ?? 0);
+      return SavedGameInfo(
+          names: names, handNumber: hn, savedAt: savedAt, raw: map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Genskab et tidligere gemt spil ind i controlleren.
+  void resumeFrom(SavedGameInfo info) {
+    final Map<String, dynamic> map = info.raw;
+    final GameState s =
+        gameStateFromMap(Map<String, dynamic>.from(map['state'] as Map));
+    _engine = GameEngine(state: s, rng: _rng);
+    _aiLog
+      ..clear()
+      ..addAll((map['log'] as List? ?? const <dynamic>[])
+          .map((e) => Map<String, dynamic>.from(e as Map)));
+    _aiGameCode = map['code'] as String?;
+    _aiHostUid = map['hostUid'] as String?;
+    _aiHostName = map['hostName'] as String?;
+    _aiSavedAtEnd = false;
+    state = s;
   }
 
   void _bump() {
@@ -208,10 +323,15 @@ class GameController extends StateNotifier<GameState> {
       cardRules: e.cardRules,
       exchangeBuffer: Map<int, PlayingCard?>.from(e.exchangeBuffer),
     );
-    // Når spillet lige er afsluttet, persistér det til Firestore for stats.
+    // Når spillet lige er afsluttet, persistér det til Firestore for stats og
+    // ryd den lokale autosave. Ellers gem løbende så spillet kan genoptages.
     if (e.winningTeamIndex != null) {
       // ignore: discarded_futures
       _persistFinishedAiGame();
+      // ignore: discarded_futures
+      _clearSave();
+    } else {
+      _autosave();
     }
   }
 }

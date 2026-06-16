@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app.dart';
 import '../../online/online_service.dart';
 import 'admin_screen.dart';
+import 'game_screen.dart';
 import 'online_screens.dart';
 import 'profile_screen.dart';
 import 'self_test_screen.dart';
@@ -91,9 +93,12 @@ class HomeScreen extends ConsumerWidget {
                         builder: (_) => const AuthScreen()));
                   }),
                 if (loggedIn) ...<Widget>[
-                  _bigButton(context, Icons.smart_toy, 'Spil mod AI', () {
-                    Navigator.of(context).push<void>(MaterialPageRoute<void>(
-                        builder: (_) => const SetupScreen()));
+                  const _ResumeButton(),
+                  _bigButton(context, Icons.smart_toy, 'Spil mod AI', () async {
+                    await Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const SetupScreen()));
+                    ref.invalidate(savedGameProvider);
                   }),
                   const SizedBox(height: 12),
                   _bigButton(context, Icons.group, 'Online med venner', () {
@@ -162,6 +167,39 @@ class HomeScreen extends ConsumerWidget {
       onPressed: onTap,
       icon: Icon(icon),
       label: Text(label),
+    );
+  }
+}
+
+/// Viser en "Fortsæt spil"-knap hvis der findes et gemt, igangværende spil.
+/// Skjuler sig selv (og sin spacing) når der ikke er noget at genoptage.
+class _ResumeButton extends ConsumerWidget {
+  const _ResumeButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final SavedGameInfo? saved = ref.watch(savedGameProvider).valueOrNull;
+    if (saved == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            backgroundColor: const Color(0xFF2E7D32),
+          ),
+          onPressed: () async {
+            ref.read(gameProvider.notifier).resumeFrom(saved);
+            await Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(builder: (_) => const GameScreen()));
+            ref.invalidate(savedGameProvider);
+          },
+          icon: const Icon(Icons.play_circle),
+          label: Text('Fortsæt spil (hånd #${saved.handNumber})',
+              style: const TextStyle(fontSize: 18)),
+        ),
+      ),
     );
   }
 }
