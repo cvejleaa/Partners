@@ -57,7 +57,7 @@ void main() {
       expect(exit.steps.first.capturedPieceId, isNotNull);
     });
 
-    test('1 og 11 frem er gyldige fra banen (ud-felt 15 tæller ikke med)', () {
+    test('1 og 11 frem er gyldige fra banen', () {
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(5)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.ace, Suit.hearts));
@@ -65,8 +65,8 @@ void main() {
           .where((Move m) => !m.exitsStart && m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      // 5+1=6; 5+11 springer over ud-felt 15 → 17.
-      expect(targets, containsAll(<int>[6, 17]));
+      // 5+1=6; 5+11=16 (ud-felter tæller med).
+      expect(targets, containsAll(<int>[6, 16]));
     });
   });
 
