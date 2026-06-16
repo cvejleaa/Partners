@@ -85,20 +85,20 @@ class CardRules {
 
   /// Standard (klassiske) regler — matcher spillets oprindelige opførsel.
   factory CardRules.defaults() {
-    return CardRules(<Rank, CardRuleConfig>{
-      Rank.ace: const CardRuleConfig(exitStart: true, forwardSteps: <int>[1, 11]),
-      Rank.two: const CardRuleConfig(forwardSteps: <int>[2]),
-      Rank.three: const CardRuleConfig(forwardSteps: <int>[3]),
-      Rank.four: const CardRuleConfig(forwardSteps: <int>[4], backwardSteps: 4),
-      Rank.five: const CardRuleConfig(forwardSteps: <int>[5]),
-      Rank.six: const CardRuleConfig(forwardSteps: <int>[6]),
-      Rank.seven: const CardRuleConfig(splitTotal: 7),
-      Rank.eight: const CardRuleConfig(forwardSteps: <int>[8]),
-      Rank.nine: const CardRuleConfig(forwardSteps: <int>[9]),
-      Rank.ten: const CardRuleConfig(forwardSteps: <int>[10]),
-      Rank.jack: const CardRuleConfig(forwardSteps: <int>[11]),
-      Rank.queen: const CardRuleConfig(forwardSteps: <int>[12]),
-      Rank.king: const CardRuleConfig(exitStart: true, forwardSteps: <int>[13]),
+    return const CardRules(<Rank, CardRuleConfig>{
+      Rank.ace: CardRuleConfig(exitStart: true, forwardSteps: <int>[1, 11]),
+      Rank.two: CardRuleConfig(forwardSteps: <int>[2]),
+      Rank.three: CardRuleConfig(forwardSteps: <int>[3]),
+      Rank.four: CardRuleConfig(forwardSteps: <int>[4], backwardSteps: 4),
+      Rank.five: CardRuleConfig(forwardSteps: <int>[5]),
+      Rank.six: CardRuleConfig(forwardSteps: <int>[6]),
+      Rank.seven: CardRuleConfig(splitTotal: 7),
+      Rank.eight: CardRuleConfig(forwardSteps: <int>[8]),
+      Rank.nine: CardRuleConfig(forwardSteps: <int>[9]),
+      Rank.ten: CardRuleConfig(forwardSteps: <int>[10]),
+      Rank.jack: CardRuleConfig(forwardSteps: <int>[11]),
+      Rank.queen: CardRuleConfig(forwardSteps: <int>[12]),
+      Rank.king: CardRuleConfig(exitStart: true, forwardSteps: <int>[13]),
     });
   }
 

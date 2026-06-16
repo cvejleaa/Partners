@@ -39,7 +39,7 @@ class PlayerPanel extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(compact ? 5 : 8),
       decoration: BoxDecoration(
-        color: isCurrent ? player.color.withOpacity(0.22) : Colors.white,
+        color: isCurrent ? player.color.withValues(alpha: 0.22) : Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isCurrent ? player.color : Colors.black26,
@@ -47,7 +47,7 @@ class PlayerPanel extends StatelessWidget {
         ),
         boxShadow: isCurrent
             ? <BoxShadow>[
-                BoxShadow(color: player.color.withOpacity(0.6), blurRadius: 8),
+                BoxShadow(color: player.color.withValues(alpha: 0.6), blurRadius: 8),
               ]
             : null,
       ),

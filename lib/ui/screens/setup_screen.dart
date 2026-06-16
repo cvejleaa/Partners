@@ -78,17 +78,28 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               'Pladsen overfor er din makker.',
             ),
             const SizedBox(height: 16),
-            for (int i = 0; i < 4; i++) ...<Widget>[
-              _PlayerRow(
-                index: i,
-                nameController: _names[i],
-                colorIdx: _colorIdx[i],
-                isHuman: i == _humanSeat,
-                onSelectHuman: () => setState(() => _humanSeat = i),
-                onColorChanged: (int c) => setState(() => _colorIdx[i] = c),
+            RadioGroup<int>(
+              groupValue: _humanSeat,
+              onChanged: (int? v) {
+                if (v != null) setState(() => _humanSeat = v);
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  for (int i = 0; i < 4; i++) ...<Widget>[
+                    _PlayerRow(
+                      index: i,
+                      nameController: _names[i],
+                      colorIdx: _colorIdx[i],
+                      isHuman: i == _humanSeat,
+                      onColorChanged: (int c) =>
+                          setState(() => _colorIdx[i] = c),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ],
               ),
-              const SizedBox(height: 8),
-            ],
+            ),
             const Spacer(),
             if (!unique)
               const Padding(
@@ -149,7 +160,6 @@ class _PlayerRow extends StatelessWidget {
     required this.nameController,
     required this.colorIdx,
     required this.isHuman,
-    required this.onSelectHuman,
     required this.onColorChanged,
   });
 
@@ -157,17 +167,14 @@ class _PlayerRow extends StatelessWidget {
   final TextEditingController nameController;
   final int colorIdx;
   final bool isHuman;
-  final VoidCallback onSelectHuman;
   final ValueChanged<int> onColorChanged;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Radio<bool>(
-          value: true,
-          groupValue: isHuman ? true : null,
-          onChanged: (_) => onSelectHuman(),
+        Radio<int>(
+          value: index,
         ),
         SizedBox(
           width: 64,

@@ -147,7 +147,7 @@ class _BoardPainter extends CustomPainter {
       center,
       dim * 0.47,
       Paint()
-        ..color = Colors.black.withOpacity(0.35)
+        ..color = Colors.black.withValues(alpha: 0.35)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
     );
     canvas.drawCircle(
@@ -171,7 +171,7 @@ class _BoardPainter extends CustomPainter {
     for (final Player pl in state.players) {
       for (int slot = 0; slot < state.geometry.homeStretchLength; slot++) {
         final Offset p = _homePoint(center, tr, pl.index, slot, trackLen, rotation);
-        canvas.drawCircle(p, cr, Paint()..color = pl.color.withOpacity(0.22));
+        canvas.drawCircle(p, cr, Paint()..color = pl.color.withValues(alpha: 0.22));
         canvas.drawCircle(
           p,
           cr,
@@ -214,7 +214,7 @@ class _BoardPainter extends CustomPainter {
       final double a = -pi / 2 + 2 * pi * entry / trackLen + rotation;
       final double rOut = tr + cr * 2.2;
       final Offset p = Offset(center.dx + rOut * cos(a), center.dy + rOut * sin(a));
-      canvas.drawCircle(p, cr * 1.1, Paint()..color = pl.color.withOpacity(0.25));
+      canvas.drawCircle(p, cr * 1.1, Paint()..color = pl.color.withValues(alpha: 0.25));
       canvas.drawCircle(
         p,
         cr * 1.1,
@@ -230,7 +230,7 @@ class _BoardPainter extends CustomPainter {
     for (final Player pl in state.players) {
       for (int slot = 0; slot < 4; slot++) {
         final Offset p = _startPoint(center, tr, pl.index, slot, trackLen, rotation);
-        canvas.drawCircle(p, cr, Paint()..color = pl.color.withOpacity(0.12));
+        canvas.drawCircle(p, cr, Paint()..color = pl.color.withValues(alpha: 0.12));
         canvas.drawCircle(
           p,
           cr,
@@ -286,7 +286,7 @@ class _BoardPainter extends CustomPainter {
   void _drawPiece(Canvas canvas, Offset c, double r, Color color, bool hl) {
     final double pr = r * 1.15;
     canvas.drawCircle(
-        c + const Offset(0, 1.5), pr, Paint()..color = Colors.black.withOpacity(0.3));
+        c + const Offset(0, 1.5), pr, Paint()..color = Colors.black.withValues(alpha: 0.3));
     canvas.drawCircle(
       c,
       pr,

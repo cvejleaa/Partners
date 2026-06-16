@@ -346,9 +346,9 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _kBrown.withOpacity(0.6)),
+        border: Border.all(color: _kBrown.withValues(alpha: 0.6)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,24 +405,24 @@ class _CardsPage extends StatelessWidget {
     // Eksempelkort der dækker de vigtigste funktioner. Tallene følger de
     // aktuelle regler via [rules]/[CardView], så de matcher admin-justeringer.
     final List<_CardExample> examples = <_CardExample>[
-      _CardExample(
-        const PlayingCard.exit(0),
+      const _CardExample(
+        PlayingCard.exit(0),
         'UD-kortet sender kun en brik ud på dit udgangsfelt.',
       ),
-      _CardExample(
-        const PlayingCard(Rank.ace, Suit.spades),
+      const _CardExample(
+        PlayingCard(Rank.ace, Suit.spades),
         'Esset: ud af start — eller ryk 1 eller 11 felter frem.',
       ),
-      _CardExample(
-        const PlayingCard(Rank.king, Suit.hearts),
+      const _CardExample(
+        PlayingCard(Rank.king, Suit.hearts),
         'Kongen: ud af start — eller ryk 13 felter frem.',
       ),
-      _CardExample(
-        const PlayingCard(Rank.seven, Suit.diamonds),
+      const _CardExample(
+        PlayingCard(Rank.seven, Suit.diamonds),
         '7\'eren: 7 træk, der kan deles over flere brikker.',
       ),
-      _CardExample(
-        const PlayingCard(Rank.four, Suit.clubs),
+      const _CardExample(
+        PlayingCard(Rank.four, Suit.clubs),
         '4\'eren: ryk 4 felter frem ELLER 4 felter tilbage.',
       ),
     ];
@@ -558,9 +558,9 @@ class _CardRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _kBrown.withOpacity(0.6)),
+        border: Border.all(color: _kBrown.withValues(alpha: 0.6)),
       ),
       child: Row(
         children: <Widget>[

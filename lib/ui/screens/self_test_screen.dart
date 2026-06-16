@@ -110,8 +110,8 @@ class _SelfTestScreenState extends State<SelfTestScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: r.allPassed
-                ? Colors.green.withOpacity(0.12)
-                : Colors.red.withOpacity(0.12),
+                ? Colors.green.withValues(alpha: 0.12)
+                : Colors.red.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: r.allPassed ? Colors.green : Colors.red,

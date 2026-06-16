@@ -83,7 +83,7 @@ class CardView extends StatelessWidget {
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withOpacity(0.25),
+              color: Colors.black.withValues(alpha: 0.25),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -140,7 +140,7 @@ class CardView extends StatelessWidget {
             textAlign: TextAlign.right,
             style: TextStyle(
               fontSize: width * 0.18,
-              color: accent.withOpacity(0.7),
+              color: accent.withValues(alpha: 0.7),
             ),
           ),
         ],

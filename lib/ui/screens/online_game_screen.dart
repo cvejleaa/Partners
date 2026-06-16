@@ -153,7 +153,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     final desc = _describeStep(m);
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withValues(alpha: 0.7),
         child: Center(
           child: Card(
             margin: const EdgeInsets.all(24),

@@ -215,7 +215,7 @@ class _LoginIndicator extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.2),
+          color: Colors.red.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.red.shade300),
         ),
@@ -236,7 +236,7 @@ class _LoginIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.25),
+        color: Colors.green.withValues(alpha: 0.25),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.green.shade300),
       ),
