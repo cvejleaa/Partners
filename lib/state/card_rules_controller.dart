@@ -16,24 +16,74 @@ import '../online/online_service.dart';
 /// tværs af enheder/sessioner. En lokal kopi (shared_preferences) bruges som
 /// hurtig fallback. Skrivefejl rapporteres via [lastSaveError] så admin-UI
 /// kan vise dem.
+/// Status for sidste load/save mod Firestore (vises i admin-UI).
+class CardRulesStatus {
+  CardRulesStatus({
+    this.loaded = false,
+    this.loadedAt,
+    this.savedAt,
+    this.lastLoadError = '',
+    this.lastSaveError = '',
+    this.lastLoadSource = '',
+  });
+  bool loaded;
+  DateTime? loadedAt;
+  DateTime? savedAt;
+  String lastLoadError;
+  String lastSaveError;
+  String lastLoadSource; // 'firestore', 'prefs', 'defaults'
+
+  CardRulesStatus copy() => CardRulesStatus(
+        loaded: loaded,
+        loadedAt: loadedAt,
+        savedAt: savedAt,
+        lastLoadError: lastLoadError,
+        lastSaveError: lastSaveError,
+        lastLoadSource: lastLoadSource,
+      );
+}
+
+final cardRulesStatusProvider =
+    StateProvider<CardRulesStatus>((_) => CardRulesStatus());
+
 /// Senest registrerede gem-fejl (string er tom = OK). Opdateres af
 /// [CardRulesController] hver gang den forsøger at gemme.
 final cardRulesSaveErrorProvider = StateProvider<String>((_) => '');
 
 final cardRulesProvider =
     StateNotifierProvider<CardRulesController, CardRules>(
-  (ref) => CardRulesController(errorSink: (msg) {
-    ref.read(cardRulesSaveErrorProvider.notifier).state = msg;
-  }),
+  (ref) => CardRulesController(
+    errorSink: (msg) {
+      ref.read(cardRulesSaveErrorProvider.notifier).state = msg;
+    },
+    statusSink: (s) {
+      ref.read(cardRulesStatusProvider.notifier).state = s;
+    },
+  ),
 );
 
 class CardRulesController extends StateNotifier<CardRules> {
-  CardRulesController({this.errorSink}) : super(CardRules.defaults()) {
+  CardRulesController({this.errorSink, this.statusSink})
+      : super(CardRules.defaults()) {
     _load();
+    // Når auth-tilstand ændrer sig (fx auto-login fuldfører efter app-start)
+    // genindlæses reglerne — for at undgå at en fejl tidligt i livscyklussen
+    // efterlader brugeren med defaults selv om Firestore har det rigtige.
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null && !_userTouched) {
+        _load();
+      }
+    });
   }
 
   /// Bruges til at rapportere gem-fejl til UI (sat fra provider-fabrikken).
   void Function(String)? errorSink;
+
+  /// Bruges til at rapportere load/save-status til UI.
+  void Function(CardRulesStatus)? statusSink;
+
+  /// Aktuel status — synkroniseres med statusSink.
+  final CardRulesStatus _status = CardRulesStatus();
 
   static const String _prefsKey = 'card_rules_v1';
 
@@ -43,7 +93,11 @@ class CardRulesController extends StateNotifier<CardRules> {
   void _setError(String s) {
     lastSaveError = s;
     errorSink?.call(s);
+    _status.lastSaveError = s;
+    statusSink?.call(_status.copy());
   }
+
+  void _emitStatus() => statusSink?.call(_status.copy());
 
   /// Når true, ignorerer _load eventuelle ændringer brugeren har lavet imens
   /// vi hentede regler (undgår at en sen hentet remote-værdi overskriver et
@@ -59,15 +113,19 @@ class CardRulesController extends StateNotifier<CardRules> {
   }
 
   Future<void> _load() async {
+    String source = 'defaults';
+    String loadErr = '';
     // 1) Lokal cache (hurtig).
     try {
       final sp = await SharedPreferences.getInstance();
       final raw = sp.getString(_prefsKey);
       if (raw != null && !_userTouched) {
         state = CardRules.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        source = 'prefs';
       }
     } catch (e) {
       debugPrint('[cardRules] prefs read fail: $e');
+      loadErr = 'prefs: $e';
     }
 
     // 2) Database (autoritativ — men respekter at brugeren kan have ændret
@@ -78,10 +136,17 @@ class CardRulesController extends StateNotifier<CardRules> {
       final rules = data?['rules'];
       if (rules is Map && !_userTouched) {
         state = CardRules.fromJson(Map<String, dynamic>.from(rules));
+        source = 'firestore';
       }
     } catch (e) {
       debugPrint('[cardRules] firestore read fail: $e');
+      loadErr = 'firestore: $e';
     }
+    _status.loaded = true;
+    _status.loadedAt = DateTime.now();
+    _status.lastLoadSource = source;
+    _status.lastLoadError = loadErr;
+    _emitStatus();
   }
 
   Future<void> _save() async {
@@ -109,6 +174,8 @@ class CardRulesController extends StateNotifier<CardRules> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
       _setError('');
+      _status.savedAt = DateTime.now();
+      _emitStatus();
     } catch (e) {
       _setError('$e');
       debugPrint('[cardRules] firestore write fail: $e');

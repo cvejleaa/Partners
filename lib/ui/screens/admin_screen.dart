@@ -28,6 +28,11 @@ class AdminScreen extends ConsumerWidget {
 
   static String _label(Rank r) => PlayingCard(r, Suit.spades).rankLabel;
 
+  static String _hhmmss(DateTime d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.hour)}:${two(d.minute)}:${two(d.second)}';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authStateProvider).valueOrNull;
@@ -58,10 +63,27 @@ class AdminScreen extends ConsumerWidget {
     final CardRules rules = ref.watch(cardRulesProvider);
     final ctrl = ref.read(cardRulesProvider.notifier);
     final String saveErr = ref.watch(cardRulesSaveErrorProvider);
+    final CardRulesStatus status = ref.watch(cardRulesStatusProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin — Kortfunktioner'),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'Hent fra database NU',
+            icon: const Icon(Icons.cloud_download, color: Colors.white),
+            onPressed: () async {
+              await ctrl.refresh();
+              if (context.mounted) {
+                final s = ref.read(cardRulesStatusProvider);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(s.lastLoadError.isEmpty
+                          ? 'Hentet fra ${s.lastLoadSource}'
+                          : 'Læsefejl: ${s.lastLoadError}')),
+                );
+              }
+            },
+          ),
           TextButton.icon(
             onPressed: () async {
               await ctrl.retrySave();
@@ -119,11 +141,46 @@ class AdminScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          // DB-status: vis hvornår der senest blev hentet og gemt.
+          Container(
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF5EA),
+              border: Border.all(color: Colors.green.shade300),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  status.loaded
+                      ? 'Hentet fra ${status.lastLoadSource} '
+                          '${status.loadedAt != null ? _hhmmss(status.loadedAt!) : ''}'
+                      : 'Henter regler fra database…',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                if (status.savedAt != null)
+                  Text(
+                    'Sidst gemt i database: ${_hhmmss(status.savedAt!)}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                if (status.lastLoadError.isNotEmpty)
+                  Text(
+                    'Læsefejl: ${status.lastLoadError}',
+                    style: const TextStyle(
+                        fontSize: 11, color: Colors.red),
+                  ),
+              ],
+            ),
+          ),
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
             child: Text(
               'Marker hvilke funktioner hvert kort skal have. Ændringer gemmes '
-              'automatisk i Firebase.',
+              'automatisk i Firebase. Hvis felterne ser ud som standarder selv '
+              'om du har gemt før: tryk på sky-pil-ned (øverst) for at hente '
+              'fra databasen nu.',
             ),
           ),
           for (final Rank r in _order)
@@ -169,18 +226,44 @@ class _RankTileState extends ConsumerState<_RankTile> {
   @override
   void initState() {
     super.initState();
-    final CardRuleConfig c = widget.config;
+    _forwardCtrl = TextEditingController();
+    _backwardCtrl = TextEditingController();
+    _splitCtrl = TextEditingController();
+    _syncFromConfig(widget.config);
+  }
+
+  @override
+  void didUpdateWidget(_RankTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Når konfigen ændres udefra (fx når Firestore-load fuldfører efter
+    // tile'en er bygget, eller efter "Hent fra database NU"-knappen) skal
+    // de lokale toggles og felter opdateres.
+    if (!_sameConfig(oldWidget.config, widget.config)) {
+      _syncFromConfig(widget.config);
+    }
+  }
+
+  bool _sameConfig(CardRuleConfig a, CardRuleConfig b) {
+    if (a.exitStart != b.exitStart) return false;
+    if (a.swap != b.swap) return false;
+    if (a.backwardSteps != b.backwardSteps) return false;
+    if (a.splitTotal != b.splitTotal) return false;
+    if (a.forwardSteps.length != b.forwardSteps.length) return false;
+    for (int i = 0; i < a.forwardSteps.length; i++) {
+      if (a.forwardSteps[i] != b.forwardSteps[i]) return false;
+    }
+    return true;
+  }
+
+  void _syncFromConfig(CardRuleConfig c) {
     _exitStart = c.exitStart;
     _forwardOn = c.forwardSteps.isNotEmpty;
     _backwardOn = c.backwardSteps != null;
     _splitOn = c.splitTotal != null;
     _swap = c.swap;
-    _forwardCtrl =
-        TextEditingController(text: c.forwardSteps.join(', '));
-    _backwardCtrl =
-        TextEditingController(text: (c.backwardSteps ?? 4).toString());
-    _splitCtrl =
-        TextEditingController(text: (c.splitTotal ?? 7).toString());
+    _forwardCtrl.text = c.forwardSteps.join(', ');
+    _backwardCtrl.text = (c.backwardSteps ?? 4).toString();
+    _splitCtrl.text = (c.splitTotal ?? 7).toString();
   }
 
   @override
