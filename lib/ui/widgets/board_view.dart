@@ -183,37 +183,47 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
-    // Spor-felter + numre.
+    // Spor-felter + numre. Ringen er en ren ring på [trackLen] felter
+    // (14 nummererede felter pr. spiller). Hver celle viser sit nummer 1..14.
+    // Spillerens FØRSTE felt (felt "1") ligger på i % quarter == 0 og får en
+    // farvet kant så man kan se hvor hver spiller starter på ringen.
     for (int i = 0; i < trackLen; i++) {
       final Offset p = _trackPoint(center, tr, i, trackLen, rotation);
+      final bool isFirstField = i % quarter == 0;
+      final int ownerOfFirst = i ~/ quarter;
       canvas.drawCircle(p, cr, Paint()..color = Colors.white);
       canvas.drawCircle(
         p,
         cr,
         Paint()
-          ..color = Colors.black38
+          ..color = isFirstField
+              ? state.players[ownerOfFirst].color
+              : Colors.black38
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.8,
+          ..strokeWidth = isFirstField ? 2.2 : 0.8,
       );
-      if (i % quarter != 0) {
-        _text(canvas, '${i % quarter}', p, cr * 0.95, Colors.black54);
-      }
+      _text(canvas, '${(i % quarter) + 1}', p, cr * 0.85,
+          isFirstField ? state.players[ownerOfFirst].color : Colors.black54);
     }
 
-    // Ud-felter.
+    // Ud-felter: tegnes som dekoration UDEN for ringen ud for hver spillers
+    // felt 1. De er IKKE felter på ringen — en brik der kommer ud af start
+    // står logisk på spillerens felt 1 (TrackPosition(playerIndex*quarter)).
     for (final Player pl in state.players) {
-      final int idx = state.geometry.startTrackIndexFor(pl.index);
-      final Offset p = _trackPoint(center, tr, idx, trackLen, rotation);
-      canvas.drawCircle(p, cr + 1.5, Paint()..color = pl.color.withOpacity(0.25));
+      final int entry = state.geometry.startTrackIndexFor(pl.index);
+      final double a = -pi / 2 + 2 * pi * entry / trackLen + rotation;
+      final double rOut = tr + cr * 2.2;
+      final Offset p = Offset(center.dx + rOut * cos(a), center.dy + rOut * sin(a));
+      canvas.drawCircle(p, cr * 1.1, Paint()..color = pl.color.withOpacity(0.25));
       canvas.drawCircle(
         p,
-        cr + 3,
+        cr * 1.1,
         Paint()
           ..color = pl.color
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
+          ..strokeWidth = 2.5,
       );
-      _text(canvas, 'UD', p, cr * 0.8, pl.color);
+      _text(canvas, 'UD', p, cr * 0.7, pl.color);
     }
 
     // Start-bås.

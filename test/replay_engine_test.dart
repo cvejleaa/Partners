@@ -64,13 +64,13 @@ void main() {
         moveEntry(0, const PlayingCard(Rank.ten, Suit.hearts), [
           (id: 'p0.0', from: const TrackPosition(0), to: const TrackPosition(10)),
         ]),
-        // P1 går ud → felt 15 (deres ud-felt)
+        // P1 går ud → felt 14 (deres første felt; ud-feltet ligger uden for ringen)
         moveEntry(1, const PlayingCard.exit(0), [
-          (id: 'p1.0', from: const StartPosition(1, 0), to: const TrackPosition(15)),
+          (id: 'p1.0', from: const StartPosition(1, 0), to: const TrackPosition(14)),
         ]),
-        // P1 rykker 5 baglæns → felt 10 (slår P0's brik på 10)
+        // P1 rykker 4 baglæns → felt 10 (slår P0's brik på 10)
         moveEntry(1, const PlayingCard(Rank.four, Suit.clubs), [
-          (id: 'p1.0', from: const TrackPosition(15), to: const TrackPosition(10)),
+          (id: 'p1.0', from: const TrackPosition(14), to: const TrackPosition(10)),
         ]),
       ],
     );

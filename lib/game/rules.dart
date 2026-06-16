@@ -41,7 +41,7 @@ class Rules {
     final List<Move> moves = <Move>[];
     final CardRuleConfig cfg = state.cardRules.forRank(card.rank!);
 
-    // 1) Gå ud af start (til eget ud-felt).
+    // 1) Gå ud af start (til eget første felt).
     if (cfg.exitStart) {
       moves.addAll(_exitStartMoves(state, active, card));
     }
@@ -86,24 +86,15 @@ class Rules {
   /// - Egne brikker: ok (stak ovenpå), intet slag.
   /// - Præcis 1 modstander: slag.
   /// - 2+ modstandere (beskyttet dobbelt): ulovligt.
+  ///
+  /// Ud-felterne er ikke felter på ringen, så der findes ingen særregel for
+  /// at lande på "andres ud-felt" længere.
   _Landing _landing(GameState state, int ownerIndex, TrackPosition to) {
-    // Man kan ikke stå på en ANDEN spillers ud-felt. Dermed kan en brik på sit
-    // eget ud-felt aldrig slås hjem (ingen modstander kan lande der).
-    final int? entryOwner = _entryOwner(to.index);
-    if (entryOwner != null && entryOwner != ownerIndex) {
-      return const _Landing(false);
-    }
     final List<Piece> occ = state.piecesAt(to);
     if (occ.isEmpty) return const _Landing(true);
     if (occ.first.ownerIndex == ownerIndex) return const _Landing(true);
     if (occ.length >= 2) return const _Landing(false); // beskyttet
     return _Landing(true, occ.first.id); // slag på enlig modstander
-  }
-
-  /// Hvilken spillers ud-felt et spor-indeks er (eller null).
-  int? _entryOwner(int trackIndex) {
-    final int q = geometry.trackLength ~/ 4;
-    return trackIndex % q == 0 ? trackIndex ~/ q : null;
   }
 
   // ---------------------------------------------------------------------------
@@ -119,10 +110,12 @@ class Rules {
         player.pieces.where((Piece p) => p.position is StartPosition).toList();
     if (inStart.isEmpty) return;
 
-    // En brik der kommer ud af start lander ALTID på spillerens eget ud-felt.
-    final TrackPosition udFelt =
+    // En brik der kommer ud af start lander direkte på spillerens første
+    // nummererede felt (felt "1"), dvs. ringindeks playerIndex*14. Ud-feltet
+    // er ikke et felt på ringen og tælles aldrig med.
+    final TrackPosition firstField =
         TrackPosition(geometry.startTrackIndexFor(player.index));
-    final _Landing landing = _landing(state, player.index, udFelt);
+    final _Landing landing = _landing(state, player.index, firstField);
     if (!landing.legal) return;
 
     final Piece exiting = inStart.first;
@@ -133,7 +126,7 @@ class Rules {
         MoveStep(
           pieceId: exiting.id,
           from: exiting.position,
-          to: udFelt,
+          to: firstField,
           capturedPieceId: landing.capturedId,
         ),
       ],
@@ -185,17 +178,9 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
-    // Hver felt tæller — også ud-felter. Et besat ud-felt spærrer for passage.
+    // Ren modulo-fremdrift baglæns; ud-felter findes ikke på ringen.
     final int len = geometry.trackLength;
-    int idx = pos.index;
-    for (int step = 0; step < steps; step++) {
-      final int next = (idx - 1 + len) % len;
-      if (_entryOwner(next) != null &&
-          state.piecesAt(TrackPosition(next)).isNotEmpty) {
-        return null;
-      }
-      idx = next;
-    }
+    final int idx = (pos.index - steps % len + len) % len;
     final TrackPosition target = TrackPosition(idx);
     final _Landing landing = _landing(state, piece.ownerIndex, target);
     if (!landing.legal) return null;
@@ -235,16 +220,15 @@ class Rules {
     }
 
     if (pos is TrackPosition) {
-      // Ud-felter tæller med som almindelige felter, men man kan ikke lande på
-      // andres ud-felt (_landing håndterer det), og et besat ud-felt spærrer
-      // for passage.
+      // Ren modulo-fremdrift på ringen — hver ringcelle er ét skridt.
+      // Ud-felter findes ikke på ringen og tælles derfor aldrig med.
       final int len = geometry.trackLength;
       final int ownEntry = geometry.startTrackIndexFor(player.index);
       int idx = pos.index;
       for (int step = 0; step < steps; step++) {
         final int next = (idx + 1) % len;
-        // Drej ind i EGET hjemstræk når man når sit eget ud-felt
-        // (efter en omgang).
+        // Drej ind i EGET hjemstræk når man (efter en hel omgang) når tilbage
+        // til sit eget første felt.
         if (next == ownEntry && piece.hasLeftStart) {
           final int slot = (steps - step) - 1;
           if (slot >= geometry.homeStretchLength) return null;
@@ -254,11 +238,6 @@ class Rules {
             }
           }
           return HomeStretchPosition(player.index, slot);
-        }
-        // Besat ud-felt spærrer for passage.
-        if (_entryOwner(next) != null &&
-            state.piecesAt(TrackPosition(next)).isNotEmpty) {
-          return null;
         }
         idx = next;
       }
@@ -279,7 +258,6 @@ class Rules {
     bool eligible(Piece p) {
       final PiecePosition pos = p.position;
       if (pos is! TrackPosition) return false;
-      if (_entryOwner(pos.index) != null) return false; // ikke på et ud-felt
       return !state.isProtected(pos);
     }
 

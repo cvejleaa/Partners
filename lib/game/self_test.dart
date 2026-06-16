@@ -249,11 +249,11 @@ List<CheckResult> _ruleChecks() {
         moves.any((Move m) => m.exitsStart)));
   }
 
-  // Es kan stable på eget ud-felt (egen brik blokerer ikke)
+  // Es kan stable på eget første felt (egen brik blokerer ikke)
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
-      const TrackPosition(0),
+      const TrackPosition(0), // egen brik står på felt 1
       const StartPosition(0, 1),
       const StartPosition(0, 2),
       const StartPosition(0, 3),
@@ -261,7 +261,7 @@ List<CheckResult> _ruleChecks() {
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
         s, s.players[0], const PlayingCard(Rank.ace, Suit.hearts));
-    out.add(CheckResult('Es kan stable på eget ud-felt',
+    out.add(CheckResult('Es kan stable på eget første felt',
         moves.any((Move m) => m.exitsStart)));
   }
 
@@ -335,25 +335,7 @@ List<CheckResult> _ruleChecks() {
     out.add(CheckResult('Beskyttet dobbelt kan ikke slås', !landsOn13));
   }
 
-  // Kan ikke lande på andres ud-felt
-  {
-    final positions = _allStart();
-    positions[0] = <PiecePosition>[
-      const TrackPosition(12),
-      const StartPosition(0, 1),
-      const StartPosition(0, 2),
-      const StartPosition(0, 3),
-    ];
-    final s = _stateWith(positions);
-    final moves = rules.legalMoves(
-        s, s.players[0], const PlayingCard(Rank.three, Suit.hearts));
-    final landsOn15 = moves.any((Move m) =>
-        m.steps.first.to is TrackPosition &&
-        (m.steps.first.to as TrackPosition).index == 15);
-    out.add(CheckResult('Kan ikke lande på andres ud-felt', !landsOn15));
-  }
-
-  // 4 baglæns wrap-around
+  // 4 baglæns wrap-around (56-ring, ud-felter findes ikke på ringen)
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
@@ -369,14 +351,16 @@ List<CheckResult> _ruleChecks() {
         .where((Move m) => m.steps.first.to is TrackPosition)
         .map((Move m) => (m.steps.first.to as TrackPosition).index)
         .toSet();
-    out.add(CheckResult('4 baglæns wrap-around (→58)', targets.contains(58)));
+    // 2 - 4 = -2 → 54 på 56-ringen.
+    out.add(CheckResult('4 baglæns wrap-around (→54)', targets.contains(54)));
   }
 
   // Hjemstræk-indgang
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
-      const TrackPosition(55),
+      // 50 + 6 = lander i hjemstræk slot 0 (felt 56 findes ikke; entry = 0).
+      const TrackPosition(50),
       const StartPosition(0, 1),
       const StartPosition(0, 2),
       const StartPosition(0, 3),
@@ -393,7 +377,7 @@ List<CheckResult> _ruleChecks() {
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
-      const TrackPosition(55),
+      const TrackPosition(50),
       const StartPosition(0, 1),
       const StartPosition(0, 2),
       const StartPosition(0, 3),

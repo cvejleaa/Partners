@@ -1,10 +1,14 @@
 /// Brættets geometri.
 ///
-/// Banen er en ring med [trackLength] felter (default 60 = 4 udgangsfelter +
-/// 14 mellemfelter mellem hver). Hver spiller har et udgangsfelt på
-/// `playerIndex * 15` (dvs. 0, 15, 30, 45). Hjemstrækket har 4 felter.
+/// Banen er en ren ring med [trackLength] felter (default 56 = 4 spillere ×
+/// 14 nummererede felter). Ud-felterne ligger IKKE på ringen — de er kun en
+/// visuel markering uden for ringen. Når en brik kommer ud af start, lander
+/// den direkte på spillerens første nummererede felt (felt "1"), dvs.
+/// ringindeks `playerIndex * 14` (0, 14, 28, 42). Et kort der flytter N felter,
+/// flytter præcis N felter på ringen — ud-feltet tælles aldrig med.
+/// Hjemstrækket har 4 felter.
 class BoardGeometry {
-  const BoardGeometry({this.trackLength = 60, this.homeStretchLength = 4});
+  const BoardGeometry({this.trackLength = 56, this.homeStretchLength = 4});
 
   final int trackLength;
   final int homeStretchLength;
@@ -13,7 +17,7 @@ class BoardGeometry {
       (playerIndex * (trackLength ~/ 4)) % trackLength;
 
   /// Antal felter brik med playerIndex skal "have rejst" fra sit eget
-  /// udgangsfelt for at være klar til at gå ind i hjemstrækket.
+  /// første felt for at være klar til at gå ind i hjemstrækket.
   int get fullLap => trackLength;
 }
 
