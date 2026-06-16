@@ -95,9 +95,28 @@ Hver kort-konfiguration har disse knapper i admin: `exitStart` (ud af start),
 - 🔧 KODE: `Rules._advanceFrom` (fremad), `Rules._tryReverse` (tilbage),
   `Rules._exitStartMoves` (exit), `Rules._entryOwner`.
 
-**Eksempel:** Rød (plads 0) har UD-felt på indeks 0. Blå spiller en 5'er fra sit
-felt 13: blå rykker forbi spiller 1's UD-felt (indeks 15) uden at tælle det og
-lander 5 *tællende* felter fremme. Blå kan ikke lande på indeks 15.
+**Eksempel 1 (fremmed UD springes over):** Rød (plads 0) har UD-felt på indeks 0.
+Blå spiller en 5'er fra sit felt 13: blå rykker forbi spiller 1's UD-felt
+(indeks 15) uden at tælle det og lander 5 *tællende* felter fremme. Blå kan
+aldrig lande på indeks 15.
+
+**Eksempel 2 (eget UD springes over → drej ind i hjemstræk):** Spiller 0's brik
+står på felt 56 og spiller en 7'er. Brikken besøger:
+
+| Skridt | Position |
+|-------:|----------|
+| 1 | felt 57 |
+| 2 | felt 58 |
+| 3 | felt 59 |
+| — | (UD-felt idx 0 springes over — ingen position landes) |
+| 4 | hus 0 |
+| 5 | hus 1 |
+| 6 | hus 2 |
+| 7 | hus 3 (slut) |
+
+UD-feltet er aldrig en landings-position; det springes over og bevægelsen
+fortsætter ind i hjemstrækket. En 8'er fra felt 56 ville kræve slot 4 — som
+ikke findes — og er derfor ulovligt.
 
 ## 7. Bevægelse: frem og tilbage 🔧 KODE
 
