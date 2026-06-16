@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/game/card_rules.dart';
 import 'package:partners/models/board.dart';
-import 'package:partners/models/piece.dart';
 import 'package:partners/models/playing_card.dart';
 import 'package:partners/online/serialize.dart';
 import 'package:partners/stats/replay_engine.dart';
