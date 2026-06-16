@@ -102,8 +102,8 @@ class Rules {
     return _Landing(true, capturedId: occ.first.id); // slag på enlig brik
   }
 
-  /// Ejeren af et udgangsfelt (felt 1) for et ringindeks, eller null hvis
-  /// indekset ikke er et udgangsfelt (0, 14, 28, 42 på en 56-ring).
+  /// Ejeren af et UD-felt for et ringindeks, eller null hvis indekset ikke er
+  /// et UD-felt (0, 15, 30, 45 på en 60-ring).
   int? _entryOwner(int trackIndex) {
     final int q = geometry.trackLength ~/ 4;
     return trackIndex % q == 0 ? trackIndex ~/ q : null;
@@ -134,11 +134,16 @@ class Rules {
         player.pieces.where((Piece p) => p.position is StartPosition).toList();
     if (inStart.isEmpty) return;
 
-    // En brik der kommer ud af start lander på spillerens UD-FELT — en sikker
-    // lomme uden for ringen, lige før felt 1. Først ved et efterfølgende
-    // fremad-træk rykker brikken ind på de nummererede felter (ud-felt + 1 =
-    // felt 1). Ud-feltet kan ikke være optaget af modstandere, så ingen
-    // landings-/slag-tjek er nødvendigt.
+    // En brik der kommer ud af start lander på spillerens UD-FELT — som er
+    // ringens første felt for den spiller (TrackPosition(playerIndex*15)).
+    // De næste felter på ringen er felt 1, 2, …, 14. En 7'er fra UD-feltet
+    // lander altså på felt 7. Hvis UD-feltet er besat tjekkes som ethvert
+    // andet felt: egen brik = stak, enlig modstander = slag, dobbelt = brænd.
+    final TrackPosition exitField =
+        TrackPosition(geometry.startTrackIndexFor(player.index));
+    final _Landing landing = _landing(state, player.index, exitField);
+    if (!landing.legal) return;
+
     final Piece exiting = inStart.first;
     yield Move(
       card: card,
@@ -147,7 +152,9 @@ class Rules {
         MoveStep(
           pieceId: exiting.id,
           from: exiting.position,
-          to: ExitPosition(player.index),
+          to: exitField,
+          capturedPieceId: landing.capturedId,
+          burnsMover: landing.burnsMover,
         ),
       ],
     );
@@ -235,21 +242,6 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is StartPosition) return null;
-
-    if (pos is ExitPosition) {
-      // Fra ud-feltet: felt 1 er første skridt (ud-felt + 1 = felt 1). N skridt
-      // → felt N. Brikken kan aldrig nå hjemstrækket direkte herfra (N er lille).
-      if (steps <= 0) return null;
-      final int len = geometry.trackLength;
-      final int entry = geometry.startTrackIndexFor(piece.ownerIndex);
-      int idx = entry; // efter 1. skridt står brikken på felt 1 (= entry)
-      for (int step = 1; step < steps; step++) {
-        final int next = (idx + 1) % len;
-        if (_entryBlocked(state, next, piece.ownerIndex)) return null;
-        idx = next;
-      }
-      return TrackPosition(idx);
-    }
 
     if (pos is HomeStretchPosition) {
       final int newSlot = pos.slot + steps;

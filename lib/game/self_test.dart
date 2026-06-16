@@ -249,11 +249,11 @@ List<CheckResult> _ruleChecks() {
         moves.any((Move m) => m.exitsStart)));
   }
 
-  // Es kan stable på eget første felt (egen brik blokerer ikke)
+  // Es kan stable på eget UD-felt (egen brik blokerer ikke)
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
-      const TrackPosition(0), // egen brik står på felt 1
+      const TrackPosition(0), // egen brik står på UD-feltet
       const StartPosition(0, 1),
       const StartPosition(0, 2),
       const StartPosition(0, 3),
@@ -261,7 +261,7 @@ List<CheckResult> _ruleChecks() {
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
         s, s.players[0], const PlayingCard(Rank.ace, Suit.hearts));
-    out.add(CheckResult('Es kan stable på eget første felt',
+    out.add(CheckResult('Es kan stable på eget UD-felt',
         moves.any((Move m) => m.exitsStart)));
   }
 
@@ -338,7 +338,7 @@ List<CheckResult> _ruleChecks() {
     out.add(CheckResult('Lande på dobbelt brænder egen brik', burns));
   }
 
-  // Bevogtet udgangsfelt spærrer for modstandere (passage + landing)
+  // Bevogtet UD-felt spærrer for modstandere (passage + landing)
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
@@ -347,9 +347,9 @@ List<CheckResult> _ruleChecks() {
       const StartPosition(0, 2),
       const StartPosition(0, 3),
     ];
-    // Spiller 1's brik på sit eget udgangsfelt (index 14) bevogter feltet.
+    // Spiller 1's brik på sit eget UD-felt (index 15) bevogter feltet.
     positions[1] = <PiecePosition>[
-      const TrackPosition(14),
+      const TrackPosition(15),
       const StartPosition(1, 1),
       const StartPosition(1, 2),
       const StartPosition(1, 3),
@@ -357,14 +357,14 @@ List<CheckResult> _ruleChecks() {
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
         s, s.players[0], const PlayingCard(Rank.five, Suit.hearts));
-    // Femmer fra 13 ville passere det bevogtede felt 14 → ingen træk fra 13.
+    // Femmer fra 13 ville passere det bevogtede UD-felt 15 → ingen træk.
     final fromThirteen = moves.any((Move m) =>
         m.steps.first.from is TrackPosition &&
         (m.steps.first.from as TrackPosition).index == 13);
-    out.add(CheckResult('Bevogtet udgangsfelt spærrer passage', !fromThirteen));
+    out.add(CheckResult('Bevogtet UD-felt spærrer passage', !fromThirteen));
   }
 
-  // 4 baglæns wrap-around (56-ring, ud-felter findes ikke på ringen)
+  // 4 baglæns wrap-around (60-ring)
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
@@ -380,21 +380,20 @@ List<CheckResult> _ruleChecks() {
         .where((Move m) => m.steps.first.to is TrackPosition)
         .map((Move m) => (m.steps.first.to as TrackPosition).index)
         .toSet();
-    // 2 - 4 = -2 → 54 på 56-ringen.
-    out.add(CheckResult('4 baglæns wrap-around (→54)', targets.contains(54)));
+    // 2 - 4 = -2 → 58 på 60-ringen.
+    out.add(CheckResult('4 baglæns wrap-around (→58)', targets.contains(58)));
   }
 
   // Hjemstræk-indgang
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
-      // 50 + 6 = lander i hjemstræk slot 0 (felt 56 findes ikke; entry = 0).
-      const TrackPosition(50),
+      // 54 + 6 = lander i hjemstræk slot 0 (60 = 0 = ownEntry).
+      const TrackPosition(54),
       const StartPosition(0, 1),
       const StartPosition(0, 2),
       const StartPosition(0, 3),
     ];
-    // markér hasLeftStart
     final s = _stateWith(positions, leftStartFor: <int>{0});
     final moves = rules.legalMoves(
         s, s.players[0], const PlayingCard(Rank.six, Suit.hearts));
@@ -406,7 +405,7 @@ List<CheckResult> _ruleChecks() {
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
-      const TrackPosition(50),
+      const TrackPosition(54),
       const StartPosition(0, 1),
       const StartPosition(0, 2),
       const StartPosition(0, 3),

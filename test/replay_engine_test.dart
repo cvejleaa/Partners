@@ -56,21 +56,21 @@ void main() {
       playerColors: colors,
       cardRules: rules,
       log: <Map<String, dynamic>>[
-        // P0 går ud → felt 0
+        // P0 går ud → UD-felt (TrackPosition(0))
         moveEntry(0, const PlayingCard.exit(0), [
           (id: 'p0.0', from: const StartPosition(0, 0), to: const TrackPosition(0)),
         ]),
-        // P0 rykker 10 frem → felt 10
-        moveEntry(0, const PlayingCard(Rank.ten, Suit.hearts), [
-          (id: 'p0.0', from: const TrackPosition(0), to: const TrackPosition(10)),
+        // P0 rykker 11 frem (Knægt) → felt 11
+        moveEntry(0, const PlayingCard(Rank.jack, Suit.hearts), [
+          (id: 'p0.0', from: const TrackPosition(0), to: const TrackPosition(11)),
         ]),
-        // P1 går ud → felt 14 (deres første felt; ud-feltet ligger uden for ringen)
+        // P1 går ud → deres UD-felt (TrackPosition(15))
         moveEntry(1, const PlayingCard.exit(0), [
-          (id: 'p1.0', from: const StartPosition(1, 0), to: const TrackPosition(14)),
+          (id: 'p1.0', from: const StartPosition(1, 0), to: const TrackPosition(15)),
         ]),
-        // P1 rykker 4 baglæns → felt 10 (slår P0's brik på 10)
+        // P1 rykker 4 baglæns → felt 11 (slår P0's brik på 11)
         moveEntry(1, const PlayingCard(Rank.four, Suit.clubs), [
-          (id: 'p1.0', from: const TrackPosition(14), to: const TrackPosition(10)),
+          (id: 'p1.0', from: const TrackPosition(15), to: const TrackPosition(11)),
         ]),
       ],
     );

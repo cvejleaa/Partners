@@ -85,34 +85,19 @@ class _PiecePoint {
 // Geometri (statiske, rotation-bevidste hjælpere)
 // ---------------------------------------------------------------------------
 
-// Visuelt fylder ringen 4 × (kvarter + 1) positioner: 14 nummererede felter +
-// 1 UD-felt pr. spiller. UD-feltet sidder DER hvor felt 1 visuelt var — felt
-// 1..14 fittes ind imellem som de næste 14 positioner.
-
-int _visualPosForTrack(int index, int trackLen) {
-  final int q = trackLen ~/ 4;
-  return 15 * (index ~/ q) + (index % q) + 1;
-}
-
-int _visualPosForExit(int playerIndex, int trackLen) =>
-    15 * playerIndex;
-
-int _visualTotal(int trackLen) => 4 * ((trackLen ~/ 4) + 1);
-
-double _angleForVisual(int vp, int trackLen, double rot) =>
-    -pi / 2 + 2 * pi * vp / _visualTotal(trackLen) + rot;
+// Ringen er en 60-felts ring: 4 UD-felter (ved indeks 0, 15, 30, 45) +
+// 14 nummererede felter pr. spiller. Hvert ringindeks er en TrackPosition.
 
 Offset _trackPoint(Offset c, double radius, int index, int trackLen, double rot) {
-  final double a =
-      _angleForVisual(_visualPosForTrack(index, trackLen), trackLen, rot);
+  final double a = -pi / 2 + 2 * pi * index / trackLen + rot;
   return Offset(c.dx + radius * cos(a), c.dy + radius * sin(a));
 }
 
 Offset _homePoint(
     Offset c, double radius, int playerIndex, int slot, int trackLen, double rot) {
   // Hjemstrækket peger fra UD-feltets retning radielt ind mod centrum.
-  final double a =
-      _angleForVisual(_visualPosForExit(playerIndex, trackLen), trackLen, rot);
+  final int entry = playerIndex * (trackLen ~/ 4);
+  final double a = -pi / 2 + 2 * pi * entry / trackLen + rot;
   final double r = radius - (slot + 1) * radius * 0.17;
   return Offset(c.dx + r * cos(a), c.dy + r * sin(a));
 }
@@ -120,28 +105,17 @@ Offset _homePoint(
 Offset _startPoint(
     Offset c, double radius, int playerIndex, int slot, int trackLen, double rot) {
   // Start-båsen ligger uden for ringen ud for UD-feltet.
-  final double aEntry =
-      _angleForVisual(_visualPosForExit(playerIndex, trackLen), trackLen, rot);
+  final int entry = playerIndex * (trackLen ~/ 4);
+  final double aEntry = -pi / 2 + 2 * pi * entry / trackLen + rot;
   final double rOuter = radius + radius * 0.22;
   final double a = aEntry + (slot - 1.5) * 0.10;
   return Offset(c.dx + rOuter * cos(a), c.dy + rOuter * sin(a));
-}
-
-Offset _exitPoint(
-    Offset c, double radius, int playerIndex, int trackLen, double rot) {
-  // Ud-feltet sidder PÅ ringen, dér hvor felt 1 visuelt var — som ét felt
-  // mere på ringen. Felt 1..14 er fittet ind i de næste 14 positioner.
-  final double a =
-      _angleForVisual(_visualPosForExit(playerIndex, trackLen), trackLen, rot);
-  return Offset(c.dx + radius * cos(a), c.dy + radius * sin(a));
 }
 
 Offset _posPoint(
     PiecePosition pos, Offset c, double radius, int trackLen, double rot) {
   if (pos is StartPosition) {
     return _startPoint(c, radius, pos.ownerIndex, pos.slot, trackLen, rot);
-  } else if (pos is ExitPosition) {
-    return _exitPoint(c, radius, pos.ownerIndex, trackLen, rot);
   } else if (pos is TrackPosition) {
     return _trackPoint(c, radius, pos.index, trackLen, rot);
   } else if (pos is HomeStretchPosition) {
@@ -214,45 +188,37 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
-    // Spor-felter + numre. Ringen er en ren ring på [trackLen] felter
-    // (14 nummererede felter pr. spiller). Hver celle viser sit nummer 1..14.
-    // Spillerens FØRSTE felt (felt "1") ligger på i % quarter == 0 og får en
-    // farvet kant så man kan se hvor hver spiller starter på ringen.
+    // Spor-felter. Ringen er på [trackLen] felter (60 = 4 UD + 4×14
+    // nummererede). For hvert ringindeks: UD-felter (i % quarter == 0) tegnes
+    // i ejer-spillerens farve, øvrige som hvide cirkler med felt-nummer 1..14.
     for (int i = 0; i < trackLen; i++) {
       final Offset p = _trackPoint(center, tr, i, trackLen, rotation);
-      final bool isFirstField = i % quarter == 0;
-      final int ownerOfFirst = i ~/ quarter;
-      canvas.drawCircle(p, cr, Paint()..color = Colors.white);
-      canvas.drawCircle(
-        p,
-        cr,
-        Paint()
-          ..color = isFirstField
-              ? state.players[ownerOfFirst].color
-              : Colors.black38
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = isFirstField ? 2.2 : 0.8,
-      );
-      _text(canvas, '${(i % quarter) + 1}', p, cr * 0.85,
-          isFirstField ? state.players[ownerOfFirst].color : Colors.black54);
-    }
-
-    // Ud-felterne er et FELT på ringen, dér hvor felt 1 visuelt var. De er
-    // samme størrelse som de øvrige celler, så ringen er et regelmæssigt
-    // mønster af 4 UD-felter + 14 nummererede pr. spiller.
-    for (final Player pl in state.players) {
-      final Offset p = _exitPoint(center, tr, pl.index, trackLen, rotation);
-      canvas.drawCircle(
-          p, cr, Paint()..color = pl.color.withValues(alpha: 0.30));
-      canvas.drawCircle(
-        p,
-        cr,
-        Paint()
-          ..color = pl.color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0,
-      );
-      _text(canvas, 'UD', p, cr * 0.7, pl.color);
+      final bool isExit = i % quarter == 0;
+      final int owner = i ~/ quarter;
+      if (isExit) {
+        canvas.drawCircle(
+            p, cr, Paint()..color = state.players[owner].color.withValues(alpha: 0.30));
+        canvas.drawCircle(
+          p,
+          cr,
+          Paint()
+            ..color = state.players[owner].color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0,
+        );
+        _text(canvas, 'UD', p, cr * 0.7, state.players[owner].color);
+      } else {
+        canvas.drawCircle(p, cr, Paint()..color = Colors.white);
+        canvas.drawCircle(
+          p,
+          cr,
+          Paint()
+            ..color = Colors.black38
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.8,
+        );
+        _text(canvas, '${i % quarter}', p, cr * 0.85, Colors.black54);
+      }
     }
 
     // Start-bås.
@@ -363,8 +329,6 @@ class _BoardPainter extends CustomPainter {
         final String key;
         if (pos is StartPosition) {
           key = 'S${pos.ownerIndex}.${pos.slot}';
-        } else if (pos is ExitPosition) {
-          key = 'E${pos.ownerIndex}';
         } else if (pos is TrackPosition) {
           key = 'T${pos.index}';
         } else if (pos is HomeStretchPosition) {

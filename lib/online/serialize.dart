@@ -19,7 +19,6 @@ PlayingCard cardFromMap(Map<String, dynamic> m) => m['e'] == true
 
 Map<String, dynamic> posToMap(PiecePosition p) {
   if (p is StartPosition) return {'t': 'start', 'o': p.ownerIndex, 's': p.slot};
-  if (p is ExitPosition) return {'t': 'exit', 'o': p.ownerIndex};
   if (p is TrackPosition) return {'t': 'track', 'i': p.index};
   if (p is HomeStretchPosition) {
     return {'t': 'home', 'o': p.ownerIndex, 's': p.slot};
@@ -32,7 +31,9 @@ PiecePosition posFromMap(Map<String, dynamic> m) {
     case 'start':
       return StartPosition((m['o'] as num).toInt(), (m['s'] as num).toInt());
     case 'exit':
-      return ExitPosition((m['o'] as num).toInt());
+      // Bagudkompatibel: tidligere gemte 'exit'-positioner mappes til
+      // UD-feltet (TrackPosition(playerIndex*15)) i den nye geometri.
+      return TrackPosition((m['o'] as num).toInt() * 15);
     case 'track':
       return TrackPosition((m['i'] as num).toInt());
     case 'home':
