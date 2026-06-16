@@ -113,15 +113,15 @@ class _TutorialScreenState extends ConsumerState<TutorialScreen> {
             icon: Icons.flag,
             heading: 'Mål',
             body: 'Partners spilles af 4 spillere i 2 hold. Du og din makker '
-                '(spilleren overfor dig) er ét hold. I deler fælles mål: at få '
+                '(spilleren OVERFOR dig) er ét hold. I har fælles mål: at få '
                 'alle jeres brikker sikkert i mål i hjemstrækket.',
           ),
           _Section(
             icon: Icons.emoji_events,
             heading: 'Sådan vinder I',
-            body: 'Hver spiller har 4 brikker. Holdet vinder, når BÅDE du og din '
-                'makker har alle jeres brikker hjemme i hjemstrækket — i alt 8 '
-                'brikker i hus.',
+            body: 'Hver spiller har 4 brikker. Holdet vinder, når alle 8 '
+                'holdbrikker (dine 4 + makkerens 4) er kommet i mål i '
+                'hjemstrækket.',
           ),
         ],
       ),
@@ -132,22 +132,24 @@ class _TutorialScreenState extends ConsumerState<TutorialScreen> {
           _Section(
             icon: Icons.track_changes,
             heading: 'Banen',
-            body: 'Banen er en stor ring af felter. Brikkerne bevæger sig med '
-                'uret hele vejen rundt. Hver spiller har sit eget ud-felt, hvor '
-                'brikkerne kommer ind på banen.',
+            body: 'Banen er én stor ring med 56 felter — 14 nummererede felter '
+                'pr. spiller. Brikkerne bevæger sig hele vejen rundt. Hver '
+                'spiller har sit eget udgangsfelt ("felt 1"), hvor brikkerne '
+                'kommer ind på banen.',
           ),
           _Section(
             icon: Icons.home,
             heading: 'Hjemstrækket',
-            body: 'Når en brik har været en hel omgang rundt og passerer sit '
-                'eget ud-felt igen, kan den dreje ind i hjemstrækket — fire '
-                'felter helt for dig selv. Her står brikken sikkert i mål.',
+            body: 'Når en brik har taget en hel omgang og når tilbage til sit '
+                'eget udgangsfelt, drejer den ind i sit hjemstræk — 4 felter '
+                'helt for dig selv. Her står brikken sikkert i mål. Du kan ikke '
+                'rykke længere end hjemstrækkets bagende.',
           ),
           _Section(
             icon: Icons.inventory_2,
             heading: 'Start',
-            body: 'Dine 4 brikker starter i din start-bås. De skal først ud på '
-                'banen, før de kan begynde rejsen mod hjemstrækket.',
+            body: 'Dine 4 brikker starter i din startcirkel. De skal først ud '
+                'på banen, før de kan begynde rejsen mod hjemstrækket.',
           ),
         ],
       ),
@@ -159,15 +161,17 @@ class _TutorialScreenState extends ConsumerState<TutorialScreen> {
           _Section(
             icon: Icons.login,
             heading: 'Sådan kommer du ud',
-            body: 'For at få en brik ud af start skal du bruge et UD-kort '
-                '(hjerte-kortet), et Es eller en Konge. Brikken sættes på dit '
-                'eget ud-felt.',
+            body: 'For at få en brik ud af start skal du bruge et UD-kort, et '
+                'Es eller en Konge. Brikken sættes på dit eget udgangsfelt '
+                '("felt 1").',
           ),
           _Section(
-            icon: Icons.shield,
-            heading: 'Ud-feltet er sikkert',
-            body: 'Ingen andre kan lande på dit ud-felt. En brik der lige er '
-                'kommet ud, kan derfor ikke slås hjem, så længe den står der.',
+            icon: Icons.block,
+            heading: 'Udgangsfeltet spærrer',
+            body: 'Så længe du selv har en brik stående PÅ dit udgangsfelt, kan '
+                'ingen modstander hverken lande på eller passere det felt — '
+                'hverken frem eller tilbage. Du selv spærres aldrig af din egen '
+                'brik. Flytter du brikken videre, åbner feltet igen.',
           ),
         ],
       ),
@@ -177,17 +181,36 @@ class _TutorialScreenState extends ConsumerState<TutorialScreen> {
         sections: <_Section>[
           _Section(
             icon: Icons.bolt,
-            heading: 'Slå en modstander',
-            body: 'Lander du præcis på en modstanders enlige brik, ryger den '
-                'hele vejen hjem til start igen. Sådan kan du sætte modstanderne '
+            heading: 'Slå hjem',
+            body: 'Lander du på et felt med PRÆCIS ÉN modstanderbrik, sendes '
+                'den hjem til startcirklen. Sådan sætter du modstanderne '
                 'tilbage.',
           ),
           _Section(
-            icon: Icons.favorite,
-            heading: 'Pas på makkeren',
-            body: 'Du må ALDRIG slå din egen makkers brik hjem. Står der to '
-                'brikker på samme felt, er de beskyttede — så kan ingen lande '
-                'der.',
+            icon: Icons.handshake,
+            heading: 'Makkerens brik',
+            body: 'Du MÅ godt slå din egen makkers brik hjem — det er bare '
+                'sjældent klogt. Dine egne brikker kan derimod stables oven på '
+                'hinanden uden at slå hinanden.',
+          ),
+        ],
+      ),
+      const _TutorialPage(
+        emoji: '🛡️',
+        title: 'Doubler og passage',
+        sections: <_Section>[
+          _Section(
+            icon: Icons.layers,
+            heading: 'To brikker spærrer ikke',
+            body: 'Står der 2 eller flere brikker på samme felt, spærrer de '
+                'IKKE for nogen — alle må passere forbi.',
+          ),
+          _Section(
+            icon: Icons.local_fire_department,
+            heading: 'Pas på modstanderens double',
+            body: 'Men lander du på et felt, hvor en MODSTANDER har 2+ brikker '
+                '(en "double"), bliver DIN egen brik slået hjem — doublen '
+                '"brænder" dig. Tænk dig om, før du lander der!',
           ),
         ],
       ),
@@ -198,16 +221,17 @@ class _TutorialScreenState extends ConsumerState<TutorialScreen> {
           _Section(
             icon: Icons.call_split,
             heading: 'Del en 7\'er',
-            body: 'En 7\'er er fleksibel: du kan dele de 7 skridt ud på flere '
-                'af dine egne brikker — fx 4 + 3 eller 5 + 2. Smart til at få '
-                'flere brikker frem på én gang.',
+            body: 'En 7\'er fordeles over en eller flere af dine brikker i '
+                'spil — fx 4 + 3 eller 5 + 2. Du SKAL kunne bruge alle 7 træk. '
+                'Hver brik rykkes kun én gang. Får du din sidste brik i mål med '
+                'færre træk, må resten lægges på MAKKERENS brikker.',
           ),
           _Section(
             icon: Icons.swap_horiz,
             heading: 'Frem og tilbage',
             body: 'En 4\'er kan rykke 4 felter frem ELLER 4 felter tilbage. Et '
-                'Es kan rykke 1 eller 11 felter. Læs altid kortets små symboler '
-                'for at se, hvad det kan.',
+                'Es kan gå ud af start eller rykke 1 eller 11 felter. Læs altid '
+                'kortets symboler for at se, hvad det kan.',
           ),
         ],
       ),
@@ -238,9 +262,9 @@ class _TutorialScreenState extends ConsumerState<TutorialScreen> {
           _Section(
             icon: Icons.lightbulb,
             heading: 'Gode råd',
-            body: 'Hjælp din makker frem. Beskyt brikker ved at stille to '
-                'sammen. Hold øje med modstandernes brikker — og slå dem hjem, '
-                'når chancen byder sig.',
+            body: 'Hjælp din makker frem. Hold en brik på dit udgangsfelt for '
+                'at spærre modstanderne. Hold øje med deres brikker — og slå '
+                'dem hjem, når chancen byder sig.',
           ),
           _Section(
             icon: Icons.sports_esports,
@@ -378,28 +402,44 @@ class _CardsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Eksempelkort der dækker de vigtigste funktioner.
+    // Eksempelkort der dækker de vigtigste funktioner. Tallene følger de
+    // aktuelle regler via [rules]/[CardView], så de matcher admin-justeringer.
     final List<_CardExample> examples = <_CardExample>[
       _CardExample(
         const PlayingCard.exit(0),
-        'UD-kortet sender en brik ud på dit ud-felt.',
+        'UD-kortet sender kun en brik ud på dit udgangsfelt.',
       ),
       _CardExample(
         const PlayingCard(Rank.ace, Suit.spades),
-        'Esset kan gå ud af start — eller rykke 1 eller 11 felter.',
+        'Esset: ud af start — eller ryk 1 eller 11 felter frem.',
       ),
       _CardExample(
         const PlayingCard(Rank.king, Suit.hearts),
-        'Kongen kan gå ud af start og rykke langt frem.',
+        'Kongen: ud af start — eller ryk 13 felter frem.',
       ),
       _CardExample(
         const PlayingCard(Rank.seven, Suit.diamonds),
-        '7\'eren kan deles ud på flere af dine egne brikker.',
+        '7\'eren: 7 træk, der kan deles over flere brikker.',
       ),
       _CardExample(
         const PlayingCard(Rank.four, Suit.clubs),
-        '4\'eren kan rykke frem eller tilbage.',
+        '4\'eren: ryk 4 felter frem ELLER 4 felter tilbage.',
       ),
+    ];
+
+    // Komplet oversigt over alle kort i standardopsætningen.
+    const List<_CardLine> allCards = <_CardLine>[
+      _CardLine('UD-kort', 'Kun ud af start.'),
+      _CardLine('Es', 'Ud af start, eller 1 eller 11 frem.'),
+      _CardLine('2 – 3', 'Ryk det antal frem (2 eller 3).'),
+      _CardLine('4', '4 frem ELLER 4 tilbage.'),
+      _CardLine('5 – 6', 'Ryk det antal frem (5 eller 6).'),
+      _CardLine('7', 'Kan deles over flere brikker.'),
+      _CardLine('8 – 9 – 10', 'Ryk det antal frem (8, 9 eller 10).'),
+      _CardLine('Knægt (J)', '11 frem. (Byt kan admin slå til; standard er '
+          '11 frem.)'),
+      _CardLine('Dame (Q)', '12 frem.'),
+      _CardLine('Konge (K)', 'Ud af start, eller 13 frem.'),
     ];
 
     return SingleChildScrollView(
@@ -435,6 +475,20 @@ class _CardsPage extends StatelessWidget {
             _CardRow(example: ex, rules: rules),
             const SizedBox(height: 12),
           ],
+          const SizedBox(height: 8),
+          const Text(
+            'Alle kort',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final _CardLine line in allCards) ...<Widget>[
+            _CardLineRow(line: line),
+            const SizedBox(height: 8),
+          ],
           const SizedBox(height: 4),
           const Text(
             'Symboler: ⤴ ud af start  •  → frem  •  ← tilbage  •  '
@@ -443,6 +497,46 @@ class _CardsPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// En linje i den komplette kort-oversigt: navn + kort beskrivelse.
+class _CardLine {
+  const _CardLine(this.name, this.text);
+  final String name;
+  final String text;
+}
+
+class _CardLineRow extends StatelessWidget {
+  const _CardLineRow({required this.line});
+
+  final _CardLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: 96,
+          child: Text(
+            line.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            line.text,
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ),
+      ],
     );
   }
 }
