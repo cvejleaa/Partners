@@ -109,9 +109,14 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
 
-      - name: Deploy Firestore-regler (kræver at Firestore er aktiveret)
+      - name: Deploy Firestore-regler til navngivet database 'partners'
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
         continue-on-error: true
-        run: firebase deploy --only firestore:rules --project "$FIREBASE_PROJECT_ID" --non-interactive
+        run: |
+          # Eksplicit target navngivet database — CLI'en deployer ellers til (default).
+          firebase deploy \
+            --only "firestore:partners:rules" \
+            --project "$FIREBASE_PROJECT_ID" \
+            --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json

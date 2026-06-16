@@ -34,8 +34,10 @@
       }
     ]
   },
-  "firestore": {
-    "database": "partners",
-    "rules": "firestore.rules"
-  }
+  "firestore": [
+    {
+      "database": "partners",
+      "rules": "firestore.rules"
+    }
+  ]
 }
