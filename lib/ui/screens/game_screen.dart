@@ -247,37 +247,37 @@ class _GameScreenState extends ConsumerState<GameScreen>
               ),
               // Top-venstre: makker (sidder visuelt over toppen af brættet).
               Positioned(
-                top: 4,
-                left: 4,
+                top: 0,
+                left: 0,
                 child: SizedBox(
-                  width: 110,
+                  width: 100,
                   child: _panel(state, partner, compact: true),
                 ),
               ),
               // Top-højre: højre modstander.
               Positioned(
-                top: 4,
-                right: 4,
+                top: 0,
+                right: 0,
                 child: SizedBox(
-                  width: 110,
+                  width: 100,
                   child: _panel(state, right, compact: true),
                 ),
               ),
               // Bund-venstre: venstre modstander.
               Positioned(
-                bottom: 4,
-                left: 4,
+                bottom: 0,
+                left: 0,
                 child: SizedBox(
-                  width: 110,
+                  width: 100,
                   child: _panel(state, left, compact: true),
                 ),
               ),
               // Bund-højre: dig selv — tæt på hånden i bunden.
               Positioned(
-                bottom: 4,
-                right: 4,
+                bottom: 0,
+                right: 0,
                 child: SizedBox(
-                  width: 110,
+                  width: 100,
                   child: _panel(state, human, compact: true),
                 ),
               ),
@@ -292,7 +292,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   Widget _boardArea(GameState state, Player human, Set<String> highlighted) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(6),
+        padding: const EdgeInsets.all(1),
         child: AspectRatio(
           aspectRatio: 1,
           child: Stack(
@@ -383,19 +383,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final bool humanDone = state.exchangeBuffer.containsKey(human.index);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
       color: const Color(0xFF14331F),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Text(
             humanDone
                 ? 'Venter på de andre…'
                 : 'Vælg ét kort til din makker (skjult bytte)',
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           SizedBox(
-            height: 110,
+            height: 84,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -406,6 +407,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                     child: CardView(
                       card: c,
                       rules: state.cardRules,
+                      width: 54,
                       selected: _humanExchangeChoice == c,
                       onTap: humanDone
                           ? null
@@ -415,7 +417,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           if (!humanDone)
             FilledButton(
               onPressed: _humanExchangeChoice == null
@@ -443,27 +445,28 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ref.read(gameProvider.notifier).canPlay(human.index);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
       color: const Color(0xFF14331F),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           if (!humanTurn)
             Text('${state.currentPlayer.name} spiller…',
-                style: const TextStyle(color: Colors.white)),
+                style: const TextStyle(color: Colors.white, fontSize: 12)),
           if (humanTurn && humanCanPlay)
             Text(
               _selectedCard == null
                   ? 'Vælg et kort'
                   : 'Vælg en brik (gult = lovligt træk)',
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.white, fontSize: 12),
             ),
           if (humanTurn && !humanCanPlay && !busy)
             Text('Du kan ikke rykke nogen brik',
-                style: TextStyle(color: Colors.red.shade300)),
-          const SizedBox(height: 8),
+                style: TextStyle(color: Colors.red.shade300, fontSize: 12)),
+          const SizedBox(height: 4),
           SizedBox(
-            height: 110,
+            height: 84,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -475,6 +478,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                       card: c,
                       rules: state.cardRules,
                       faceUp: humanTurn,
+                      width: 54,
                       selected: _selectedCard == c,
                       onTap: (!humanTurn || !humanCanPlay)
                           ? null
@@ -486,10 +490,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
           ),
           if (humanTurn && !humanCanPlay && !busy)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.only(top: 6),
               child: FilledButton.icon(
                 onPressed: _humanPass,
-                icon: const Icon(Icons.block),
+                icon: const Icon(Icons.block, size: 18),
                 label: const Text('Smid kortene og sid over'),
               ),
             ),
