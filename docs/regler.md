@@ -72,9 +72,9 @@ Hver kort-konfiguration har disse knapper i admin: `exitStart` (ud af start),
 - For at få en brik ud af start skal du spille et **UD-kort, Es eller Konge**
   (alt med `exitStart`).
 - Brikken sættes på **dit eget UD-felt** (indeks `15·p`).
-- Hvis dit UD-felt er optaget: egne brikker stables (ok) **ÆNDRING:** **det næste skal slettes, en modstander kan aldrig stå på feltet**; en enlig modstander
-  slås hjem; 2+ modstandere ⇒ se "brænd" (afsnit 8). *(I praksis kan modstandere
-  sjældent stå på dit UD-felt, jf. afsnit 6.)*
+- Hvis dit UD-felt allerede har **én af dine egne** brikker, stables den nye
+  ovenpå. En modstander kan aldrig stå der (alle andre springer feltet over,
+  jf. afsnit 6), så der er ikke noget slag eller brænd at håndtere ved exit.
 - 🔧 KODE: `Rules._exitStartMoves`.
 
 ## 6. UD-feltets særregel (vigtig!) 🔧 KODE
@@ -86,13 +86,14 @@ Hver kort-konfiguration har disse knapper i admin: `exitStart` (ud af start),
   dvs. de flytter fra **felt 14 direkte til felt 1** (gælder begge retninger).
 - En anden spiller kan derfor **aldrig lande på** eller **blive blokeret af** et
   fremmed UD-felt — det er som om feltet ikke findes for dem.
-- **Ejeren** bruger sit eget UD-felt helt normalt: kommer ud på det, kan stå på
-  det, **ÆNDRING:** **feltet tæller ikke med, det bruges kun i forbindelse med at komme ud med sine brikker**tæller det med når egne brikker bevæger sig, og **drejer ind i
-  hjemstrækket** når brikken når tilbage til det efter en omgang.
+- **Ejeren** bruger sit UD-felt **kun som exit-plads**: en brik der kommer ud af
+  start placeres der, og en brik der under en bevægelse vender tilbage til
+  UD-feltet efter en hel omgang **drejer ind i hjemstrækket**. Selve UD-feltet
+  er IKKE et tællende ringfelt — det har ingen rolle for distancer.
 - Konsekvens: en brik der står på sit eget UD-felt er reelt **sikker** (ingen
   andre kan ramme den, for de springer feltet over).
 - 🔧 KODE: `Rules._advanceFrom` (fremad), `Rules._tryReverse` (tilbage),
-  `Rules._entryOwner`.
+  `Rules._exitStartMoves` (exit), `Rules._entryOwner`.
 
 **Eksempel:** Rød (plads 0) har UD-felt på indeks 0. Blå spiller en 5'er fra sit
 felt 13: blå rykker forbi spiller 1's UD-felt (indeks 15) uden at tælle det og

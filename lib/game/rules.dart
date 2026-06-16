@@ -123,15 +123,13 @@ class Rules {
         player.pieces.where((Piece p) => p.position is StartPosition).toList();
     if (inStart.isEmpty) return;
 
-    // En brik der kommer ud af start lander på spillerens UD-FELT — som er
-    // ringens første felt for den spiller (TrackPosition(playerIndex*15)).
-    // De næste felter på ringen er felt 1, 2, …, 14. En 7'er fra UD-feltet
-    // lander altså på felt 7. Hvis UD-feltet er besat tjekkes som ethvert
-    // andet felt: egen brik = stak, enlig modstander = slag, dobbelt = brænd.
+    // En brik der kommer ud af start lander på spillerens UD-felt — kun ejeren
+    // kan bruge feltet (alle andre springer det over, jf. afsnit 6 i
+    // docs/regler.md). Modstandere kan derfor aldrig stå dér, så slag/brænd
+    // er umuligt ved exit: enten er feltet tomt, eller også ligger der allerede
+    // én eller flere af ejerens egne brikker — det er bare en stak.
     final TrackPosition exitField =
         TrackPosition(geometry.startTrackIndexFor(player.index));
-    final _Landing landing = _landing(state, player.index, exitField);
-    if (!landing.legal) return;
 
     final Piece exiting = inStart.first;
     yield Move(
@@ -142,8 +140,6 @@ class Rules {
           pieceId: exiting.id,
           from: exiting.position,
           to: exitField,
-          capturedPieceId: landing.capturedId,
-          burnsMover: landing.burnsMover,
         ),
       ],
     );
