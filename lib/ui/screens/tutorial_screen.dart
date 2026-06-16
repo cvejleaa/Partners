@@ -393,53 +393,90 @@ class _SectionCard extends StatelessWidget {
 }
 
 /// Side der viser et udvalg af rigtige spillekort med forklaring, så
-/// spilleren lærer at læse kortenes symboler. Genbruger [CardView] og
-/// [describeCard], så beskrivelserne følger de aktuelle regler.
+/// spilleren lærer at læse kortenes symboler. Teksten genereres dynamisk fra
+/// de aktuelle [CardRules], så alt matcher admin-justeringer øjeblikkeligt.
 class _CardsPage extends StatelessWidget {
   const _CardsPage({required this.rules});
 
   final CardRules rules;
 
+  /// Beskriv én rangs FAKTISKE funktion ud fra dens [CardRuleConfig].
+  static String describeRank(Rank r, CardRules rules) {
+    final CardRuleConfig cfg = rules.forRank(r);
+    final List<String> parts = <String>[];
+    if (cfg.exitStart) parts.add('ud af start');
+    if (cfg.forwardSteps.isNotEmpty) {
+      if (cfg.forwardSteps.length == 1) {
+        parts.add('${cfg.forwardSteps.first} frem');
+      } else {
+        parts.add('${cfg.forwardSteps.join(' eller ')} frem');
+      }
+    }
+    if (cfg.backwardSteps != null) parts.add('${cfg.backwardSteps} tilbage');
+    if (cfg.splitTotal != null) {
+      parts.add('${cfg.splitTotal} træk delt over flere af dine brikker');
+    }
+    if (cfg.swap) parts.add('byt to brikker');
+    if (parts.isEmpty) return 'Ingen funktion.';
+    final String body = parts.length == 1
+        ? parts.first
+        : '${parts.sublist(0, parts.length - 1).join(', ')} eller ${parts.last}';
+    return '${body[0].toUpperCase()}${body.substring(1)}.';
+  }
+
+  /// Et brugervenligt navn for en rang ("Es", "Knægt", "10" osv.).
+  static String rankName(Rank r) {
+    switch (r) {
+      case Rank.ace:
+        return 'Es';
+      case Rank.two:
+        return '2';
+      case Rank.three:
+        return '3';
+      case Rank.four:
+        return '4';
+      case Rank.five:
+        return '5';
+      case Rank.six:
+        return '6';
+      case Rank.seven:
+        return '7';
+      case Rank.eight:
+        return '8';
+      case Rank.nine:
+        return '9';
+      case Rank.ten:
+        return '10';
+      case Rank.jack:
+        return 'Knægt';
+      case Rank.queen:
+        return 'Dame';
+      case Rank.king:
+        return 'Konge';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Eksempelkort der dækker de vigtigste funktioner. Tallene følger de
-    // aktuelle regler via [rules]/[CardView], så de matcher admin-justeringer.
+    // Eksempelkort: vis et lille udvalg af de mest karakteristiske kort.
+    // Beskrivelserne genereres fra de aktuelle regler.
+    const List<Rank> exampleRanks = <Rank>[
+      Rank.ace,
+      Rank.king,
+      Rank.seven,
+      Rank.four,
+      Rank.jack,
+    ];
     final List<_CardExample> examples = <_CardExample>[
-      const _CardExample(
-        PlayingCard.exit(0),
+      _CardExample(
+        const PlayingCard.exit(0),
         'UD-kortet sender kun en brik ud på dit udgangsfelt.',
       ),
-      const _CardExample(
-        PlayingCard(Rank.ace, Suit.spades),
-        'Esset: ud af start — eller ryk 1 eller 11 felter frem.',
-      ),
-      const _CardExample(
-        PlayingCard(Rank.king, Suit.hearts),
-        'Kongen: ud af start — eller ryk 13 felter frem.',
-      ),
-      const _CardExample(
-        PlayingCard(Rank.seven, Suit.diamonds),
-        '7\'eren: 7 træk, der kan deles over flere brikker.',
-      ),
-      const _CardExample(
-        PlayingCard(Rank.four, Suit.clubs),
-        '4\'eren: ryk 4 felter frem ELLER 4 felter tilbage.',
-      ),
-    ];
-
-    // Komplet oversigt over alle kort i standardopsætningen.
-    const List<_CardLine> allCards = <_CardLine>[
-      _CardLine('UD-kort', 'Kun ud af start.'),
-      _CardLine('Es', 'Ud af start, eller 1 eller 11 frem.'),
-      _CardLine('2 – 3', 'Ryk det antal frem (2 eller 3).'),
-      _CardLine('4', '4 frem ELLER 4 tilbage.'),
-      _CardLine('5 – 6', 'Ryk det antal frem (5 eller 6).'),
-      _CardLine('7', 'Kan deles over flere brikker.'),
-      _CardLine('8 – 9 – 10', 'Ryk det antal frem (8, 9 eller 10).'),
-      _CardLine('Knægt (J)', '11 frem. (Byt kan admin slå til; standard er '
-          '11 frem.)'),
-      _CardLine('Dame (Q)', '12 frem.'),
-      _CardLine('Konge (K)', 'Ud af start, eller 13 frem.'),
+      for (final Rank r in exampleRanks)
+        _CardExample(
+          PlayingCard(r, Suit.spades),
+          '${rankName(r)}: ${describeRank(r, rules)}',
+        ),
     ];
 
     return SingleChildScrollView(
@@ -485,14 +522,21 @@ class _CardsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          for (final _CardLine line in allCards) ...<Widget>[
-            _CardLineRow(line: line),
+          // Den komplette oversigt læses LIVE fra CardRules — ændrer admin et
+          // kort, opdaterer denne liste sig automatisk.
+          _CardLineRow(
+            line: const _CardLine(
+                'UD-kort', 'Sender en brik ud på dit udgangsfelt.'),
+          ),
+          const SizedBox(height: 8),
+          for (final Rank r in Rank.values) ...<Widget>[
+            _CardLineRow(line: _CardLine(rankName(r), describeRank(r, rules))),
             const SizedBox(height: 8),
           ],
           const SizedBox(height: 4),
           const Text(
-            'Symboler: ⤴ ud af start  •  → frem  •  ← tilbage  •  '
-            '✂ del 7\'eren',
+            'Tip: Admin kan justere hvad hvert kort gør. Beskrivelserne her '
+            'følger altid den aktuelle opsætning.',
             style: TextStyle(color: Colors.white60, fontSize: 13),
           ),
         ],
