@@ -46,6 +46,14 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   // bestemt signatur — undgår at spamme transaktioner mens vi venter.
   String _lastTakeoverSig = '';
 
+  // "Mens du var væk"-catch-up må KUN trigge ved første-load af skærmen.
+  // Resten af tiden bliver events markeret set live i baggrunden så vi ikke
+  // sætter en overlay-dialog hver gang en anden spiller (eller AI) rykker.
+  bool _initialReplayChecked = false;
+  // Sidste seen-tal vi selv har skrevet, så vi ikke spammer markSeen-skriv
+  // hver gang Riverpod genrender.
+  int _liveSeenAck = 0;
+
   OnlineService get _svc => ref.read(onlineServiceProvider);
 
   @override
@@ -124,18 +132,37 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
 
   void _maybeStartReplay(GameState state, List log, int mySeen) {
     if (_replayActive) return;
-    if (log.length <= mySeen) return;
-    setState(() {
-      _replayActive = true;
-      _replayIndex = mySeen;
-      _replayTarget = log.length;
-    });
+    if (log.length <= mySeen) {
+      _initialReplayChecked = true; // intet at indhente
+      return;
+    }
+    // KUN ved første load: vis "mens du var væk"-replay for det vi har
+    // missed. Resten af tiden er vi tydeligvis tilstede (skærmen er åben,
+    // heartbeat kører) og skal ikke spammes med en overlay-dialog for
+    // hver eneste modspiller-/AI-bevægelse — vi ser dem live.
+    if (!_initialReplayChecked) {
+      _initialReplayChecked = true;
+      setState(() {
+        _replayActive = true;
+        _replayIndex = mySeen;
+        _replayTarget = log.length;
+      });
+      return;
+    }
+    // Live mode: bagvejen-opdatér seen så det matcher log, så replay aldrig
+    // genoptræder mens vi er på skærmen. Skriv kun ved ændring.
+    if (log.length > _liveSeenAck) {
+      _liveSeenAck = log.length;
+      // ignore: discarded_futures
+      _svc.markSeen(widget.code, log.length);
+    }
   }
 
   Future<void> _finishReplay() async {
     try {
       await _svc.markSeen(widget.code, _replayTarget);
     } catch (_) {}
+    _liveSeenAck = _replayTarget;
     if (!mounted) return;
     setState(() => _replayActive = false);
   }
