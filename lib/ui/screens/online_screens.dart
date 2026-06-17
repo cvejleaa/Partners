@@ -183,22 +183,71 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 class OnlineHomeScreen extends ConsumerWidget {
   const OnlineHomeScreen({super.key});
 
-  Widget _gameTile(BuildContext context, GameSummary g) => Card(
-        child: ListTile(
-          leading: Icon(g.isPlaying ? Icons.play_circle : Icons.meeting_room),
-          title: Text('Spil ${g.code}  ·  vært: ${g.hostName}'),
-          subtitle: Text(g.isLobby
-              ? 'Venter i lobby'
-              : (g.isPlaying ? 'Tryk for at genindtræde' : 'I gang')),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            Navigator.of(context).push<void>(MaterialPageRoute<void>(
-                builder: (_) => g.isLobby
-                    ? LobbyScreen(code: g.code)
-                    : OnlineGameScreen(code: g.code)));
-          },
+  Widget _gameTile(BuildContext context, WidgetRef ref, GameSummary g) {
+    final user = FirebaseAuth.instance.currentUser;
+    final bool canDelete =
+        (user != null && g.hostUid == user.uid) || isAdmin(user);
+    return Card(
+      child: ListTile(
+        leading: Icon(g.isPlaying ? Icons.play_circle : Icons.meeting_room),
+        title: Text('Spil ${g.code}  ·  vært: ${g.hostName}'),
+        subtitle: Text(g.isLobby
+            ? 'Venter i lobby'
+            : (g.isPlaying ? 'Tryk for at genindtræde' : 'I gang')),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (canDelete)
+              IconButton(
+                tooltip: 'Slet spil',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _confirmDelete(context, ref, g),
+              ),
+            const Icon(Icons.chevron_right),
+          ],
         ),
-      );
+        onTap: () {
+          Navigator.of(context).push<void>(MaterialPageRoute<void>(
+              builder: (_) => g.isLobby
+                  ? LobbyScreen(code: g.code)
+                  : OnlineGameScreen(code: g.code)));
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, GameSummary g) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Slet spil?'),
+        content: Text(
+            'Sletter "${g.code}" (${g.isLobby ? "lobby" : "i gang"}). '
+            'Handlingen kan ikke fortrydes — alle deltagere mister adgangen.'),
+        actions: <Widget>[
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annullér')),
+          FilledButton(
+              style:
+                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Slet')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(onlineServiceProvider).deleteGame(g.code);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunne ikke slette: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -281,7 +330,7 @@ class OnlineHomeScreen extends ConsumerWidget {
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
-                        for (final g in playing) _gameTile(context, g),
+                        for (final g in playing) _gameTile(context, ref, g),
                         const SizedBox(height: 12),
                       ],
                       if (lobbies.isNotEmpty) ...<Widget>[
@@ -291,7 +340,7 @@ class OnlineHomeScreen extends ConsumerWidget {
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
-                        for (final g in lobbies) _gameTile(context, g),
+                        for (final g in lobbies) _gameTile(context, ref, g),
                       ],
                     ],
                   );

@@ -231,9 +231,10 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
             'Vælg hvad der skal nulstilles. Handlingen kan ikke fortrydes.\n\n'
             '• Kun cache: sletter alt under userStats/ (kan genberegnes fra '
             'games-collection bagefter).\n'
-            '• Cache + spilhistorik: sletter også alle afsluttede spil '
-            '(status="over") fra games-collection. Igangværende spil '
-            '(lobby/playing) bevares.'),
+            '• Cache + afsluttede spil: sletter også alle afsluttede spil '
+            '(status="over"). Igangværende spil bevares.\n'
+            '• Alt inkl. igangværende: rydder også lobby/playing — '
+            'spillere mister adgang til deres aktive spil.'),
         actions: <Widget>[
           TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -241,12 +242,15 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
           TextButton(
               onPressed: () => Navigator.pop(ctx, _ResetScope.cacheOnly),
               child: const Text('Kun cache')),
+          TextButton(
+              onPressed: () =>
+                  Navigator.pop(ctx, _ResetScope.cacheAndHistory),
+              child: const Text('+ afsluttede')),
           FilledButton(
               style:
                   FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
-              onPressed: () =>
-                  Navigator.pop(ctx, _ResetScope.cacheAndHistory),
-              child: const Text('Cache + spilhistorik')),
+              onPressed: () => Navigator.pop(ctx, _ResetScope.allGames),
+              child: const Text('Alt inkl. igangværende')),
         ],
       ),
     );
@@ -294,6 +298,9 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
     await deleteAll('userStats');
     if (scope == _ResetScope.cacheAndHistory) {
       await deleteAll('games', where: <String, dynamic>{'status': 'over'});
+    } else if (scope == _ResetScope.allGames) {
+      // Slet ALLE spil — også igangværende og lobbyer.
+      await deleteAll('games');
     }
   }
 
@@ -309,5 +316,5 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
       );
 }
 
-enum _ResetScope { cacheOnly, cacheAndHistory }
+enum _ResetScope { cacheOnly, cacheAndHistory, allGames }
 

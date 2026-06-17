@@ -42,9 +42,13 @@ service cloud.firestore {
       }
     }
 
-    // Spil.
+    // Spil. Indloggede må læse + skrive (inviteret/joine/heartbeat/applyMove);
+    // slet er låst til værten eller en admin så ingen kan rive andres spil ned.
     match /games/{game} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isSignedIn() &&
+        (resource.data.hostUid == request.auth.uid || isAdmin());
     }
 
     // Stats-cache pr. bruger: alle indloggede må læse (profilskærmen viser

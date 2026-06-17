@@ -56,11 +56,13 @@ final myGamesProvider = StreamProvider<List<GameSummary>>(
     (ref) => ref.read(onlineServiceProvider).myGames());
 
 class GameSummary {
-  GameSummary(this.code, this.hostName, this.status, this.playerNames);
+  GameSummary(this.code, this.hostName, this.status, this.playerNames,
+      {this.hostUid});
   final String code;
   final String hostName;
   final String status;
   final List<String> playerNames;
+  final String? hostUid;
 
   bool get isLobby => status == 'lobby';
   bool get isPlaying => status == 'playing';
@@ -289,6 +291,7 @@ class OnlineService {
                   d.data()['hostName'] as String? ?? '?',
                   d.data()['status'] as String? ?? 'lobby',
                   (d.data()['names'] as List).map((e) => e as String).toList(),
+                  hostUid: d.data()['hostUid'] as String?,
                 ))
             .where((g) => g.status != 'over')
             .toList());
@@ -424,6 +427,12 @@ class OnlineService {
     await _games.doc(code).update(<String, dynamic>{
       'seen.$uid': count,
     });
+  }
+
+  /// Slet et spil-dokument helt. Tilladt for værten eller en admin — Firestore-
+  /// reglerne tjekker det. UI-laget viser kun knappen for relevante brugere.
+  Future<void> deleteGame(String code) async {
+    await _games.doc(code).delete();
   }
 
   /// Kør en handling på spillet i en transaktion (sikker mod samtidige skriv).
