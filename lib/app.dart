@@ -20,6 +20,7 @@ import 'models/piece.dart';
 import 'models/player.dart';
 import 'models/playing_card.dart';
 import 'online/online_service.dart';
+import 'online/push_service.dart';
 import 'online/serialize.dart';
 import 'state/settings_controller.dart';
 import 'stats/stats_repository.dart';
@@ -338,6 +339,11 @@ class GameController extends StateNotifier<GameState> {
   }
 }
 
+/// Global nøgle så foregrund-push-beskeder kan vise en SnackBar uanset
+/// hvilken skærm der er øverst.
+final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
 class PartnersApp extends ConsumerWidget {
   const PartnersApp({super.key});
 
@@ -346,8 +352,23 @@ class PartnersApp extends ConsumerWidget {
     final ThemeMode themeMode = ref.watch(
       settingsProvider.select((Settings s) => s.themeMode),
     );
+
+    // Vis en SnackBar når der lander en push i forgrunden. Lyt via
+    // listen() så vi ikke kører rebuild ved hver besked.
+    ref.listen<AsyncValue<PushMessage>>(pushMessageProvider, (prev, next) {
+      final msg = next.valueOrNull;
+      if (msg == null) return;
+      final messenger = _scaffoldMessengerKey.currentState;
+      if (messenger == null) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text('${msg.title}: ${msg.body}'),
+        duration: const Duration(seconds: 5),
+      ));
+    });
+
     return MaterialApp(
       title: 'Partners',
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       theme: ThemeData(
         colorSchemeSeed: const Color(0xFF8B5E3C),
         brightness: Brightness.light,

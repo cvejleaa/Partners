@@ -16,21 +16,29 @@ class Settings {
     this.soundEnabled = true,
     this.hapticsEnabled = true,
     this.themeMode = ThemeMode.system,
+    this.pushEnabled = false,
   });
 
   final bool soundEnabled;
   final bool hapticsEnabled;
   final ThemeMode themeMode;
 
+  /// Browser-push (FCM). Default: slået fra. Når brugeren slår til,
+  /// spørges der om browser-permission og en FCM-token registreres
+  /// under `users/{uid}.fcmTokens`.
+  final bool pushEnabled;
+
   Settings copyWith({
     bool? soundEnabled,
     bool? hapticsEnabled,
     ThemeMode? themeMode,
+    bool? pushEnabled,
   }) {
     return Settings(
       soundEnabled: soundEnabled ?? this.soundEnabled,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       themeMode: themeMode ?? this.themeMode,
+      pushEnabled: pushEnabled ?? this.pushEnabled,
     );
   }
 
@@ -38,6 +46,7 @@ class Settings {
         'soundEnabled': soundEnabled,
         'hapticsEnabled': hapticsEnabled,
         'themeMode': themeMode.name,
+        'pushEnabled': pushEnabled,
       };
 
   factory Settings.fromJson(Map<String, dynamic> json) {
@@ -45,6 +54,7 @@ class Settings {
       soundEnabled: json['soundEnabled'] as bool? ?? true,
       hapticsEnabled: json['hapticsEnabled'] as bool? ?? true,
       themeMode: _themeModeFromName(json['themeMode'] as String?),
+      pushEnabled: json['pushEnabled'] as bool? ?? false,
     );
   }
 
@@ -105,6 +115,11 @@ class SettingsController extends StateNotifier<Settings> {
 
   void setThemeMode(ThemeMode mode) {
     state = state.copyWith(themeMode: mode);
+    _save();
+  }
+
+  void setPushEnabled(bool value) {
+    state = state.copyWith(pushEnabled: value);
     _save();
   }
 }
