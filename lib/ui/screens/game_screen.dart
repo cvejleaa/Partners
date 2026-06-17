@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../../game/ai/heuristic_ai.dart';
 import '../../models/board.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
+import '../../models/piece.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../services/feedback_service.dart';
@@ -237,63 +240,63 @@ class _GameScreenState extends ConsumerState<GameScreen>
     Player right,
     Set<String> highlighted,
   ) {
-    // Mobil: brættet får en FAST størrelse (bredden, eller højst ~58% af
-    // højden) så der ikke opstår tom luft mellem bræt og hånd. De 4 paneler
-    // sidder i hjørnerne over brættets tomme strimler. Hånd-blokken fylder
-    // resten af skærmen (Expanded) — så kortene kan være store og læsbare.
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints c) {
-        final double byHeight = c.maxHeight * 0.58;
-        final double boardSize =
-            c.maxWidth < byHeight ? c.maxWidth : byHeight;
-        return Column(
-          children: <Widget>[
-            SizedBox(
-              height: boardSize,
-              width: double.infinity,
-              child: Stack(
-                children: <Widget>[
-                  Positioned.fill(
-                    child: _boardArea(state, human, highlighted),
+    // Mobil: brættet får AL resterende plads over hånd-blokken (Expanded), så
+    // det bliver så stort som muligt uden at klippe yder-cirklerne. Hånd-blokken
+    // nedenunder er kompakt (sizer til sit indhold). De 4 paneler hugger
+    // brættets hjørner.
+    return Column(
+      children: <Widget>[
+        Expanded(
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints c) {
+              final double boardSize =
+                  math.min(c.maxWidth, c.maxHeight);
+              return Center(
+                child: SizedBox(
+                  width: boardSize,
+                  height: boardSize,
+                  child: Stack(
+                    children: <Widget>[
+                      Positioned.fill(
+                        child: _boardArea(state, human, highlighted),
+                      ),
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: SizedBox(
+                            width: 100,
+                            child: _panel(state, partner, compact: true)),
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: SizedBox(
+                            width: 100,
+                            child: _panel(state, right, compact: true)),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        child: SizedBox(
+                            width: 100,
+                            child: _panel(state, left, compact: true)),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: SizedBox(
+                            width: 100,
+                            child: _panel(state, human, compact: true)),
+                      ),
+                    ],
                   ),
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    child: SizedBox(
-                        width: 100,
-                        child: _panel(state, partner, compact: true)),
-                  ),
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: SizedBox(
-                        width: 100,
-                        child: _panel(state, right, compact: true)),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    child: SizedBox(
-                        width: 100,
-                        child: _panel(state, left, compact: true)),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: SizedBox(
-                        width: 100,
-                        child: _panel(state, human, compact: true)),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _buildHumanArea(state, human,
-                  showPanel: false, fill: true),
-            ),
-          ],
-        );
-      },
+                ),
+              );
+            },
+          ),
+        ),
+        _buildHumanArea(state, human, showPanel: false, fill: true),
+      ],
     );
   }
 
@@ -390,29 +393,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   Widget _buildExchangeArea(GameState state, Player human, {bool fill = false}) {
     final bool humanDone = state.exchangeBuffer.containsKey(human.index);
-    final double cardW = fill ? 78 : 54;
-    final double rowH = fill ? 120 : 84;
-    final Widget cards = SizedBox(
-      height: rowH,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        children: <Widget>[
-          for (final PlayingCard c in human.hand)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: CardView(
-                card: c,
-                rules: state.cardRules,
-                width: cardW,
-                selected: _humanExchangeChoice == c,
-                onTap: humanDone
-                    ? null
-                    : () => setState(() => _humanExchangeChoice = c),
-              ),
-            ),
-        ],
-      ),
+    final double maxCardW = fill ? 72 : 54;
+    final Widget cards = _handCards(
+      state: state,
+      hand: human.hand,
+      faceUp: true,
+      maxCardW: maxCardW,
+      selected: _humanExchangeChoice,
+      onTapCard:
+          humanDone ? null : (c) => setState(() => _humanExchangeChoice = c),
     );
     final Widget cardRow = Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -439,12 +428,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
     );
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
       color: const Color(0xFF14331F),
       child: Column(
-        mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
-        mainAxisAlignment:
-            fill ? MainAxisAlignment.center : MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: <Widget>[
           Text(
             humanDone
@@ -459,22 +447,59 @@ class _GameScreenState extends ConsumerState<GameScreen>
     );
   }
 
+  /// Lægger alle kort på hånden ud så de PRÆCIST fylder den tilgængelige
+  /// bredde — ingen vandret scroll, alle kort altid synlige. Kort-bredden
+  /// beregnes fra pladsen / antal kort og loftes af [maxCardW] så de ikke
+  /// bliver enorme på brede skærme.
+  Widget _handCards({
+    required GameState state,
+    required List<PlayingCard> hand,
+    required bool faceUp,
+    required double maxCardW,
+    required PlayingCard? selected,
+    required void Function(PlayingCard)? onTapCard,
+  }) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints c) {
+        final int n = hand.isEmpty ? 1 : hand.length;
+        const double gap = 6;
+        double cardW = (c.maxWidth - gap * n) / n;
+        if (cardW > maxCardW) cardW = maxCardW;
+        if (cardW < 32) cardW = 32;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            for (final PlayingCard card in hand)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: gap / 2),
+                child: CardView(
+                  card: card,
+                  rules: state.cardRules,
+                  faceUp: faceUp,
+                  width: cardW,
+                  selected: selected == card,
+                  onTap: onTapCard == null ? null : () => onTapCard(card),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildPlayArea(GameState state, Player human, {bool fill = false}) {
     final bool humanTurn = state.currentPlayerIndex == human.index;
     final bool busy = _animMoves.isNotEmpty;
     final bool humanCanPlay = humanTurn &&
         !busy &&
         ref.read(gameProvider.notifier).canPlay(human.index);
-    final double cardW = fill ? 78 : 54;
-    final double rowH = fill ? 120 : 84;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
       color: const Color(0xFF14331F),
       child: Column(
-        mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
-        mainAxisAlignment:
-            fill ? MainAxisAlignment.center : MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           if (!humanTurn)
@@ -519,28 +544,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
             Text('Du kan ikke rykke nogen brik',
                 style: TextStyle(color: Colors.red.shade300, fontSize: 13)),
           const SizedBox(height: 8),
-          SizedBox(
-            height: rowH,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              children: <Widget>[
-                for (final PlayingCard c in human.hand)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: CardView(
-                      card: c,
-                      rules: state.cardRules,
-                      faceUp: humanTurn,
-                      width: cardW,
-                      selected: _selectedCard == c,
-                      onTap: (!humanTurn || !humanCanPlay)
-                          ? null
-                          : () => _selectCard(c),
-                    ),
-                  ),
-              ],
-            ),
+          _handCards(
+            state: state,
+            hand: human.hand,
+            faceUp: humanTurn,
+            maxCardW: fill ? 84 : 54,
+            selected: _selectedCard,
+            onTapCard: (!humanTurn || !humanCanPlay)
+                ? null
+                : (c) => _selectCard(c),
           ),
           if (humanTurn && !humanCanPlay && !busy)
             Padding(
@@ -834,15 +846,32 @@ class _GameScreenState extends ConsumerState<GameScreen>
     if (found != null) _confirmSwap(state, found);
   }
 
+  /// Beskriver hvor en brik står med det felt-nummer der er SYNLIGT på brættet
+  /// (1–14 pr. kvarter), så spilleren kan finde præcis den brik der byttes.
+  String _pieceLocation(GameState state, Piece p) {
+    final PiecePosition pos = p.position;
+    if (pos is StartPosition) return 'i start';
+    if (pos is HomeStretchPosition) return 'i hjemmet (felt ${pos.slot + 1})';
+    if (pos is TrackPosition) {
+      final int quarter = state.geometry.trackLength ~/ 4;
+      final int field = pos.index % quarter;
+      return field == 0 ? 'på UD-feltet' : 'på felt $field';
+    }
+    return '';
+  }
+
   Future<void> _confirmSwap(GameState state, Move move) async {
     final a = state.pieceById(move.steps[0].pieceId);
     final b = state.pieceById(move.steps[1].pieceId);
+    final String an = state.players[a.ownerIndex].name;
+    final String bn = state.players[b.ownerIndex].name;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Byt brikker?'),
         content: Text(
-            'Byt ${state.players[a.ownerIndex].name} og ${state.players[b.ownerIndex].name}?'),
+            'Byt $an-brikken ${_pieceLocation(state, a)} '
+            'med $bn-brikken ${_pieceLocation(state, b)}?'),
         actions: <Widget>[
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
