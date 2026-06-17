@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../online/online_service.dart';
@@ -78,6 +79,12 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
       appBar: AppBar(
         title: const Text('Statistik · alle'),
         actions: <Widget>[
+          if (isAdmin(FirebaseAuth.instance.currentUser))
+            IconButton(
+              tooltip: 'Nulstil al statistik (admin)',
+              icon: const Icon(Icons.delete_forever),
+              onPressed: _loading ? null : _confirmReset,
+            ),
           IconButton(
             tooltip: 'Genberegn',
             icon: const Icon(Icons.refresh),
@@ -166,6 +173,19 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
     return entries.take(5).map((e) => MapEntry(e.key, display(e.key))).toList();
   }
 
+  /// Disambiguerer navne i ranglisterne — hvis flere spillere har samme
+  /// displayName (typisk "Du" fra default-AI-opsætningen, ramt af brugere der
+  /// har logget ind med både Google og email og dermed har to forskellige
+  /// uids) tilføjes et kort uid-fragment så rækkerne kan kendes fra hinanden.
+  String _disambiguatedName(UserStats s) {
+    final int dupes =
+        _allStats.values.where((o) => o.displayName == s.displayName).length;
+    if (dupes <= 1) return s.displayName;
+    final String tail =
+        s.uid.length >= 4 ? s.uid.substring(s.uid.length - 4) : s.uid;
+    return '${s.displayName} (#$tail)';
+  }
+
   Widget _ranking(String title, List<MapEntry<UserStats, String>> rows) {
     if (rows.isEmpty) return const SizedBox.shrink();
     return Card(
@@ -189,7 +209,7 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
                         child: Text('${i + 1}.',
                             style: TextStyle(
                                 color: Colors.grey.shade600))),
-                    Expanded(child: Text(rows[i].key.displayName)),
+                    Expanded(child: Text(_disambiguatedName(rows[i].key))),
                     Text(rows[i].value,
                         style: const TextStyle(
                             fontWeight: FontWeight.bold)),
@@ -200,6 +220,81 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmReset() async {
+    final choice = await showDialog<_ResetScope>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nulstil statistik'),
+        content: const Text(
+            'Vælg hvad der skal nulstilles. Handlingen kan ikke fortrydes.\n\n'
+            '• Kun cache: sletter alt under userStats/ (kan genberegnes fra '
+            'games-collection bagefter).\n'
+            '• Cache + spilhistorik: sletter også alle afsluttede spil '
+            '(status="over") fra games-collection. Igangværende spil '
+            '(lobby/playing) bevares.'),
+        actions: <Widget>[
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annullér')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, _ResetScope.cacheOnly),
+              child: const Text('Kun cache')),
+          FilledButton(
+              style:
+                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+              onPressed: () =>
+                  Navigator.pop(ctx, _ResetScope.cacheAndHistory),
+              child: const Text('Cache + spilhistorik')),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    setState(() => _loading = true);
+    try {
+      await _performReset(choice);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Statistik nulstillet.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '$e';
+        });
+      }
+    }
+  }
+
+  Future<void> _performReset(_ResetScope scope) async {
+    // Slet i batches af 400 (Firestore-grænse: 500 ops pr. batch).
+    Future<void> deleteAll(String coll, {Map<String, dynamic>? where}) async {
+      while (true) {
+        Query q = firestore.collection(coll);
+        if (where != null) {
+          where.forEach((k, v) {
+            q = q.where(k, isEqualTo: v);
+          });
+        }
+        final snap = await q.limit(400).get();
+        if (snap.docs.isEmpty) break;
+        final batch = firestore.batch();
+        for (final d in snap.docs) {
+          batch.delete(d.reference);
+        }
+        await batch.commit();
+        if (snap.docs.length < 400) break;
+      }
+    }
+
+    await deleteAll('userStats');
+    if (scope == _ResetScope.cacheAndHistory) {
+      await deleteAll('games', where: <String, dynamic>{'status': 'over'});
+    }
   }
 
   Widget _row(String label, String value) => Padding(
@@ -213,3 +308,6 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
         ),
       );
 }
+
+enum _ResetScope { cacheOnly, cacheAndHistory }
+

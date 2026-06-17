@@ -29,17 +29,23 @@ class Rules {
 
   /// Find alle gyldige [Move] som [player] kan lave med [card] i [state].
   List<Move> legalMoves(GameState state, Player player, PlayingCard card) {
-    // Når alle spillerens egne brikker er kommet i mål (hjemstrækket), spiller
-    // man videre på makkerens brikker indtil holdet har alle 8 hjem.
+    // "Endgame mode": når alle ens egne brikker er i hjemstrækket (uanset slot)
+    // åbnes også makkerens brikker som lovlige mål — uden at man mister
+    // adgangen til sine egne hjemstræks-brikker. Det betyder fx at man kan
+    // dele en 7'er hen over en egen brik der mangler 1 slot for at låse i hus
+    // OG en af makkerens brikker på banen.
     final bool allOwnHome = player.pieces
         .every((Piece p) => p.position is HomeStretchPosition);
-    final Player active = allOwnHome
-        ? state.players[player.partnerIndex]
-        : player;
+    final List<Player> activePool = allOwnHome
+        ? <Player>[player, state.players[player.partnerIndex]]
+        : <Player>[player];
 
-    // Rene ud-kort kan kun rykke en brik ud.
+    // Rene ud-kort kan kun rykke en brik ud — fra enten egen eller makkers
+    // start når begge pools er aktive.
     if (card.isExit) {
-      return _exitStartMoves(state, active, card).toList();
+      return <Move>[
+        for (final Player a in activePool) ..._exitStartMoves(state, a, card),
+      ];
     }
 
     final List<Move> moves = <Move>[];
@@ -47,30 +53,39 @@ class Rules {
 
     // 1) Gå ud af start (til eget første felt).
     if (cfg.exitStart) {
-      moves.addAll(_exitStartMoves(state, active, card));
+      for (final Player a in activePool) {
+        moves.addAll(_exitStartMoves(state, a, card));
+      }
     }
 
     // 2) Almindelige fremad-skridt.
     for (final int steps in cfg.forwardSteps) {
-      for (final Piece p in active.pieces) {
-        if (p.position is StartPosition) continue;
-        final Move? m = _tryAdvance(state, active, p, steps, card);
-        if (m != null) moves.add(m);
+      for (final Player a in activePool) {
+        for (final Piece p in a.pieces) {
+          if (p.position is StartPosition) continue;
+          final Move? m = _tryAdvance(state, a, p, steps, card);
+          if (m != null) moves.add(m);
+        }
       }
     }
 
     // 3) Baglæns (kun på banen).
     if (cfg.backwardSteps != null) {
-      for (final Piece p in active.pieces) {
-        if (p.position is! TrackPosition) continue;
-        final Move? m = _tryReverse(state, p, cfg.backwardSteps!, card);
-        if (m != null) moves.add(m);
+      for (final Player a in activePool) {
+        for (final Piece p in a.pieces) {
+          if (p.position is! TrackPosition) continue;
+          final Move? m = _tryReverse(state, p, cfg.backwardSteps!, card);
+          if (m != null) moves.add(m);
+        }
       }
     }
 
-    // 4) Split (7'eren): total felter delt over flere af [active]s brikker.
+    // 4) Split (7'eren): _splitMoves har allerede både egne og makker-brikker
+    //    i sin pulje internt (med den klassiske regel "makker-brikker kun når
+    //    egne er låst i hjemstrækket"). Når alle egne er i hjemstrækket
+    //    triggrer låsen automatisk fra første step, så fordelingen er fri.
     if (cfg.splitTotal != null) {
-      moves.addAll(_splitMoves(state, active, card, cfg.splitTotal!));
+      moves.addAll(_splitMoves(state, player, card, cfg.splitTotal!));
     }
 
     // 5) Byt to brikker (Knægt) — forbliver mellem to FORSKELLIGE spillere.
