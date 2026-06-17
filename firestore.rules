@@ -19,10 +19,27 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Brugerprofiler.
+    // Brugerprofiler. Læsbar af alle indloggede (så søgning kan finde dem).
+    // Skrivbar kun af ejeren selv.
     match /users/{uid} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == uid;
+
+      // Venneliste — den lokale kopi af hvem en bruger har som ven.
+      // Læses og skrives kun af ejeren.
+      match /friends/{friendUid} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+
+      // Indbakke — invitationer fra andre. Ejeren kan læse og slette.
+      // Andre indloggede må oprette nye dokumenter (så de kan sende
+      // invitationer), men ikke ændre eller slette eksisterende.
+      match /inbox/{inviteId} {
+        allow read: if isSignedIn() && request.auth.uid == uid;
+        allow create: if isSignedIn();
+        allow update: if isSignedIn() && request.auth.uid == uid;
+        allow delete: if isSignedIn() && request.auth.uid == uid;
+      }
     }
 
     // Spil.

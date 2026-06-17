@@ -16,6 +16,7 @@ import '../models/move.dart';
 import '../models/piece.dart';
 import '../models/player.dart';
 import '../models/playing_card.dart';
+import 'friends_service.dart';
 import 'serialize.dart';
 
 /// Navnet på Firestore-databasen i projekt partners-8d4aa.
@@ -98,6 +99,10 @@ class OnlineService {
       await user.updateDisplayName(displayName.trim());
       await _writeProfile(user.uid,
           displayName: displayName.trim(), email: email.trim());
+      // Sørg for at de søgbare felter også er sat på den nye bruger.
+      try {
+        await FriendsService().ensureUserDoc();
+      } catch (_) {}
     } catch (e) {
       // Profilen kunne ikke skrives — slet auth-brugeren igen, så samme
       // email kan bruges til at prøve igen (i stedet for at sidde fast i
@@ -128,18 +133,28 @@ class OnlineService {
 
   Future<void> _ensureProfile(User user) async {
     final doc = await _users.doc(user.uid).get();
-    if (doc.exists) return;
-    final email = user.email ?? '';
-    final name = (user.displayName ?? '').isNotEmpty
-        ? user.displayName!
-        : (email.isNotEmpty ? email.split('@').first : 'Spiller');
-    await _writeProfile(user.uid, displayName: name, email: email);
+    if (!doc.exists) {
+      final email = user.email ?? '';
+      final name = (user.displayName ?? '').isNotEmpty
+          ? user.displayName!
+          : (email.isNotEmpty ? email.split('@').first : 'Spiller');
+      await _writeProfile(user.uid, displayName: name, email: email);
+    }
+    // Sørg også for at de søgbare felter (email, displayNameLower osv.) er
+    // friske, så venne-søgning kan finde brugeren. Fejler stille.
+    try {
+      await FriendsService().ensureUserDoc();
+    } catch (_) {
+      // Ignorér — login må ikke fejle pga. dette skriv.
+    }
   }
 
   Future<void> _writeProfile(String uid,
       {required String displayName, required String email}) async {
     await _users.doc(uid).set(<String, dynamic>{
       'displayName': displayName,
+      'displayNameLower': displayName.toLowerCase(),
+      'email': email,
       'emailLower': email.toLowerCase(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));

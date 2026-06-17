@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
 import '../../utils/palette.dart';
@@ -226,10 +227,31 @@ class OnlineHomeScreen extends ConsumerWidget {
               icon: const Icon(Icons.add),
               label: const Text('Opret nyt spil'),
               onPressed: () async {
+                // Vis først dialog hvor man kan vælge venner at invitere.
+                // Brugere uden venner ser blot et hint og kan trykke "Opret".
+                final List<FriendRef>? invitees =
+                    await showDialog<List<FriendRef>>(
+                  context: context,
+                  builder: (_) => const _InviteFriendsDialog(),
+                );
+                if (invitees == null) return; // brugeren annullerede
                 final code = await svc.createGame(
                   colorValue: kPalette.first.color.toARGB32(),
                   rules: ref.read(cardRulesProvider),
                 );
+                // Send invitationer til markerede venner. Fejl pr. ven må ikke
+                // forhindre at lobbyen åbnes.
+                if (invitees.isNotEmpty) {
+                  final friends = ref.read(friendsServiceProvider);
+                  for (final f in invitees) {
+                    try {
+                      await svc.invite(code, f.uid);
+                      await friends.sendGameInvite(f.uid, code);
+                    } catch (_) {
+                      // Ignorér en enkelt fejl — vis evt. snackbar nedenfor.
+                    }
+                  }
+                }
                 if (context.mounted) {
                   Navigator.of(context).push<void>(MaterialPageRoute<void>(
                       builder: (_) => LobbyScreen(code: code)));
@@ -528,5 +550,89 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${user['displayName']} er inviteret')));
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dialog: vælg venner at invitere ved oprettelse af nyt spil
+// ---------------------------------------------------------------------------
+
+class _InviteFriendsDialog extends ConsumerStatefulWidget {
+  const _InviteFriendsDialog();
+
+  @override
+  ConsumerState<_InviteFriendsDialog> createState() =>
+      _InviteFriendsDialogState();
+}
+
+class _InviteFriendsDialogState extends ConsumerState<_InviteFriendsDialog> {
+  final Set<String> _selected = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final friendsAsync = ref.watch(friendsStreamProvider);
+    return AlertDialog(
+      title: const Text('Inviter venner'),
+      content: SizedBox(
+        width: 320,
+        child: friendsAsync.when(
+          loading: () => const SizedBox(
+            height: 80,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Text('Fejl: $e'),
+          data: (friends) {
+            if (friends.isEmpty) {
+              return const Text(
+                'Tilføj venner i din profil for at invitere direkte.',
+              );
+            }
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: friends.length,
+                itemBuilder: (_, i) {
+                  final f = friends[i];
+                  final picked = _selected.contains(f.uid);
+                  return CheckboxListTile(
+                    value: picked,
+                    title: Text(f.displayName),
+                    subtitle: Text(f.email.isEmpty ? '—' : f.email),
+                    onChanged: (v) {
+                      setState(() {
+                        if (v == true) {
+                          _selected.add(f.uid);
+                        } else {
+                          _selected.remove(f.uid);
+                        }
+                      });
+                    },
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annullér'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final friends = ref.read(friendsStreamProvider).valueOrNull ??
+                const <FriendRef>[];
+            final picked =
+                friends.where((f) => _selected.contains(f.uid)).toList();
+            Navigator.pop(context, picked);
+          },
+          child: Text(_selected.isEmpty
+              ? 'Opret uden invitationer'
+              : 'Opret og inviter (${_selected.length})'),
+        ),
+      ],
+    );
   }
 }

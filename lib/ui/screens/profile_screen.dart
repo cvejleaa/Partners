@@ -6,6 +6,7 @@ import '../../stats/badges.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 import '../widgets/badge_chip.dart';
+import 'friends_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -48,6 +49,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         appBar: AppBar(
           title: const Text('Min profil'),
           actions: <Widget>[
+            IconButton(
+              tooltip: 'Mine venner',
+              icon: const Icon(Icons.people),
+              onPressed: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const FriendsScreen())),
+            ),
             IconButton(
               tooltip: 'Genberegn stats',
               icon: _recomputing
