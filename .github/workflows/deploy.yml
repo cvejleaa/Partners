@@ -132,3 +132,18 @@ jobs:
             --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
+
+      - name: Installér Cloud Functions deps
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        run: npm --prefix functions install
+
+      - name: Deploy Cloud Functions
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        run: |
+          # onInboxCreate lytter på users/{uid}/inbox/{x} og sender push via FCM.
+          firebase deploy \
+            --only functions \
+            --project "$FIREBASE_PROJECT_ID" \
+            --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json

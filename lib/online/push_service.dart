@@ -19,7 +19,8 @@ import 'online_service.dart';
 ///
 /// Mens nøglen er tom logges en advarsel og [PushService.registerTokenForCurrentUser]
 /// undlader at hente token — appen crasher IKKE.
-const String _kVapidKey = '';
+const String _kVapidKey =
+    'BHKKeJhMTO_nQN2lgRk4Z8ijLmD4vUWalLCZN2O4ldXOwB2LOL3gtsC7WET9GmeSHTYNfySdo-mQSgfgSd6lZQM';
 
 /// Letvægts-besked vist når der kommer en foregrund-push (browser-fanen er åben).
 @immutable

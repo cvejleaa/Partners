@@ -31,77 +31,24 @@ Hvis du ændrer Firebase-konfigurationen (`lib/firebase_options.dart`) skal
 samme felter også opdateres i `firebase-messaging-sw.js` — de to er
 manuelle kopier.
 
-## 3. Cloud Function — manuel opfølgning
+## 3. Cloud Function
 
-FCM-token alene sender ingenting. Der skal stå en server (typisk en
-Cloud Function) som lytter på `users/{uid}/inbox/{x}` og kalder FCM Admin
-SDK med modtagerens tokens.
+FCM-token alene sender ingenting. En Cloud Function (`functions/index.js`)
+lytter på `users/{uid}/inbox/{x}` og kalder FCM Admin SDK med modtagerens
+tokens. CI deployer den automatisk efter hosting (`firebase deploy --only
+functions` i `.github/workflows/deploy.yml`). Kræver Blaze-plan.
 
-**Status: ikke automatiseret. Hoved-sessionen sætter dette op manuelt.**
-CI'en deployer IKKE Cloud Functions i denne fase.
+Region: `europe-west1`. Runtime: `nodejs20`. Database: `partners` (navngiven).
 
-Skitse (Node.js, Firestore-triggered):
+Funktionen ligger i `functions/index.js`. CI installerer dependencies og
+deployer den automatisk via `firebase deploy --only functions`.
 
-```js
-// functions/index.js
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
-admin.initializeApp();
+Hvis du vil teste lokalt med Firebase Emulator:
 
-// Brug den navngivne database 'partners' — IKKE (default).
-const db = admin.firestore();
-db.settings({ databaseId: 'partners' });
-
-exports.onInboxCreate = functions
-  .firestore
-  .document('users/{uid}/inbox/{inviteId}')
-  .onCreate(async (snap, ctx) => {
-    const invite = snap.data() || {};
-    if (invite.type !== 'gameInvite') return;
-
-    const uid = ctx.params.uid;
-    const userDoc = await db.collection('users').doc(uid).get();
-    const tokens = (userDoc.data() || {}).fcmTokens || [];
-    if (!tokens.length) return;
-
-    const fromName = invite.fromName || 'En ven';
-    const gameCode = invite.gameCode || '';
-
-    const res = await admin.messaging().sendEachForMulticast({
-      tokens,
-      notification: {
-        title: 'Partners — invitation',
-        body: `${fromName} har inviteret dig til et spil`,
-      },
-      data: {
-        gameCode,
-        click_action: '/',
-      },
-      webpush: {
-        fcmOptions: { link: gameCode ? `/?invite=${gameCode}` : '/' },
-      },
-    });
-
-    // Ryd op i tokens der ikke længere er gyldige.
-    const stale = [];
-    res.responses.forEach((r, i) => {
-      if (!r.success && (
-        r.error?.code === 'messaging/registration-token-not-registered' ||
-        r.error?.code === 'messaging/invalid-registration-token')) {
-        stale.push(tokens[i]);
-      }
-    });
-    if (stale.length) {
-      await db.collection('users').doc(uid).update({
-        fcmTokens: admin.firestore.FieldValue.arrayRemove(...stale),
-      });
-    }
-  });
+```sh
+cd functions && npm install
+firebase emulators:start --only functions,firestore
 ```
-
-Deploy senere med `firebase deploy --only functions` (kræver `functions/`-
-mappe med `package.json`). Tilføj `functions` til `firebase.json` når
-funktionen er klar.
 
 ## 4. Test
 

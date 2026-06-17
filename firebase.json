@@ -46,5 +46,15 @@
       "database": "partners",
       "rules": "firestore.rules"
     }
+  ],
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs20",
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" install"
+      ]
+    }
   ]
 }
