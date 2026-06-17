@@ -60,7 +60,14 @@ jobs:
           echo "Genererede ikoner:" && ls -la web/icons/*.png web/favicon.png
 
       - name: Byg web (release)
-        run: flutter build web --release --base-href "/"
+        # BUILD_TAG eksponeres i appen via _BuildStamp (kortet "build XXXXXXX"
+        # nederst på home_screen). Giver os mulighed for at se i live-appen
+        # hvilken commit der faktisk kører — så vi kan udelukke 'gammel
+        # cache' når en bug rapporteres.
+        run: |
+          BUILD_TAG="${GITHUB_SHA:0:7}"
+          flutter build web --release --base-href "/" \
+            --dart-define=BUILD_TAG="$BUILD_TAG"
 
       - name: Setup Node
         uses: actions/setup-node@v4

@@ -154,6 +154,8 @@ class HomeScreen extends ConsumerWidget {
                     ],
                   ),
                 ],
+                const SizedBox(height: 24),
+                const _BuildStamp(),
               ],
             ),
           ),
@@ -385,6 +387,25 @@ class _InviteBanner extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Lille build-stempel der gør det muligt at se hvilket build der kører.
+/// Sættes via --dart-define=BUILD_TAG=... i CI; default 'dev' lokalt.
+class _BuildStamp extends StatelessWidget {
+  const _BuildStamp();
+
+  static const String _buildTag =
+      String.fromEnvironment('BUILD_TAG', defaultValue: 'dev');
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        'build $_buildTag',
+        style: const TextStyle(color: Color(0x88FFFFFF), fontSize: 11),
       ),
     );
   }

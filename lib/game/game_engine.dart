@@ -124,8 +124,20 @@ class GameEngine extends ChangeNotifier {
     _afterMove(playerIndex);
   }
 
-  /// Spil et træk (validering antages allerede udført).
+  /// Spil et træk. Re-validerer mod aktuel state for at fange edge-case
+  /// bugs hvor en stale move-genereret ifølge gammel state har overlevet
+  /// (fx en AI der vælger move BAS på et tidligere state-snapshot). Hvis
+  /// move'et ikke findes blandt aktuelle gyldige træk → afvis og log.
   void applyMove(int playerIndex, Move move) {
+    final List<Move> legal = rules.legalMoves(
+        state, state.players[playerIndex], move.card);
+    final bool isLegal = legal.any((Move m) => _movesEqual(m, move));
+    if (!isLegal) {
+      // ignore: avoid_print
+      print('[applyMove] AFVIST ULOVLIGT MOVE for player $playerIndex: '
+          '${_moveDebug(move)}');
+      return;
+    }
     final Player player = state.players[playerIndex];
     for (final MoveStep step in move.steps) {
       final Piece moving = state.pieceById(step.pieceId);
@@ -204,5 +216,22 @@ class GameEngine extends ChangeNotifier {
       if (occ == null) return slot;
     }
     return 0;
+  }
+
+  bool _movesEqual(Move a, Move b) {
+    if (a.card != b.card) return false;
+    if (a.exitsStart != b.exitsStart) return false;
+    if (a.steps.length != b.steps.length) return false;
+    for (int i = 0; i < a.steps.length; i++) {
+      if (a.steps[i].pieceId != b.steps[i].pieceId) return false;
+      if (a.steps[i].to != b.steps[i].to) return false;
+    }
+    return true;
+  }
+
+  String _moveDebug(Move m) {
+    final steps =
+        m.steps.map((s) => '${s.pieceId} ${s.from} -> ${s.to}').join(' | ');
+    return 'card=${m.card} steps=[$steps]';
   }
 }
