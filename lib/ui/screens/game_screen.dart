@@ -28,6 +28,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   List<Move> _candidateMoves = <Move>[];
   PlayingCard? _humanExchangeChoice;
   String? _swapFirstPiece;
+  // Trin-for-trin split-7-flow: brugeren bygger en sekvens af MoveSteps op,
+  // og hver delskridt vælges via et bottom-sheet.
+  final List<MoveStep> _splitPath = <MoveStep>[];
   bool _showCardCounter = false;
 
   final HeuristicAi _ai = HeuristicAi();
@@ -478,12 +481,40 @@ class _GameScreenState extends ConsumerState<GameScreen>
             Text('${state.currentPlayer.name} spiller…',
                 style: const TextStyle(color: Colors.white, fontSize: 13)),
           if (humanTurn && humanCanPlay)
-            Text(
-              _selectedCard == null
-                  ? 'Vælg et kort'
-                  : 'Vælg en brik (gult = lovligt træk)',
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-            ),
+            Builder(builder: (BuildContext _) {
+              String label;
+              if (_selectedCard == null) {
+                label = 'Vælg et kort';
+              } else if (_isSplitCard(state, _selectedCard!)) {
+                final int rem = _splitRemaining(state);
+                label = _splitPath.isEmpty
+                    ? 'Vælg første brik ($rem træk tilbage)'
+                    : '$rem træk tilbage — vælg næste brik';
+              } else {
+                label = 'Vælg en brik (gult = lovligt træk)';
+              }
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(label,
+                      style: const TextStyle(
+                          color: Colors.white, fontSize: 13)),
+                  if (_selectedCard != null &&
+                      _isSplitCard(state, _selectedCard!) &&
+                      _splitPath.isNotEmpty) ...<Widget>[
+                    const SizedBox(width: 8),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 28),
+                          foregroundColor: Colors.amber),
+                      onPressed: _cancelSplit,
+                      child: const Text('Annullér'),
+                    ),
+                  ],
+                ],
+              );
+            }),
           if (humanTurn && !humanCanPlay && !busy)
             Text('Du kan ikke rykke nogen brik',
                 style: TextStyle(color: Colors.red.shade300, fontSize: 13)),
@@ -553,6 +584,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
       }
       return set;
     }
+    if (card != null && _isSplitCard(state, card)) {
+      // Highlight de brikker der kan vælges som NÆSTE delskridt, ud fra det
+      // der allerede er bygget op i _splitPath.
+      final List<Move> matching = _splitMatchingMoves();
+      final int nextIdx = _splitPath.length;
+      return <String>{
+        for (final Move m in matching)
+          if (m.steps.length > nextIdx) m.steps[nextIdx].pieceId,
+      };
+    }
     return <String>{for (final m in _candidateMoves) m.steps.first.pieceId};
   }
 
@@ -564,13 +605,85 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _selectedCard = c;
       _candidateMoves = moves;
       _swapFirstPiece = null;
+      _splitPath.clear();
     });
+  }
+
+  /// Sand når kortet er et split-kort (fx 7'eren) der spilles trin for trin.
+  bool _isSplitCard(GameState state, PlayingCard c) {
+    if (c.isExit) return false;
+    final cfg = state.cardRules.forRank(c.rank!);
+    return cfg.splitTotal != null;
+  }
+
+  /// Move'er der stadig er konsistente med det vi har bygget op (_splitPath).
+  List<Move> _splitMatchingMoves() {
+    return _candidateMoves.where((Move m) {
+      if (m.steps.length < _splitPath.length) return false;
+      for (int i = 0; i < _splitPath.length; i++) {
+        final MoveStep a = m.steps[i];
+        final MoveStep b = _splitPath[i];
+        if (a.pieceId != b.pieceId) return false;
+        if (_posKey(a.to) != _posKey(b.to)) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  String _posKey(PiecePosition p) {
+    if (p is TrackPosition) return 'T${p.index}';
+    if (p is HomeStretchPosition) return 'H${p.ownerIndex}.${p.slot}';
+    if (p is StartPosition) return 'S${p.ownerIndex}.${p.slot}';
+    return '?';
+  }
+
+  /// Beregner hvor mange træk der er tilbage i det igangværende split, ud fra
+  /// længden af det første kandidat-Move og hvad der allerede er valgt.
+  int _splitRemaining(GameState state) {
+    final Move? any = _splitMatchingMoves().isEmpty
+        ? (_candidateMoves.isEmpty ? null : _candidateMoves.first)
+        : _splitMatchingMoves().first;
+    if (any == null) return 0;
+    // Tæl tællende felter i hele any.steps minus de allerede valgte.
+    int total = 0;
+    for (final MoveStep s in any.steps) {
+      total += _stepDistance(state, s);
+    }
+    int used = 0;
+    for (final MoveStep s in _splitPath) {
+      used += _stepDistance(state, s);
+    }
+    return total - used;
+  }
+
+  /// Hvor mange tællende felter et step udgør (frem på banen eller ind i
+  /// hjemstrækket).
+  int _stepDistance(GameState state, MoveStep s) {
+    final from = s.from;
+    final to = s.to;
+    final int len = state.geometry.trackLength;
+    if (from is TrackPosition && to is TrackPosition) {
+      return (to.index - from.index + len) % len;
+    }
+    if (from is TrackPosition && to is HomeStretchPosition) {
+      final int entry = state.geometry.startTrackIndexFor(to.ownerIndex);
+      final int toEntry = (entry - from.index - 1 + len) % len + 1;
+      return toEntry + to.slot;
+    }
+    if (from is HomeStretchPosition && to is HomeStretchPosition) {
+      return to.slot - from.slot;
+    }
+    return 0;
   }
 
   void _handlePieceTap(GameState state, String pieceId) {
     if (_selectedCard == null) return;
     if (_isSwapCard(state, _selectedCard!)) {
       _handleSwapTap(state, pieceId);
+      return;
+    }
+    if (_isSplitCard(state, _selectedCard!)) {
+      _handleSplitTap(state, pieceId);
       return;
     }
     final List<Move> matching = _candidateMoves
@@ -582,6 +695,121 @@ class _GameScreenState extends ConsumerState<GameScreen>
     } else {
       _showMoveChoice(matching);
     }
+  }
+
+  /// Split-7 trin-for-trin: brugeren har trykket på en brik. Find de mulige
+  /// delskridt for netop denne brik som NÆSTE step i en konsistent split, og
+  /// lad brugeren vælge afstand. Bagefter: er splittet fuldført, anvend det;
+  /// ellers fortsæt med næste brik.
+  Future<void> _handleSplitTap(GameState state, String pieceId) async {
+    final List<Move> matching = _splitMatchingMoves();
+    final int nextIdx = _splitPath.length;
+    // Find unikke næste-steps for denne brik (samme destination = samme valg).
+    final Map<String, MoveStep> byKey = <String, MoveStep>{};
+    for (final Move m in matching) {
+      if (m.steps.length <= nextIdx) continue;
+      final MoveStep s = m.steps[nextIdx];
+      if (s.pieceId != pieceId) continue;
+      final String key = _posKey(s.to);
+      byKey.putIfAbsent(key, () => s);
+    }
+    if (byKey.isEmpty) return;
+
+    MoveStep? chosen;
+    if (byKey.length == 1) {
+      chosen = byKey.values.first;
+    } else {
+      chosen = await _chooseSplitStep(state, byKey.values.toList());
+    }
+    if (chosen == null) return;
+
+    setState(() => _splitPath.add(chosen!));
+
+    // Er der præcis ét candidat-Move der matcher hele _splitPath og ikke har
+    // flere steps? Så er splittet færdigt.
+    final List<Move> fullyMatching = _candidateMoves.where((Move m) {
+      if (m.steps.length != _splitPath.length) return false;
+      for (int i = 0; i < _splitPath.length; i++) {
+        if (m.steps[i].pieceId != _splitPath[i].pieceId) return false;
+        if (_posKey(m.steps[i].to) != _posKey(_splitPath[i].to)) return false;
+      }
+      return true;
+    }).toList();
+    if (fullyMatching.isNotEmpty) {
+      _applyMove(fullyMatching.first);
+    }
+    // Ellers: brugeren skal vælge en brik mere (highlight'en opdaterer sig).
+  }
+
+  /// Vis en bottom-sheet der lader brugeren vælge mellem flere afstande for
+  /// samme brik (fx +3 frem vs +5 frem vs ind i hjemstrækket).
+  Future<MoveStep?> _chooseSplitStep(
+      GameState state, List<MoveStep> options) async {
+    options.sort((a, b) =>
+        _stepDistance(state, a).compareTo(_stepDistance(state, b)));
+    return showModalBottomSheet<MoveStep>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (BuildContext ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Text(
+                    'Hvor mange felter?',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (BuildContext _, int i) {
+                      final MoveStep s = options[i];
+                      final int d = _stepDistance(state, s);
+                      final String label = s.to is HomeStretchPosition
+                          ? '$d ind i hjemstrækket (slot ${(s.to as HomeStretchPosition).slot + 1})'
+                          : '$d frem';
+                      return ListTile(
+                        title: Text(label),
+                        onTap: () => Navigator.of(ctx).pop(s),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Annullér et igangværende split og start forfra.
+  void _cancelSplit() {
+    setState(() => _splitPath.clear());
   }
 
   void _handleSwapTap(GameState state, String pieceId) {
