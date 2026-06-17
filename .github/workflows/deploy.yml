@@ -138,6 +138,11 @@ jobs:
         run: npm --prefix functions install
 
       - name: Deploy Cloud Functions
+        # continue-on-error: Cloud Functions deploy kræver Cloud Run API
+        # aktiveret manuelt første gang (engangsopgave). Hosting og Firestore
+        # er allerede ude på dette tidspunkt — vi vil ikke have at en
+        # functions-fejl fælder hele CI'en så live-spillet markeres rødt.
+        continue-on-error: true
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
         run: |
           # onInboxCreate lytter på users/{uid}/inbox/{x} og sender push via FCM.
