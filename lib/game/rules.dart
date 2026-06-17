@@ -352,12 +352,10 @@ class Rules {
     PlayingCard card,
     int total,
   ) sync* {
-    // 7'eren deles frit over egne OG makker-brikker. Tidligere låste vi
-    // makker-brikker bag et "alle egne i hjemstræk"-krav, hvilket gjorde at
-    // makker-brikker fx ikke kunne nudges fremad i hjemstrækket mens spilleren
-    // havde en sidste brik på banen. Reglen er bevidst permissiv: så længe
-    // hver enkelt step er lovlig (afstand, blokering, slag), er fordelingen
-    // tilladt — det er den slags ikke-begrænsning brugeren har bedt om.
+    // De 7 træk fordeles normalt KUN over egne brikker i spil. Undtagelse:
+    // hvis man undervejs får ALLE sine egne brikker låst fast (i hjemstrækket),
+    // må de overskydende træk lægges på makkerens brikker. Vi simulerer derfor
+    // egne brikker først; partner-brikker må kun bruges når alle egne er låst.
     final List<Piece> ownMovable = player.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
@@ -381,6 +379,15 @@ class Rules {
         final int n = dist[i];
         if (n == 0) continue;
         final bool isPartnerPiece = i >= ownCount;
+        // Partner-brik må kun flyttes når alle egne brikker er i hjemstræk.
+        if (isPartnerPiece) {
+          final bool allOwnLocked = sim.players[player.index].pieces
+              .every((Piece p) => p.position is HomeStretchPosition);
+          if (!allOwnLocked) {
+            ok = false;
+            break;
+          }
+        }
         final int moverIndex = isPartnerPiece ? partner.index : player.index;
         final Piece simPiece = sim.pieceById(movable[i].id);
         final Player simPlayer = sim.players[moverIndex];
