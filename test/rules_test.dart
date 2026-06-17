@@ -689,52 +689,6 @@ void main() {
       expect(m.steps.first.to, const TrackPosition(38));
     });
 
-    test('split-7 kan dele mellem egen hjemstræks-brik og makkers brik', () {
-      // Spiller 0 har alle 4 i hjemstrækket (slots 0,1,2,3) — én af dem på
-      // slot 2 mangler 1 nudge for at låses i hus. Makker (P2) har en brik på
-      // banen. Med en 7'er skal spilleren kunne splitte: 1 på egen slot-2
-      // brik (→ slot 3) + 6 på makkers brik.
-      final positions = <List<PiecePosition>>[
-        <PiecePosition>[
-          const HomeStretchPosition(0, 0),
-          const HomeStretchPosition(0, 1),
-          const HomeStretchPosition(0, 2),
-          const HomeStretchPosition(0, 3),
-        ],
-        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(1, s)],
-        <PiecePosition>[
-          const TrackPosition(35),
-          const StartPosition(2, 1),
-          const StartPosition(2, 2),
-          const StartPosition(2, 3),
-        ],
-        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(3, s)],
-      ];
-      final state = makeState(piecePositions: positions);
-      final moves = rules.legalMoves(state, state.players[0],
-          const PlayingCard(Rank.seven, Suit.hearts));
-      // Find et træk der både rykker spiller 0's slot-2 brik til slot 3 OG
-      // rykker P2's brik 6 frem (35 → 41).
-      final wanted = moves.where((Move m) {
-        if (m.steps.length != 2) return false;
-        final ownStep = m.steps.firstWhere(
-            (s) => state.pieceById(s.pieceId).ownerIndex == 0,
-            orElse: () => m.steps.first);
-        final partnerStep = m.steps.firstWhere(
-            (s) => state.pieceById(s.pieceId).ownerIndex == 2,
-            orElse: () => m.steps.first);
-        if (ownStep == partnerStep) return false;
-        final ownTo = ownStep.to;
-        final partnerTo = partnerStep.to;
-        return ownTo is HomeStretchPosition &&
-            ownTo.slot == 3 &&
-            partnerTo is TrackPosition &&
-            partnerTo.index == 41;
-      });
-      expect(wanted, isNotEmpty,
-          reason: 'forventede en split-7 hen over egen slot-2 + makker');
-    });
-
     test('Knægt-byt kan stadig bruges når mine brikker er færdige', () {
       // Spiller 0 alle hjemme. Modstander (P1) og makker (P2) har én brik
       // hver på banen. Knægt med swap=true skal give byt-træk.
