@@ -82,23 +82,36 @@ Hver kort-konfiguration har disse knapper i admin: `exitStart` (ud af start),
 > Dette er reglen vi har rettet flere gange — her er den endegyldige version.
 
 - **UD-feltet kan kun bruges af den spiller det tilhører.**
-- **Alle andre spillere springer et fremmed UD-felt over UDEN at tælle det** —
-  dvs. de flytter fra **felt 14 direkte til felt 1** (gælder begge retninger).
-- En anden spiller kan derfor **aldrig lande på** eller **blive blokeret af** et
-  fremmed UD-felt — det er som om feltet ikke findes for dem.
-- **Ejeren** bruger sit UD-felt **kun som exit-plads**: en brik der kommer ud af
-  start placeres der, og en brik der under en bevægelse vender tilbage til
+- **Alle andre spillere springer et TOMT fremmed UD-felt over UDEN at tælle
+  det** — dvs. de flytter fra **felt 14 direkte til felt 1** (gælder begge
+  retninger).
+- **Står der ≥1 brik på et fremmed UD-felt SPÆRRER feltet fuldstændigt** —
+  ingen anden spiller kan passere det, hverken fremad eller bagud. Trækket
+  er ulovligt. Denne regel gælder uanset om brikken på UD-feltet tilhører
+  ejeren selv eller (i teorien) nogen andre — i praksis kan kun ejeren stå
+  der, og deres brik gør feltet til en mur for alle andre.
+- En anden spiller kan **aldrig lande på** et fremmed UD-felt — det er som
+  om feltet ikke findes som landingsplads for dem.
+- **Ejeren** bruger sit UD-felt **kun som exit-plads**: en brik der kommer ud
+  af start placeres der, og en brik der under en bevægelse vender tilbage til
   UD-feltet efter en hel omgang **drejer ind i hjemstrækket**. Selve UD-feltet
   er IKKE et tællende ringfelt — det har ingen rolle for distancer.
-- Konsekvens: en brik der står på sit eget UD-felt er reelt **sikker** (ingen
-  andre kan ramme den, for de springer feltet over).
+- Konsekvens: en brik på sit eget UD-felt er reelt **sikker** og virker som
+  en blokade for alle modstandere der prøver at passere.
 - 🔧 KODE: `Rules._advanceFrom` (fremad), `Rules._tryReverse` (tilbage),
   `Rules._exitStartMoves` (exit), `Rules._entryOwner`.
 
-**Eksempel 1 (fremmed UD springes over):** Rød (plads 0) har UD-felt på indeks 0.
-Blå spiller en 5'er fra sit felt 13: blå rykker forbi spiller 1's UD-felt
-(indeks 15) uden at tælle det og lander 5 *tællende* felter fremme. Blå kan
-aldrig lande på indeks 15.
+**Eksempel 1 (TOMT fremmed UD springes over):** Rød (plads 0) har UD-felt på
+indeks 0. Spiller 1's UD-felt (indeks 15) er tomt. Blå spiller en 5'er fra sit
+felt 13: blå rykker forbi spiller 1's UD-felt uden at tælle det og lander 5
+*tællende* felter fremme. Blå kan aldrig lande på indeks 15.
+
+**Eksempel 1b (BESAT fremmed UD spærrer):** Røds UD-felt (indeks 0) har 2 røde
+brikker stående. Gul står på sit felt 10 (indeks 55) og spiller en Konge (13
+frem). Gul ville skulle: 55 → 56 → 57 → 58 → 59 → \[UD spærret\]. Trækket er
+**ulovligt** — der bliver slet ikke genereret nogen forward-move for gul med
+det kort. Lige så for tilbage-retning: en gul brik på rødt felt 5 kan ikke
+rykke 6 baglæns gennem røds besatte UD.
 
 **Eksempel 2 (eget UD springes over → drej ind i hjemstræk):** Spiller 0's brik
 står på felt 56 og spiller en 7'er. Brikken besøger:

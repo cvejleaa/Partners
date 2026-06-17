@@ -318,27 +318,13 @@ void main() {
       }
     });
 
-    test('andre spillere springer fremmed UD-felt over (14 → 1 direkte)', () {
-      // Spiller 1's brik på sit UD-felt (15). Spiller 0 fra 13 med en femmer
+    test('andre spillere springer TOMT fremmed UD-felt over (14 → 1 direkte)',
+        () {
+      // Spiller 1's UD-felt (15) er TOMT. Spiller 0 fra 13 med en femmer
       // SPRINGER idx 15 over (tæller ikke) → 5 tællende skridt lander på 19,
       // ikke 18. Passage er tilladt (ikke blokeret).
-      final positions = <List<PiecePosition>>[
-        <PiecePosition>[
-          const TrackPosition(13),
-          const StartPosition(0, 1),
-          const StartPosition(0, 2),
-          const StartPosition(0, 3),
-        ],
-        <PiecePosition>[
-          const TrackPosition(15),
-          const StartPosition(1, 1),
-          const StartPosition(1, 2),
-          const StartPosition(1, 3),
-        ],
-        for (int i = 2; i < 4; i++)
-          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
-      ];
-      final state = makeState(piecePositions: positions);
+      final state =
+          makeState(piecePositions: _onlyOneAt(const TrackPosition(13)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.five, Suit.hearts));
       final to19 = moves.where((Move m) =>
@@ -347,6 +333,88 @@ void main() {
           m.steps.first.to is TrackPosition &&
           (m.steps.first.to as TrackPosition).index == 19);
       expect(to19, isNotEmpty);
+    });
+
+    test('BESAT fremmed UD-felt spærrer — andre kan ikke passere', () {
+      // Eksempel fra docs/regler.md (1b): Røds UD-felt (idx 0) har 2 røde
+      // brikker. Gul (spiller 3) står på rødt felt 10 (idx 55) — nej, idx 55
+      // er sidste felt før røds UD. Test scenariet: spiller 3 (gul) på idx 55
+      // forsøger at rykke fremad med en konge (13). Skal blive blokeret —
+      // ingen forward-move med Konge fra idx 55 skal eksistere når der står
+      // brikker på idx 0.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(0), // 2 røde på røds UD-felt
+          const TrackPosition(0),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 3; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+        <PiecePosition>[
+          const TrackPosition(55), // gul på sit felt 10
+          const StartPosition(3, 1),
+          const StartPosition(3, 2),
+          const StartPosition(3, 3),
+        ],
+      ];
+      final state = makeState(piecePositions: positions);
+      // Konge giver 13 frem ELLER ud-af-start. Vi tjekker kun forward.
+      final moves = rules.legalMoves(state, state.players[3],
+          const PlayingCard(Rank.king, Suit.hearts));
+      final forwardMoves = moves.where((Move m) =>
+          !m.exitsStart &&
+          m.steps.first.from is TrackPosition &&
+          (m.steps.first.from as TrackPosition).index == 55);
+      expect(forwardMoves, isEmpty,
+          reason: 'gul må ikke passere besat rødt UD-felt');
+
+      // Også med en mindre forward-værdi der ville krydse UD — fx 5'er fra 55.
+      final fiveMoves = rules.legalMoves(state, state.players[3],
+          const PlayingCard(Rank.five, Suit.hearts));
+      final fiveForward = fiveMoves.where((Move m) =>
+          !m.exitsStart &&
+          m.steps.first.from is TrackPosition &&
+          (m.steps.first.from as TrackPosition).index == 55);
+      expect(fiveForward, isEmpty,
+          reason: '5\'er fra 55 må heller ikke passere besat UD');
+    });
+
+    test('BESAT fremmed UD-felt spærrer også baglæns', () {
+      // Gul (spiller 3) på rødt felt 5 (idx 5). Røds UD-felt (idx 0) har en
+      // rød brik. Gul prøver at rykke 6 baglæns med en 4'er er kun 4 — så vi
+      // bruger en 4'er der ville lande på idx 1, ikke krydse UD (lovligt).
+      // For at TESTE blokering bruger vi 4'er fra idx 3 → ville krydse idx 0.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(0), // rød på sit eget UD
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 3; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+        <PiecePosition>[
+          const TrackPosition(3), // gul på rødt felt 3
+          const StartPosition(3, 1),
+          const StartPosition(3, 2),
+          const StartPosition(3, 3),
+        ],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[3],
+          const PlayingCard(Rank.four, Suit.hearts));
+      final backward = moves.where((Move m) =>
+          m.steps.first.from is TrackPosition &&
+          (m.steps.first.from as TrackPosition).index == 3);
+      // 4 frem (3 → 7) skal være ok. 4 bagud (3 → 59 via idx 0) skal være
+      // blokeret.
+      final tos = backward
+          .map((Move m) => (m.steps.first.to as TrackPosition).index)
+          .toSet();
+      expect(tos, contains(7), reason: '4 frem skal stadig være lovligt');
+      expect(tos, isNot(contains(59)),
+          reason: '4 baglæns gennem besat UD skal være blokeret');
     });
 
     test('ejeren bruger sit eget UD-felt normalt (tæller med)', () {

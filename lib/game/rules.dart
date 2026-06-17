@@ -192,7 +192,8 @@ class Rules {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
     // Baglæns: fremmede UD-felter springes også over uden at tælle (1 → 14
-    // direkte imod urets retning).
+    // direkte imod urets retning), medmindre der står brikker på dem — så
+    // spærrer feltet.
     final int len = geometry.trackLength;
     int idx = pos.index;
     int remaining = steps;
@@ -200,6 +201,7 @@ class Rules {
       final int next = (idx - 1 + len) % len;
       final int? udOwner = _entryOwner(next);
       if (udOwner != null && udOwner != piece.ownerIndex) {
+        if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
         idx = next;
         continue;
       }
@@ -248,8 +250,10 @@ class Rules {
     if (pos is TrackPosition) {
       // UD-felter er "lommer" der KUN tilhører deres ejer. Alle andre spillere
       // springer et fremmed UD-felt over UDEN at tælle det (felt 14 → felt 1
-      // direkte). Ejeren bruger sit eget UD-felt normalt (kommer ud på det og
-      // drejer ind i hjemstrækket når man når tilbage til det efter en omgang).
+      // direkte) — MEN kun hvis feltet er tomt. Står der ≥1 brik på et fremmed
+      // UD-felt spærrer det fuldstændigt (jf. afsnit 6 i docs/regler.md). Ejeren
+      // bruger sit eget UD-felt normalt og drejer ind i hjemstrækket når man
+      // efter en omgang når tilbage til det.
       final int len = geometry.trackLength;
       final int ownUd = geometry.startTrackIndexFor(player.index);
       int idx = pos.index;
@@ -268,9 +272,11 @@ class Rules {
           }
           return HomeStretchPosition(player.index, slot);
         }
-        // Fremmed UD-felt: ryk forbi uden at tælle skridtet (14 → 1 direkte).
+        // Fremmed UD-felt: ryk forbi uden at tælle skridtet (14 → 1 direkte),
+        // medmindre der står brikker på det — så spærrer det.
         final int? udOwner = _entryOwner(next);
         if (udOwner != null && udOwner != player.index) {
+          if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
           idx = next;
           continue;
         }
