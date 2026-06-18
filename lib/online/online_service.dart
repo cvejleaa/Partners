@@ -500,6 +500,20 @@ class OnlineService {
   ///    for taberen ved samtidig skrivning).
   /// Returnerer true hvis et træk faktisk blev udført.
   Future<bool> aiTakeoverMove(String code, int seat) async {
+    return _aiSeatMoveInternal(code, seat, asTakeover: true);
+  }
+
+  /// Lad en AI tage trækket for en almindelig AI-plads. Lige som
+  /// [aiTakeoverMove] foretages beslutningen INDE i transaktionen ud fra
+  /// frisk state — så vi undgår den klassiske "stale move"-fejl hvor AI'en
+  /// vælger et træk på baggrund af en gammel snapshot, og applyMoves
+  /// runtime-guard afviser det fordi friske state har bevæget sig videre.
+  Future<bool> aiSeatMove(String code, int seat) async {
+    return _aiSeatMoveInternal(code, seat, asTakeover: false);
+  }
+
+  Future<bool> _aiSeatMoveInternal(String code, int seat,
+      {required bool asTakeover}) async {
     bool acted = false;
     await _db.runTransaction((tx) async {
       acted = false;
@@ -536,8 +550,10 @@ class OnlineService {
       }
       final entry = Map<String, dynamic>.from(logEntry);
       entry['t'] = Timestamp.now();
-      // Marker at trækket blev lavet af AI på vegne af en fraværende spiller.
-      entry['ai'] = true;
+      if (asTakeover) {
+        // Marker at trækket blev lavet af AI på vegne af en fraværende spiller.
+        entry['ai'] = true;
+      }
       upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
       tx.update(ref, upd);
       acted = true;

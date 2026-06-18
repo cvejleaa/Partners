@@ -296,22 +296,19 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
       if (!isAiSeat && !takeover) return;
 
       if (isAiSeat) {
-        // Almindelig AI-plads: brug signaturen til at undgå dobbelt-fyring.
+        // Almindelig AI-plads. Tidligere beregnede vi trækket OUTSIDE
+        // transaktionen og applyMoves runtime-guard afviste det hvis state
+        // havde bevæget sig — spillet stallede uden tilbagemelding. Nu sker
+        // beslutningen inde i transaktionen, så vi altid ser det aktuelle
+        // state. Hvis aiSeatMove returnerer false (transient fejl eller race
+        // hvor turn skiftede), nulstilles signaturen så vi prøver igen.
         if (sig == _lastProcessed) return;
         _lastProcessed = sig;
-        final Move? m = onlineAi.chooseMove(state, idx);
-        final int discardedCount = state.players[idx].hand.length;
         Future<void>.delayed(const Duration(milliseconds: 600), () {
-          _run(() => _svc.mutate(widget.code, (engine, s) {
-                if (m != null) {
-                  engine.applyMove(idx, m);
-                } else {
-                  engine.passHand(idx);
-                }
-              },
-              logEntry: m != null
-                  ? moveLogEntry(idx, m)
-                  : passLogEntry(idx, discardedCount)));
+          _run(() async {
+            final acted = await _svc.aiSeatMove(widget.code, idx);
+            if (!acted && mounted) _lastProcessed = '';
+          });
         });
       } else {
         // AI-OVERTAGELSE af en fraværende menneskelig spiller. Brug en separat
@@ -467,8 +464,94 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
           .where((m) => m.steps.first.pieceId == pieceId)
           .toList();
       if (matching.isEmpty) return;
-      _play(matching.first, mySeat);
+      if (matching.length == 1) {
+        _play(matching.first, mySeat);
+      } else {
+        _showMoveChoice(state, matching, mySeat);
+      }
     };
+  }
+
+  /// Bottom-sheet med flere valg for samme brik (fx Es: 1 eller 11 frem, eller
+  /// 4'er: frem/tilbage). Mirrorer single-player-skærmen.
+  Future<void> _showMoveChoice(
+      GameState state, List<Move> options, int mySeat) async {
+    final Map<String, Move> byEffect = <String, Move>{};
+    for (final Move m in options) {
+      byEffect.putIfAbsent(_describeMove(state, m), () => m);
+    }
+    final entries = byEffect.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final Move? chosen = await showModalBottomSheet<Move>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (BuildContext ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text('Vælg træk',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: entries.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (BuildContext _, int i) => ListTile(
+                    title: Text(entries[i].key),
+                    onTap: () => Navigator.of(ctx).pop(entries[i].value),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (chosen != null) _play(chosen, mySeat);
+  }
+
+  String _describeMove(GameState state, Move m) {
+    if (m.exitsStart) return 'Gå ud af start';
+    final List<String> parts = <String>[];
+    for (final s in m.steps) {
+      final from = s.from;
+      final to = s.to;
+      if (from is StartPosition && to is TrackPosition) {
+        parts.add('ud af start');
+      } else if (to is HomeStretchPosition) {
+        parts.add('hjem (felt ${to.slot + 1})');
+      } else if (from is TrackPosition && to is TrackPosition) {
+        final int len = state.geometry.trackLength;
+        final int fwd = (to.index - from.index + len) % len;
+        final int back = (from.index - to.index + len) % len;
+        parts.add(fwd <= back ? '$fwd frem' : '$back tilbage');
+      } else {
+        parts.add('træk');
+      }
+    }
+    return parts.join(' + ');
   }
 
   void _handleSwapTap(GameState state, String pieceId, int mySeat) {
@@ -529,14 +612,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     }
     if (state.phase == GamePhase.play) {
       if (state.currentPlayerIndex != mySeat) {
-        final int cur = state.currentPlayerIndex;
-        // Vis hvis den nuværende spiller er væk (og en AI snart overtager).
-        if (state.currentPlayer.isHuman &&
-            OnlineService.seatLooksAway(d, cur)) {
-          return _bar(
-              '${state.currentPlayer.name} er væk — en computer overtager snart…');
-        }
-        return _bar('${state.currentPlayer.name} spiller…');
+        // Vis hånden read-only mens andre spiller, så man kan planlægge sin
+        // næste tur. Tekst-baren over hånden fortæller hvis status og hvis
+        // den aktive spiller er væk.
+        return _hand(state, mySeat, exchange: false, readOnly: true, d: d);
       }
       final rules = Rules(state.geometry);
       final canPlay = state.players[mySeat].hand
@@ -597,7 +676,25 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
             style: const TextStyle(color: Colors.white)),
       );
 
-  Widget _hand(GameState state, int mySeat, {required bool exchange}) {
+  Widget _hand(GameState state, int mySeat,
+      {required bool exchange,
+      bool readOnly = false,
+      Map<String, dynamic>? d}) {
+    String status;
+    if (readOnly && d != null) {
+      final int cur = state.currentPlayerIndex;
+      if (state.currentPlayer.isHuman &&
+          OnlineService.seatLooksAway(d, cur)) {
+        status =
+            '${state.currentPlayer.name} er væk — en computer overtager snart…';
+      } else {
+        status = '${state.currentPlayer.name} spiller…';
+      }
+    } else if (exchange) {
+      status = 'Vælg ét kort til din makker';
+    } else {
+      status = _selectedCard == null ? 'Vælg et kort' : 'Vælg en brik';
+    }
     return Container(
       width: double.infinity,
       color: const Color(0xFF14331F),
@@ -605,12 +702,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
       child: Column(
         children: <Widget>[
           Text(
-            exchange
-                ? 'Vælg ét kort til din makker'
-                : (_selectedCard == null
-                    ? 'Vælg et kort'
-                    : 'Vælg en brik'),
-            style: const TextStyle(color: Colors.white),
+            status,
+            style: TextStyle(
+                color: readOnly ? Colors.white70 : Colors.white,
+                fontStyle:
+                    readOnly ? FontStyle.italic : FontStyle.normal),
           ),
           const SizedBox(height: 8),
           SizedBox(
@@ -622,24 +718,30 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
                 for (final c in state.players[mySeat].hand)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: CardView(
-                      card: c,
-                      rules: state.cardRules,
-                      selected: _selectedCard == c,
-                      onTap: () {
-                        if (exchange) {
-                          _run(() => _svc.mutate(widget.code,
-                              (e, s) => e.submitExchangeCard(mySeat, c)));
-                        } else {
-                          final rules = Rules(state.geometry);
-                          setState(() {
-                            _selectedCard = c;
-                            _candidateMoves = rules.legalMoves(
-                                state, state.players[mySeat], c);
-                            _swapFirstPiece = null;
-                          });
-                        }
-                      },
+                    child: Opacity(
+                      opacity: readOnly ? 0.55 : 1.0,
+                      child: CardView(
+                        card: c,
+                        rules: state.cardRules,
+                        selected: _selectedCard == c,
+                        onTap: readOnly
+                            ? null
+                            : () {
+                                if (exchange) {
+                                  _run(() => _svc.mutate(widget.code,
+                                      (e, s) =>
+                                          e.submitExchangeCard(mySeat, c)));
+                                } else {
+                                  final rules = Rules(state.geometry);
+                                  setState(() {
+                                    _selectedCard = c;
+                                    _candidateMoves = rules.legalMoves(state,
+                                        state.players[mySeat], c);
+                                    _swapFirstPiece = null;
+                                  });
+                                }
+                              },
+                      ),
                     ),
                   ),
               ],
