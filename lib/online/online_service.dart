@@ -201,6 +201,25 @@ class OnlineService {
     final uid = _auth.currentUser!.uid;
     final name = await myDisplayName();
     final code = _genCode();
+    // Læs den autoritative kort-konfiguration direkte fra Firestore i stedet
+    // for at stole på den lokale [cardRulesProvider]. Provideren starter med
+    // defaults og loader async, så hvis værten opretter et spil før loaden er
+    // færdig, ville defaults blive gemt i spil-dokumentet — bug rapporteret
+    // hvor en 8 ikke kunne rykke ud og en 7 ikke kunne deles selv om admin-
+    // konfigurationen tilsagde det modsatte. Det globale doc i config/
+    // cardRules er kilden til sandheden; vi falder tilbage til [rules] hvis
+    // doc'et ikke findes eller fejler.
+    CardRules effective = rules;
+    try {
+      final snap = await firestore.collection('config').doc('cardRules').get();
+      final data = snap.data();
+      final remote = data?['rules'];
+      if (remote is Map) {
+        effective = CardRules.fromJson(Map<String, dynamic>.from(remote));
+      }
+    } catch (_) {
+      // Tabt netværk / regel-fejl: behold værtens lokale rules som fallback.
+    }
     await _games.doc(code).set(<String, dynamic>{
       'status': 'lobby',
       'hostUid': uid,
@@ -216,7 +235,7 @@ class OnlineService {
       'ready': <String, dynamic>{uid: true},
       // Tilstedeværelses-stempel pr. uid (heartbeat) til reconnect/AI-overtag.
       'presence': <String, dynamic>{uid: Timestamp.now()},
-      'cardRules': rules.toJson(),
+      'cardRules': effective.toJson(),
       'seq': 0,
       'log': <dynamic>[],
       'createdAt': FieldValue.serverTimestamp(),
