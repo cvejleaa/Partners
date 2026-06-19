@@ -62,30 +62,92 @@ class GamePlayView extends StatefulWidget {
   State<GamePlayView> createState() => _GamePlayViewState();
 }
 
-class _GamePlayViewState extends State<GamePlayView> {
+class _GamePlayViewState extends State<GamePlayView>
+    with SingleTickerProviderStateMixin {
   PlayingCard? _selectedCard;
   List<Move> _candidateMoves = <Move>[];
   PlayingCard? _humanExchangeChoice;
   String? _swapFirstPiece;
   final List<MoveStep> _splitPath = <MoveStep>[];
 
+  // Brik-animation: når widget.state skifter, sammenligner vi brik-positioner
+  // pr. piece-id og animerer alle ændrede brikker fra deres FORRIGE til deres
+  // NUVÆRENDE position over 480 ms. Bruges af både single-player (lokal
+  // engine) og online (Firestore-snapshot) — i begge tilfælde har state
+  // allerede ændret sig før vi når didUpdateWidget, så vi animerer fra det
+  // gamle state's positioner mod det nye state's positioner.
+  late final AnimationController _anim;
+  Map<String, ({PiecePosition from, PiecePosition to})> _animMoves = {};
+
   GameState get _state => widget.state;
   int get _mySeat => widget.mySeat;
+  bool get _animating => _animMoves.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 480),
+    )
+      ..addListener(() {
+        if (mounted) setState(() {});
+      })
+      ..addStatusListener((AnimationStatus s) {
+        // Ryd kun animationen når den NÅR ENDEN (completed). Brug ikke
+        // whenComplete på Future'n, da den fires med cancel hvis vi
+        // restarter med forward(from: 0), og ville rydde det nye sæt af
+        // animations-moves der lige er sat.
+        if (s == AnimationStatus.completed && mounted) {
+          setState(() => _animMoves = {});
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(GamePlayView old) {
     super.didUpdateWidget(old);
-    // Når state skifter — fx fordi vi har anvendt et træk eller en
-    // modstander har rykket — nulstil UI-valg så vi ikke står med et
-    // forældet kort/brik-valg.
-    if (_state.currentPlayerIndex != old.state.currentPlayerIndex ||
-        _state.handNumber != old.state.handNumber ||
-        _state.phase != old.state.phase) {
+    final bool phaseOrTurnChanged =
+        _state.currentPlayerIndex != old.state.currentPlayerIndex ||
+            _state.handNumber != old.state.handNumber ||
+            _state.phase != old.state.phase;
+    if (phaseOrTurnChanged) {
       _selectedCard = null;
       _candidateMoves = <Move>[];
       _swapFirstPiece = null;
       _splitPath.clear();
     }
+    // Beregn evt. animation: find alle brikker hvis position er ændret.
+    final newAnim = <String, ({PiecePosition from, PiecePosition to})>{};
+    for (final Player pNew in _state.players) {
+      for (final Piece piece in pNew.pieces) {
+        final Piece? oldPiece = _findPiece(old.state, piece.id);
+        if (oldPiece == null) continue;
+        if (oldPiece.position != piece.position) {
+          newAnim[piece.id] =
+              (from: oldPiece.position, to: piece.position);
+        }
+      }
+    }
+    if (newAnim.isNotEmpty) {
+      _animMoves = newAnim;
+      _anim.forward(from: 0);
+    }
+  }
+
+  Piece? _findPiece(GameState s, String id) {
+    for (final Player p in s.players) {
+      for (final Piece piece in p.pieces) {
+        if (piece.id == id) return piece;
+      }
+    }
+    return null;
   }
 
   @override
@@ -156,25 +218,25 @@ class _GamePlayViewState extends State<GamePlayView> {
                           top: 0,
                           left: 0,
                           child: SizedBox(
-                              width: 100,
+                              width: 132,
                               child: _panel(state, partner, compact: true))),
                       Positioned(
                           top: 0,
                           right: 0,
                           child: SizedBox(
-                              width: 100,
+                              width: 132,
                               child: _panel(state, right, compact: true))),
                       Positioned(
                           bottom: 0,
                           left: 0,
                           child: SizedBox(
-                              width: 100,
+                              width: 132,
                               child: _panel(state, left, compact: true))),
                       Positioned(
                           bottom: 0,
                           right: 0,
                           child: SizedBox(
-                              width: 100,
+                              width: 132,
                               child: _panel(state, me, compact: true))),
                     ],
                   ),
@@ -197,8 +259,12 @@ class _GamePlayViewState extends State<GamePlayView> {
           child: BoardView(
             state: state,
             viewerIndex: me.index,
-            highlightedPieceIds: _highlightSet(state),
-            onPieceTap: (id) => _handlePieceTap(state, id),
+            highlightedPieceIds: _animating ? const <String>{} : _highlightSet(state),
+            animation:
+                _animating ? BoardAnimation(_animMoves, _anim.value) : null,
+            // Deaktivér tap mens en animation kører — ellers risikerer vi
+            // race mellem brugerens valg og den igangværende state-overgang.
+            onPieceTap: _animating ? null : (id) => _handlePieceTap(state, id),
           ),
         ),
       ),

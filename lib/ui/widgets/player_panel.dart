@@ -31,10 +31,10 @@ class PlayerPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double dotSize = compact ? 12 : 16;
-    final double nameSize = compact ? 12 : 14;
-    final double countSize = compact ? 11 : 13;
-    final double cardW = compact ? 28 : 36;
+    final double dotSize = compact ? 14 : 16;
+    final double nameSize = compact ? 13 : 14;
+    final double countSize = compact ? 12 : 13;
+    final double cardW = compact ? 32 : 36;
 
     final Widget infoCol = Column(
       mainAxisSize: MainAxisSize.min,
@@ -123,7 +123,7 @@ class PlayerPanel extends StatelessWidget {
         : infoCol;
 
     return Container(
-      padding: EdgeInsets.all(compact ? 5 : 8),
+      padding: EdgeInsets.all(compact ? 7 : 8),
       decoration: BoxDecoration(
         color: player.color.withValues(alpha: isCurrent ? 0.55 : 0.28),
         borderRadius: BorderRadius.circular(10),
