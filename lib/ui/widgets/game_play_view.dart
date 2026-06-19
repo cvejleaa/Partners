@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../game/rules.dart';
@@ -201,50 +199,45 @@ class _GamePlayViewState extends State<GamePlayView>
 
   Widget _buildMobile(GameState state, Player me, Player partner, Player left,
       Player right) {
+    // Mobil-layout: paneler er nu placeret OVER og UNDER brættet i to rækker,
+    // så de ikke længere overlapper brikkerne i brættets hjørner (gjorde det
+    // svært at tappe brikker tæt på panelerne). Top-rækken har makker og
+    // højre-modstander; bund-rækken har venstre-modstander og dig selv —
+    // hver i deres "kvarter" af bordet relativt til dig.
+    final Widget topRow = Padding(
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(width: 152, child: _panel(state, partner, compact: true)),
+          SizedBox(width: 152, child: _panel(state, right, compact: true)),
+        ],
+      ),
+    );
+    final Widget bottomRow = Padding(
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: <Widget>[
+          SizedBox(width: 152, child: _panel(state, left, compact: true)),
+          SizedBox(width: 152, child: _panel(state, me, compact: true)),
+        ],
+      ),
+    );
     return Column(
       children: <Widget>[
+        topRow,
         Expanded(
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints c) {
-              final double boardSize = math.min(c.maxWidth, c.maxHeight);
-              return Center(
-                child: SizedBox(
-                  width: boardSize,
-                  height: boardSize,
-                  child: Stack(
-                    children: <Widget>[
-                      Positioned.fill(child: _boardArea(state, me)),
-                      Positioned(
-                          top: 0,
-                          left: 0,
-                          child: SizedBox(
-                              width: 132,
-                              child: _panel(state, partner, compact: true))),
-                      Positioned(
-                          top: 0,
-                          right: 0,
-                          child: SizedBox(
-                              width: 132,
-                              child: _panel(state, right, compact: true))),
-                      Positioned(
-                          bottom: 0,
-                          left: 0,
-                          child: SizedBox(
-                              width: 132,
-                              child: _panel(state, left, compact: true))),
-                      Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: SizedBox(
-                              width: 132,
-                              child: _panel(state, me, compact: true))),
-                    ],
-                  ),
-                ),
-              );
-            },
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: _boardArea(state, me),
+            ),
           ),
         ),
+        bottomRow,
         _buildHumanArea(state, me, showPanel: false, fill: true),
       ],
     );
@@ -698,7 +691,9 @@ class _GamePlayViewState extends State<GamePlayView>
                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Text('Hvor mange felter?',
                     style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87)),
               ),
               Flexible(
                 child: ListView.separated(
@@ -712,7 +707,11 @@ class _GamePlayViewState extends State<GamePlayView>
                         ? '$d ind i hjemstrækket (slot ${(s.to as HomeStretchPosition).slot + 1})'
                         : '$d frem';
                     return ListTile(
-                      title: Text(label),
+                      title: Text(label,
+                          style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500)),
                       onTap: () => Navigator.of(ctx).pop(s),
                     );
                   },
@@ -810,7 +809,9 @@ class _GamePlayViewState extends State<GamePlayView>
                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Text('Vælg træk',
                     style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87)),
               ),
               Flexible(
                 child: ListView.separated(
@@ -818,7 +819,11 @@ class _GamePlayViewState extends State<GamePlayView>
                   itemCount: entries.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (_, int i) => ListTile(
-                    title: Text(entries[i].key),
+                    title: Text(entries[i].key,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500)),
                     onTap: () => Navigator.of(ctx).pop(entries[i].value),
                   ),
                 ),
