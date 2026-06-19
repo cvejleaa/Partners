@@ -12,6 +12,7 @@ import '../../online/serialize.dart';
 import '../../stats/stats_repository.dart';
 import '../widgets/card_view.dart';
 import '../widgets/game_play_view.dart';
+import 'win_screen.dart';
 
 /// Online-skærm. Selve UI-laget (tap, valg, split-7, byt, paneler, board)
 /// kommer fra den fælles [GamePlayView] som single-player også bruger — så
@@ -50,6 +51,18 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     _heartbeat = Timer.periodic(kPresenceInterval, (_) {
       // ignore: discarded_futures
       _svc.heartbeat(widget.code);
+      // Sikkerhedsnet mod AI-freeze: hvis _maybeHostAct har markeret en sig
+      // som behandlet men handlingen aldrig trådte i kraft (transient fejl,
+      // app i baggrunden, mistet snapshot), står vi fast indtil Firestore-
+      // doc'et opdateres — hvilket ikke sker når intet sker. Ryd
+      // dedup-nøglerne her og rebuild så _maybeHostAct prøver igen.
+      // aiSeatMove er idempotent: den exit'er hvis state.currentPlayerIndex
+      // har bevæget sig, så vi kan ikke trække to gange ved en uskyld.
+      if (mounted && !_busy) {
+        _lastProcessed = '';
+        _lastTakeoverSig = '';
+        setState(() {});
+      }
     });
   }
 
@@ -98,6 +111,17 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
             _statsRecomputed = true;
             // ignore: discarded_futures
             StatsRepository().recomputeAndSave();
+            // Naviger til WinScreen — én gang. addPostFrameCallback sikrer
+            // at vi ikke kalder Navigator midt i en build.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              Navigator.of(context).pushReplacement<void, void>(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      WinScreen(winningTeamIndex: state.winningTeamIndex!),
+                ),
+              );
+            });
           }
 
           final names = (d['names'] as List).map((e) => e as String).toList();

@@ -322,11 +322,12 @@ class _GamePlayViewState extends State<GamePlayView> {
           _handCards(
             state: state,
             hand: me.hand,
-            faceUp: myTurn,
+            // Dine egne kort er ALTID face-up — også når det ikke er din tur,
+            // så du kan planlægge dit næste træk. Dimming markerer i stedet
+            // at hånden ikke er tap-bar lige nu.
+            faceUp: true,
             maxCardW: fill ? 84 : 54,
             selected: _selectedCard,
-            // Hånden er altid synlig — også når det ikke er din tur — men kun
-            // tap-bar når du faktisk er ved tur.
             onTapCard: (!myTurn || !canPlay)
                 ? null
                 : (c) => _selectCard(state, me, c),
@@ -470,24 +471,30 @@ class _GamePlayViewState extends State<GamePlayView> {
       return set;
     }
     if (card != null && _isSplitCard(state, card)) {
+      // Højlight ALLE brikker der kan vælges som næste delskridt — uanset
+      // hvor i m.steps de står. Brikker der allerede er valgt udelukkes.
+      final Set<String> alreadyChosen = <String>{
+        for (final MoveStep s in _splitPath) s.pieceId,
+      };
       final List<Move> matching = _splitMatchingMoves();
-      final int nextIdx = _splitPath.length;
       return <String>{
         for (final Move m in matching)
-          if (m.steps.length > nextIdx) m.steps[nextIdx].pieceId,
+          for (final MoveStep s in m.steps)
+            if (!alreadyChosen.contains(s.pieceId)) s.pieceId,
       };
     }
     return <String>{for (final m in _candidateMoves) m.steps.first.pieceId};
   }
 
+  /// Et move matcher hvis hver (pieceId, destination) i _splitPath findes
+  /// SOMEWHERE i m.steps — rækkefølgen i UI er fri.
   List<Move> _splitMatchingMoves() {
     return _candidateMoves.where((Move m) {
       if (m.steps.length < _splitPath.length) return false;
-      for (int i = 0; i < _splitPath.length; i++) {
-        final MoveStep a = m.steps[i];
-        final MoveStep b = _splitPath[i];
-        if (a.pieceId != b.pieceId) return false;
-        if (_posKey(a.to) != _posKey(b.to)) return false;
+      for (final MoveStep p in _splitPath) {
+        final bool found = m.steps.any((MoveStep s) =>
+            s.pieceId == p.pieceId && _posKey(s.to) == _posKey(p.to));
+        if (!found) return false;
       }
       return true;
     }).toList();
@@ -559,14 +566,20 @@ class _GamePlayViewState extends State<GamePlayView> {
 
   Future<void> _handleSplitTap(GameState state, String pieceId) async {
     final List<Move> matching = _splitMatchingMoves();
-    final int nextIdx = _splitPath.length;
+    final Set<String> alreadyChosen = <String>{
+      for (final MoveStep s in _splitPath) s.pieceId,
+    };
+    if (alreadyChosen.contains(pieceId)) return;
+    // Find unikke næste-steps for denne brik — uanset hvor i m.steps de
+    // optræder. Det lader brugeren tappe brikkerne i vilkårlig rækkefølge.
     final Map<String, MoveStep> byKey = <String, MoveStep>{};
     for (final Move m in matching) {
-      if (m.steps.length <= nextIdx) continue;
-      final MoveStep s = m.steps[nextIdx];
-      if (s.pieceId != pieceId) continue;
-      final String key = _posKey(s.to);
-      byKey.putIfAbsent(key, () => s);
+      for (final MoveStep s in m.steps) {
+        if (s.pieceId != pieceId) continue;
+        if (alreadyChosen.contains(s.pieceId)) continue;
+        final String key = _posKey(s.to);
+        byKey.putIfAbsent(key, () => s);
+      }
     }
     if (byKey.isEmpty) return;
 
@@ -580,11 +593,14 @@ class _GamePlayViewState extends State<GamePlayView> {
 
     setState(() => _splitPath.add(chosen!));
 
+    // Sæt-baseret fuld-match: hvert (pieceId, dest) i _splitPath skal findes
+    // i m.steps, og længden skal være ens. Rækkefølge er ligegyldig.
     final List<Move> fullyMatching = _candidateMoves.where((Move m) {
       if (m.steps.length != _splitPath.length) return false;
-      for (int i = 0; i < _splitPath.length; i++) {
-        if (m.steps[i].pieceId != _splitPath[i].pieceId) return false;
-        if (_posKey(m.steps[i].to) != _posKey(_splitPath[i].to)) return false;
+      for (final MoveStep p in _splitPath) {
+        final bool found = m.steps.any((MoveStep s) =>
+            s.pieceId == p.pieceId && _posKey(s.to) == _posKey(p.to));
+        if (!found) return false;
       }
       return true;
     }).toList();
