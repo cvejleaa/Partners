@@ -356,6 +356,13 @@ class Rules {
     // hvis man undervejs får ALLE sine egne brikker låst fast (i hjemstrækket),
     // må de overskydende træk lægges på makkerens brikker. Vi simulerer derfor
     // egne brikker først; partner-brikker må kun bruges når alle egne er låst.
+    //
+    // Endgame-undtagelse: hvis ingen fordeling kan udnytte ALLE [total] felter
+    // (typisk når et hold er ved at afslutte og kun mangler få skridt), falder
+    // vi tilbage til den STØRSTE delsum der har gyldige fordelinger. Det lader
+    // spilleren afslutte spillet med fx en 7'er hvor kun 3 felter er
+    // tilbage at rykke. Vi prøver fra [total] og nedad og stopper ved første
+    // sum hvor mindst ét lovligt træk eksisterer.
     final List<Piece> ownMovable = player.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
@@ -367,8 +374,29 @@ class Rules {
     final List<Piece> movable = <Piece>[...ownMovable, ...partnerMovable];
     if (movable.isEmpty) return;
 
-    final List<List<int>> distributions =
-        _compositions(total, movable.length);
+    for (int sum = total; sum >= 1; sum--) {
+      final List<Move> found = _splitMovesForSum(
+          state, player, partner, card, movable, ownCount, sum);
+      if (found.isNotEmpty) {
+        for (final Move m in found) {
+          yield m;
+        }
+        return;
+      }
+    }
+  }
+
+  List<Move> _splitMovesForSum(
+    GameState state,
+    Player player,
+    Player partner,
+    PlayingCard card,
+    List<Piece> movable,
+    int ownCount,
+    int sum,
+  ) {
+    final List<Move> out = <Move>[];
+    final List<List<int>> distributions = _compositions(sum, movable.length);
     final Set<String> seen = <String>{};
 
     for (final List<int> dist in distributions) {
@@ -379,7 +407,6 @@ class Rules {
         final int n = dist[i];
         if (n == 0) continue;
         final bool isPartnerPiece = i >= ownCount;
-        // Partner-brik må kun flyttes når alle egne brikker er i hjemstræk.
         if (isPartnerPiece) {
           final bool allOwnLocked = sim.players[player.index].pieces
               .every((Piece p) => p.position is HomeStretchPosition);
@@ -438,9 +465,10 @@ class Rules {
               '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')
           .join('|');
       if (seen.add(key)) {
-        yield Move(card: card, steps: steps);
+        out.add(Move(card: card, steps: steps));
       }
     }
+    return out;
   }
 
   String _posKey(PiecePosition p) {
