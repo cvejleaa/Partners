@@ -352,17 +352,13 @@ class Rules {
     PlayingCard card,
     int total,
   ) sync* {
-    // De 7 træk fordeles normalt KUN over egne brikker i spil. Undtagelse:
-    // hvis man undervejs får ALLE sine egne brikker låst fast (i hjemstrækket),
-    // må de overskydende træk lægges på makkerens brikker. Vi simulerer derfor
-    // egne brikker først; partner-brikker må kun bruges når alle egne er låst.
-    //
-    // Endgame-undtagelse: hvis ingen fordeling kan udnytte ALLE [total] felter
-    // (typisk når et hold er ved at afslutte og kun mangler få skridt), falder
-    // vi tilbage til den STØRSTE delsum der har gyldige fordelinger. Det lader
-    // spilleren afslutte spillet med fx en 7'er hvor kun 3 felter er
-    // tilbage at rykke. Vi prøver fra [total] og nedad og stopper ved første
-    // sum hvor mindst ét lovligt træk eksisterer.
+    // 7'eren deles normalt over alle [total] felter, men spilleren skal kunne
+    // vælge en mindre fordeling — fx 'rykker hjem-brikken 1 felt for at frigøre
+    // pladsen, så bane-brikken kan lande lige bag den med 4 felter' (1+4=5),
+    // selv om en større fordeling på 7 også er teknisk mulig. Vi yielder
+    // derfor alle sums fra 1 til [total]; UI'en lader brugeren bygge den
+    // sekvens de vil have, og hvis ingen helt-7 fordeling er mulig (endgame),
+    // får de simpelthen kun de mindre at vælge mellem.
     final List<Piece> ownMovable = player.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
@@ -374,14 +370,16 @@ class Rules {
     final List<Piece> movable = <Piece>[...ownMovable, ...partnerMovable];
     if (movable.isEmpty) return;
 
-    for (int sum = total; sum >= 1; sum--) {
+    final Set<String> seenAcrossSums = <String>{};
+    for (int sum = 1; sum <= total; sum++) {
       final List<Move> found = _splitMovesForSum(
           state, player, partner, card, movable, ownCount, sum);
-      if (found.isNotEmpty) {
-        for (final Move m in found) {
-          yield m;
-        }
-        return;
+      for (final Move m in found) {
+        final String key = m.steps
+            .map((MoveStep s) =>
+                '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')
+            .join('|');
+        if (seenAcrossSums.add(key)) yield m;
       }
     }
   }

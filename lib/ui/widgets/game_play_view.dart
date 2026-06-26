@@ -415,27 +415,39 @@ class _GamePlayViewState extends State<GamePlayView>
       final int rem = _splitRemaining(state);
       label = _splitPath.isEmpty
           ? 'Vælg første brik ($rem træk tilbage)'
-          : '$rem træk tilbage — vælg næste brik';
+          : '$rem træk tilbage — vælg næste brik eller bekræft';
     } else {
       label = 'Vælg en brik (gult = lovligt træk)';
     }
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    final bool isSplit = card != null && _isSplitCard(state, card);
+    final bool canCommit = isSplit && _firstFullyMatching() != null;
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      runSpacing: 4,
       children: <Widget>[
         Text(label,
             style: const TextStyle(color: Colors.white, fontSize: 13)),
-        if (card != null && _isSplitCard(state, card) && _splitPath.isNotEmpty)
-          ...<Widget>[
-            const SizedBox(width: 8),
-            TextButton(
-              style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 28),
-                  foregroundColor: Colors.amber),
-              onPressed: () => setState(() => _splitPath.clear()),
-              child: const Text('Annullér'),
+        if (isSplit && _splitPath.isNotEmpty) ...<Widget>[
+          if (canCommit)
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 32),
+                  backgroundColor: const Color(0xFF43A047)),
+              onPressed: _commitSplit,
+              child: const Text('Bekræft'),
             ),
-          ],
+          TextButton(
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                foregroundColor: Colors.amber),
+            onPressed: () => setState(() => _splitPath.clear()),
+            child: const Text('Annullér'),
+          ),
+        ],
       ],
     );
   }
@@ -566,21 +578,29 @@ class _GamePlayViewState extends State<GamePlayView>
     return '?';
   }
 
+  /// Maks. felter der stadig kan rykkes på en MATCHING fordeling. Når flere
+  /// sums er gyldige (fx både [A=1, B=4]=5 og [A=1, B=5]=6), viser vi det
+  /// største — brugeren kan altid trykke 'Bekræft' tidligere hvis de er
+  /// tilfredse.
   int _splitRemaining(GameState state) {
     final List<Move> matching = _splitMatchingMoves();
-    final Move? any = matching.isEmpty
-        ? (_candidateMoves.isEmpty ? null : _candidateMoves.first)
-        : matching.first;
-    if (any == null) return 0;
-    int total = 0;
-    for (final MoveStep s in any.steps) {
-      total += _stepDistance(state, s);
-    }
+    final List<Move> pool =
+        matching.isEmpty ? _candidateMoves : matching;
+    if (pool.isEmpty) return 0;
     int used = 0;
     for (final MoveStep s in _splitPath) {
       used += _stepDistance(state, s);
     }
-    return total - used;
+    int maxRemaining = 0;
+    for (final Move m in pool) {
+      int total = 0;
+      for (final MoveStep s in m.steps) {
+        total += _stepDistance(state, s);
+      }
+      final int r = total - used;
+      if (r > maxRemaining) maxRemaining = r;
+    }
+    return maxRemaining;
   }
 
   int _stepDistance(GameState state, MoveStep s) {
@@ -629,8 +649,6 @@ class _GamePlayViewState extends State<GamePlayView>
       for (final MoveStep s in _splitPath) s.pieceId,
     };
     if (alreadyChosen.contains(pieceId)) return;
-    // Find unikke næste-steps for denne brik — uanset hvor i m.steps de
-    // optræder. Det lader brugeren tappe brikkerne i vilkårlig rækkefølge.
     final Map<String, MoveStep> byKey = <String, MoveStep>{};
     for (final Move m in matching) {
       for (final MoveStep s in m.steps) {
@@ -652,20 +670,46 @@ class _GamePlayViewState extends State<GamePlayView>
 
     setState(() => _splitPath.add(chosen!));
 
-    // Sæt-baseret fuld-match: hvert (pieceId, dest) i _splitPath skal findes
-    // i m.steps, og længden skal være ens. Rækkefølge er ligegyldig.
-    final List<Move> fullyMatching = _candidateMoves.where((Move m) {
-      if (m.steps.length != _splitPath.length) return false;
-      for (final MoveStep p in _splitPath) {
-        final bool found = m.steps.any((MoveStep s) =>
-            s.pieceId == p.pieceId && _posKey(s.to) == _posKey(p.to));
-        if (!found) return false;
-      }
-      return true;
-    }).toList();
-    if (fullyMatching.isNotEmpty) {
-      widget.onApplyMove(_mySeat, fullyMatching.first);
+    // Auto-anvend KUN hvis der ikke kan tilføjes flere brikker — dvs. ingen
+    // matchende moves har FLERE steps end vi allerede har valgt. Hvis der
+    // stadig kan tilføjes (typisk fordi vi inkluderer alle sums 1..7, så fx
+    // sum=1 [A alene] og sum=5 [A+B] begge er valide), venter vi på
+    // brugeren — de kan tappe flere brikker eller trykke 'Bekræft' for at
+    // afslutte med den nuværende delvise split.
+    final bool canExtend = _candidateMoves.any((Move m) {
+      if (m.steps.length <= _splitPath.length) return false;
+      return _moveMatchesPath(m);
+    });
+    if (!canExtend) {
+      final Move? commit = _firstFullyMatching();
+      if (commit != null) widget.onApplyMove(_mySeat, commit);
     }
+  }
+
+  /// Forsigtighed: sæt-baseret check at et move indeholder ALT i _splitPath.
+  bool _moveMatchesPath(Move m) {
+    for (final MoveStep p in _splitPath) {
+      final bool found = m.steps.any((MoveStep s) =>
+          s.pieceId == p.pieceId && _posKey(s.to) == _posKey(p.to));
+      if (!found) return false;
+    }
+    return true;
+  }
+
+  /// Det første move hvor præcis vores valgte sti er hele move'et.
+  Move? _firstFullyMatching() {
+    for (final Move m in _candidateMoves) {
+      if (m.steps.length != _splitPath.length) continue;
+      if (_moveMatchesPath(m)) return m;
+    }
+    return null;
+  }
+
+  /// Bekræft den nuværende delvise split. Bruges af 'Bekræft'-knappen når
+  /// brugeren vil afslutte 7'eren tidligere end nogle af de længere match.
+  void _commitSplit() {
+    final Move? commit = _firstFullyMatching();
+    if (commit != null) widget.onApplyMove(_mySeat, commit);
   }
 
   Future<MoveStep?> _chooseSplitStep(
