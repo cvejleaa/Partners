@@ -689,18 +689,46 @@ void main() {
       expect(m.steps.first.to, const TrackPosition(38));
     });
 
-    test('split-7 fallback til delvis brug når fuld 7 ikke kan udnyttes', () {
-      // Endgame: spiller 0 har 3 brikker færdigt låst i HS slot 1,2,3, og 1
-      // brik i HS slot 0 — den mangler bare ét nudge til slot... men slot 1
-      // er besat. Eneste lovlige flytning er nul felter, men 7'eren kan ikke
-      // bare ignoreres. I stedet: brik på slot 0 KAN ikke advance overhovedet
-      // (slot 1 fyldt). Lad os derfor have et SIMPLERE scenarie:
-      // Spiller 0 har én brik på TrackPosition(57) (= eget felt 12) og 3
-      // brikker fast i HS slots 1, 2, 3. 7'eren skulle kunne lande brik på
-      // TrackPosition(57) i HS slot 0 (= afstand 3 felter via 58, 59, ind i
-      // HS slot 0), men de resterende 4 felter har ingen brikker at gå på
-      // (egen brik på slot 0 ville være blokeret af slot 1 piece, partner
-      // har intet i spil). Fald tilbage til sum=3 — flyt brikken hjem.
+    test('split-7 må bruge færre felter NÅR det afslutter spillet', () {
+      // Vinder-scenarie: hold 0 = spiller 0 + spiller 2 (makker).
+      // P2 har allerede alle 4 i HS (slot 0-3). P0 har 3 i HS (slot 1,2,3) og
+      // sin sidste brik på felt 12 (idx 57), som mangler 3 felter for at lande
+      // i HS slot 0 (57→58→59→HS0). Det fuldfører holdet (alle 8 i hus). Fuld
+      // 7 er umulig (slot 1 er besat, så brikken kan ikke gå længere end slot
+      // 0). Derfor: en sum=3 split der VINDER skal være lovlig.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(57),
+          const HomeStretchPosition(0, 1),
+          const HomeStretchPosition(0, 2),
+          const HomeStretchPosition(0, 3),
+        ],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(1, s)],
+        <PiecePosition>[
+          const HomeStretchPosition(2, 0),
+          const HomeStretchPosition(2, 1),
+          const HomeStretchPosition(2, 2),
+          const HomeStretchPosition(2, 3),
+        ],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(3, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.seven, Suit.hearts));
+      final wanted = moves.any((Move m) =>
+          m.steps.length == 1 &&
+          m.steps.first.pieceId == 'p0.0' &&
+          m.steps.first.to == const HomeStretchPosition(0, 0));
+      expect(wanted, isTrue,
+          reason: 'vindende sum=3 split skal være lovlig');
+    });
+
+    test('split-7 må IKKE bruge færre felter når det ikke afslutter spillet',
+        () {
+      // Samme som ovenfor MEN makker (P2) har stadig brikker i start, så et
+      // sum=3 træk IKKE afslutter spillet. Da skal kun fuld-7 fordelinger
+      // være lovlige — og her findes ingen (slot 1 spærrer), så 7'eren giver
+      // slet ingen split-træk.
       final positions = <List<PiecePosition>>[
         <PiecePosition>[
           const TrackPosition(57),
@@ -714,16 +742,12 @@ void main() {
       final state = makeState(piecePositions: positions);
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.seven, Suit.hearts));
-      // Forvent ÉT træk: brik på 57 → HS slot 0 (3 felter, 7'erens delvise
-      // udnyttelse).
-      expect(moves, isNotEmpty,
-          reason: 'endgame split-7 må kunne spille delvist');
-      final wanted = moves.any((Move m) =>
+      final partial = moves.any((Move m) =>
           m.steps.length == 1 &&
           m.steps.first.pieceId == 'p0.0' &&
           m.steps.first.to == const HomeStretchPosition(0, 0));
-      expect(wanted, isTrue,
-          reason: 'forventede at brik p0.0 kunne afslutte i HS slot 0');
+      expect(partial, isFalse,
+          reason: 'ikke-vindende delvis 7 må ikke være lovlig');
     });
 
     test('Knægt-byt kan stadig bruges når mine brikker er færdige', () {

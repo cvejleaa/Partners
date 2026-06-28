@@ -352,13 +352,13 @@ class Rules {
     PlayingCard card,
     int total,
   ) sync* {
-    // 7'eren deles normalt over alle [total] felter, men spilleren skal kunne
-    // vælge en mindre fordeling — fx 'rykker hjem-brikken 1 felt for at frigøre
-    // pladsen, så bane-brikken kan lande lige bag den med 4 felter' (1+4=5),
-    // selv om en større fordeling på 7 også er teknisk mulig. Vi yielder
-    // derfor alle sums fra 1 til [total]; UI'en lader brugeren bygge den
-    // sekvens de vil have, og hvis ingen helt-7 fordeling er mulig (endgame),
-    // får de simpelthen kun de mindre at vælge mellem.
+    // 7'eren skal som hovedregel bruge ALLE 7 felter (regler.md afsnit 9).
+    // Eneste undtagelse: en kortere fordeling der AFSLUTTER spillet (holdets
+    // 8 brikker alle i hus). Vi genererer derfor fuld-7 fordelinger uden
+    // win-krav, plus kortere fordelinger der KUN medtages hvis sim'en viser
+    // at holdet har vundet. Delskridtene beregnes sekventielt (sim klones og
+    // muteres pr. brik), så en brik der frigør en hjem-slot åbner den for en
+    // senere brik i samme 7-træk.
     final List<Piece> ownMovable = player.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
@@ -371,18 +371,32 @@ class Rules {
     if (movable.isEmpty) return;
 
     final Set<String> seenAcrossSums = <String>{};
-    for (int sum = 1; sum <= total; sum++) {
-      final List<Move> found = _splitMovesForSum(
-          state, player, partner, card, movable, ownCount, sum);
-      for (final Move m in found) {
-        final String key = m.steps
-            .map((MoveStep s) =>
-                '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')
-            .join('|');
+
+    // Fuld 7: altid lovligt (hvis en fordeling overhovedet kan placere alle 7).
+    for (final Move m in _splitMovesForSum(
+        state, player, partner, card, movable, ownCount, total,
+        requireWin: false)) {
+      final String key = _splitKey(m);
+      if (seenAcrossSums.add(key)) yield m;
+    }
+
+    // Kortere fordelinger (1..total-1) er KUN lovlige hvis de afslutter spillet
+    // — dvs. holdet får alle 8 brikker i hus ved at bruge færre end 7 felter.
+    // Det er den eneste undtagelse fra "brug alle 7"-reglen (regler.md afsnit 9).
+    for (int sum = total - 1; sum >= 1; sum--) {
+      for (final Move m in _splitMovesForSum(
+          state, player, partner, card, movable, ownCount, sum,
+          requireWin: true)) {
+        final String key = _splitKey(m);
         if (seenAcrossSums.add(key)) yield m;
       }
     }
   }
+
+  String _splitKey(Move m) => m.steps
+      .map((MoveStep s) =>
+          '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')
+      .join('|');
 
   List<Move> _splitMovesForSum(
     GameState state,
@@ -391,8 +405,9 @@ class Rules {
     PlayingCard card,
     List<Piece> movable,
     int ownCount,
-    int sum,
-  ) {
+    int sum, {
+    required bool requireWin,
+  }) {
     final List<Move> out = <Move>[];
     final List<List<int>> distributions = _compositions(sum, movable.length);
     final Set<String> seen = <String>{};
@@ -458,6 +473,11 @@ class Rules {
         simPiece.position = to;
       }
       if (!ok || steps.isEmpty) continue;
+      // Kortere-end-7 fordelinger er kun lovlige hvis de afslutter spillet —
+      // dvs. holdet (spillerens team) har alle 8 brikker i hus i sim'en efter
+      // trækket. Fuld-7 fordelinger har requireWin=false og slipper altid
+      // igennem (hvis hvert delskridt var lovligt).
+      if (requireWin && !sim.teamHasWon(player.teamIndex)) continue;
       final String key = steps
           .map((MoveStep s) =>
               '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')

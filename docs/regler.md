@@ -156,9 +156,17 @@ ikke findes — og er derfor ulovligt.
 
 - En 7'er giver **7 træk** der kan **fordeles** over en eller flere af dine
   brikker i spil.
-- Du **skal kunne bruge alle 7 træk** — kan de ikke alle placeres, kan 7'eren
-  ikke spilles sådan.
+- Du **skal som udgangspunkt bruge alle 7 træk** — kan de ikke alle placeres,
+  kan 7'eren ikke spilles sådan.
+- **Undtagelse (afslut spillet):** Du **må** bruge **færre end 7** felter,
+  hvis den kortere fordeling **afslutter spillet** — dvs. holdet (dine + din
+  makkers 4 brikker = alle 8) derved står i hus. Eksempel: mangler I kun 4
+  felter for at få de sidste brikker hjem, må I nøjes med at rykke 4 af de 7.
+  Uden for denne situation SKAL alle 7 bruges.
 - Hver brik flyttes **kun én gang** i et 7-træk; brikkerne flyttes efter hinanden.
+- Hvert delskridt beregnes på brættet **efter** de foregående delskridt — fx
+  frigør en brik der rykker ud af hjem-slot 1 pladsen, så en anden brik kan
+  lande dér i samme 7-træk.
 - Hvert delskridt skal være lovligt (slag, brænd osv. gælder pr. delskridt).
 - **Partner-overløb:** Hvis du undervejs får **alle dine egne** brikker i mål
   (låst i hjemstrækket) ved kun at bruge nogle af de 7 træk, **må** de
