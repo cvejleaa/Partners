@@ -115,11 +115,27 @@ class _GamePlayViewState extends State<GamePlayView>
         _state.currentPlayerIndex != old.state.currentPlayerIndex ||
             _state.handNumber != old.state.handNumber ||
             _state.phase != old.state.phase;
-    if (phaseOrTurnChanged) {
+    // Nulstil også hvis det valgte kort ikke længere er på min hånd — dækker
+    // det tilfælde hvor turen "bliver hos mig" sidst i en hånd (alle andre har
+    // tomme hænder), så currentPlayerIndex/handNumber/phase er uændret, men mit
+    // netop spillede kort er væk. Ellers ville _candidateMoves pege på gamle
+    // brik-positioner og taps sende stale træk.
+    final Player? me = (_mySeat >= 0 && _mySeat < _state.players.length)
+        ? _state.players[_mySeat]
+        : null;
+    final bool selectedGone = _selectedCard != null &&
+        (me == null || !me.hand.contains(_selectedCard));
+    if (phaseOrTurnChanged || selectedGone) {
       _selectedCard = null;
       _candidateMoves = <Move>[];
       _swapFirstPiece = null;
       _splitPath.clear();
+    }
+    if (phaseOrTurnChanged) {
+      // Bytte-valget hører til én bestemt hånd/fase — ryd det ved skift, så et
+      // gammelt valg ikke står forudvalgt (og evt. matcher et andet kort i den
+      // nye hånd via værdi-lighed) i næste byttefase.
+      _humanExchangeChoice = null;
     }
     // Beregn evt. animation: find alle brikker hvis position er ændret.
     final newAnim = <String, ({PiecePosition from, PiecePosition to})>{};
@@ -204,15 +220,20 @@ class _GamePlayViewState extends State<GamePlayView>
     // svært at tappe brikker tæt på panelerne). Top-rækken har makker og
     // højre-modstander; bund-rækken har venstre-modstander og dig selv —
     // hver i deres "kvarter" af bordet relativt til dig.
+    // Flexible + maxWidth 152: panelerne er 152 brede på normale skærme, men
+    // krymper i stedet for at overflowe på meget smalle skærme (< ~316 px).
+    Widget panelCell(Player p) => Flexible(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 152),
+            child: _panel(state, p, compact: true),
+          ),
+        );
     final Widget topRow = Padding(
       padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(width: 152, child: _panel(state, partner, compact: true)),
-          SizedBox(width: 152, child: _panel(state, right, compact: true)),
-        ],
+        children: <Widget>[panelCell(partner), panelCell(right)],
       ),
     );
     final Widget bottomRow = Padding(
@@ -220,10 +241,7 @@ class _GamePlayViewState extends State<GamePlayView>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.end,
-        children: <Widget>[
-          SizedBox(width: 152, child: _panel(state, left, compact: true)),
-          SizedBox(width: 152, child: _panel(state, me, compact: true)),
-        ],
+        children: <Widget>[panelCell(left), panelCell(me)],
       ),
     );
     return Column(
@@ -603,17 +621,40 @@ class _GamePlayViewState extends State<GamePlayView>
     return maxRemaining;
   }
 
+  /// Antal TÆLLENDE felter et delskridt udgør. UD-felter tæller ikke (§6), så
+  /// vi går ringen igennem og springer dem over — ellers ville et skridt der
+  /// krydser et fremmed UD blive vist med ét felt for meget.
   int _stepDistance(GameState state, MoveStep s) {
     final from = s.from;
     final to = s.to;
     final int len = state.geometry.trackLength;
+    final int q = len ~/ 4;
     if (from is TrackPosition && to is TrackPosition) {
-      return (to.index - from.index + len) % len;
+      int idx = from.index;
+      int count = 0;
+      while (idx != to.index && count <= len) {
+        idx = (idx + 1) % len;
+        if (idx % q == 0) continue; // UD-felt: tæller ikke
+        count++;
+        if (idx == to.index) break;
+      }
+      return count;
     }
     if (from is TrackPosition && to is HomeStretchPosition) {
       final int entry = state.geometry.startTrackIndexFor(to.ownerIndex);
-      final int toEntry = (entry - from.index - 1 + len) % len + 1;
-      return toEntry + to.slot;
+      int idx = from.index;
+      int count = 0;
+      // Gå frem til feltet lige før ejerens eget UD (entry); UD-felter
+      // undervejs tæller ikke. Drej så ind i hjemstrækket: +1 for at nå slot 0
+      // og + slot for resten.
+      while (count <= len) {
+        final int next = (idx + 1) % len;
+        if (next == entry) return count + to.slot + 1;
+        idx = next;
+        if (idx % q == 0) continue; // fremmed UD
+        count++;
+      }
+      return count + to.slot + 1;
     }
     if (from is HomeStretchPosition && to is HomeStretchPosition) {
       return to.slot - from.slot;

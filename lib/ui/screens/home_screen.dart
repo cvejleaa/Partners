@@ -214,7 +214,19 @@ class _ResumeButton extends ConsumerWidget {
             backgroundColor: const Color(0xFF2E7D32),
           ),
           onPressed: () async {
-            ref.read(gameProvider.notifier).resumeFrom(saved);
+            final bool ok =
+                ref.read(gameProvider.notifier).resumeFrom(saved);
+            if (!ok) {
+              // Korrupt/forældet save — det er nu ryddet. Fjern knappen og vis
+              // en kort besked i stedet for at navigere ind i et tomt spil.
+              ref.invalidate(savedGameProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text(
+                        'Det gemte spil kunne ikke genoptages (for gammelt format).')));
+              }
+              return;
+            }
             await Navigator.of(context).push<void>(
                 MaterialPageRoute<void>(builder: (_) => const GameScreen()));
             ref.invalidate(savedGameProvider);

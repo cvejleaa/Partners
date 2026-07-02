@@ -30,6 +30,7 @@ class OnlineGameScreen extends ConsumerStatefulWidget {
 class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   String _lastProcessed = '';
   bool _busy = false;
+  bool _aiActionPending = false;
 
   int _replayIndex = 0;
   bool _replayActive = false;
@@ -58,7 +59,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
       // dedup-nøglerne her og rebuild så _maybeHostAct prøver igen.
       // aiSeatMove er idempotent: den exit'er hvis state.currentPlayerIndex
       // har bevæget sig, så vi kan ikke trække to gange ved en uskyld.
-      if (mounted && !_busy) {
+      if (mounted && !_busy && !_aiActionPending) {
         _lastProcessed = '';
         _lastTakeoverSig = '';
         setState(() {});
@@ -123,8 +124,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
               if (!mounted) return;
               Navigator.of(context).pushReplacement<void, void>(
                 MaterialPageRoute<void>(
-                  builder: (_) =>
-                      WinScreen(winningTeamIndex: state.winningTeamIndex!),
+                  builder: (_) => WinScreen(
+                      winningTeamIndex: state.winningTeamIndex!,
+                      fromOnline: true),
                 ),
               );
             });
@@ -195,10 +197,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     }
     if (!_initialReplayChecked) {
       _initialReplayChecked = true;
-      setState(() {
-        _replayActive = true;
-        _replayIndex = mySeen;
-        _replayTarget = log.length;
+      // _maybeStartReplay kaldes fra build() — setState må ikke kaldes midt i
+      // en build. Udskyd til efter frame'en.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _replayActive = true;
+          _replayIndex = mySeen;
+          _replayTarget = log.length;
+        });
       });
       return;
     }
@@ -347,11 +354,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
       if (isAiSeat) {
         if (sig == _lastProcessed) return;
         _lastProcessed = sig;
+        // Dæk 600 ms-forsinkelsen med et in-flight-flag, så heartbeat-timeren
+        // ikke rydder _lastProcessed midt i vinduet og aflyrer en dublet-
+        // transaktion.
+        _aiActionPending = true;
         Future<void>.delayed(const Duration(milliseconds: 600), () {
           _run(() async {
             final acted = await _svc.aiSeatMove(widget.code, idx);
             if (!acted && mounted) _lastProcessed = '';
-          });
+          }).whenComplete(() => _aiActionPending = false);
         });
       } else {
         if (sig == _lastTakeoverSig) return;

@@ -291,29 +291,53 @@ class GameController extends StateNotifier<GameState> {
     }
   }
 
-  /// Genskab et tidligere gemt spil ind i controlleren.
-  void resumeFrom(SavedGameInfo info) {
-    final Map<String, dynamic> map = info.raw;
-    final GameState s =
-        gameStateFromMap(Map<String, dynamic>.from(map['state'] as Map));
-    _engine = GameEngine(state: s, rng: _rng);
-    _aiLog
-      ..clear()
-      ..addAll((map['log'] as List? ?? const <dynamic>[])
-          .map((e) => Map<String, dynamic>.from(e as Map)));
-    _aiGameCode = map['code'] as String?;
-    _aiHostUid = map['hostUid'] as String?;
-    _aiHostName = map['hostName'] as String?;
-    _aiSavedAtEnd = false;
-    state = s;
+  /// Genskab et tidligere gemt spil ind i controlleren. Returnerer false hvis
+  /// save'et ikke kunne deserialiseres (fx et gammelt format fra før nye
+  /// felter blev tilføjet) — så rydder vi det korrupte save så knappen
+  /// forsvinder i stedet for at crashe hver gang.
+  bool resumeFrom(SavedGameInfo info) {
+    try {
+      final Map<String, dynamic> map = info.raw;
+      final GameState s =
+          gameStateFromMap(Map<String, dynamic>.from(map['state'] as Map));
+      _engine = GameEngine(state: s, rng: _rng);
+      _aiLog
+        ..clear()
+        ..addAll((map['log'] as List? ?? const <dynamic>[])
+            .map((e) => Map<String, dynamic>.from(e as Map)));
+      _aiGameCode = map['code'] as String?;
+      _aiHostUid = map['hostUid'] as String?;
+      _aiHostName = map['hostName'] as String?;
+      _aiSavedAtEnd = false;
+      state = s;
+      return true;
+    } catch (e) {
+      debugPrint('[resume] kunne ikke genskabe save: $e');
+      // ignore: discarded_futures
+      _clearSave();
+      return false;
+    }
   }
 
   void _bump() {
     if (_engine == null) return;
-    // Tving Riverpod til at notificere ved at lave en kopi af staten.
+    // Tving Riverpod til at notificere ved at lave en kopi af staten. VIGTIGT:
+    // vi DYB-kopierer spillere + brikker. Ellers ville hver snapshot dele de
+    // samme muterbare Piece-objekter som motoren flytter in-place, og
+    // GamePlayView's animation (der sammenligner forrige vs. ny briks position
+    // i didUpdateWidget) ville ALDRIG se en ændring → ingen animation lokalt.
     final GameState e = _engine!.state;
     state = GameState(
-      players: e.players,
+      players: e.players
+          .map((Player p) => Player(
+                index: p.index,
+                name: p.name,
+                color: p.color,
+                isHuman: p.isHuman,
+                pieces: p.pieces.map((Piece pi) => pi.copy()).toList(),
+                hand: List<PlayingCard>.from(p.hand),
+              ))
+          .toList(),
       geometry: e.geometry,
       deck: e.deck,
       discard: e.discard,

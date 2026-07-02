@@ -8,9 +8,15 @@ import '../../stats/records.dart';
 import '../../stats/stats_repository.dart';
 
 class WinScreen extends ConsumerStatefulWidget {
-  const WinScreen({super.key, required this.winningTeamIndex});
+  const WinScreen(
+      {super.key, required this.winningTeamIndex, this.fromOnline = false});
 
   final int winningTeamIndex;
+
+  /// Sand når skærmen vises efter et ONLINE-spil. Da må vi IKKE kalde
+  /// gameProvider.reset() (som ville rydde den lokale AI-autosave) — der er
+  /// intet lokalt spil at nulstille.
+  final bool fromOnline;
 
   @override
   ConsumerState<WinScreen> createState() => _WinScreenState();
@@ -67,7 +73,11 @@ class _WinScreenState extends ConsumerState<WinScreen> {
             const SizedBox(height: 24),
             FilledButton(
               onPressed: () {
-                ref.read(gameProvider.notifier).reset();
+                // Kun for lokale spil: nulstil controlleren + ryd autosave.
+                // Efter et online-spil ville det slette den lokale AI-autosave.
+                if (!widget.fromOnline) {
+                  ref.read(gameProvider.notifier).reset();
+                }
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
               child: const Text('Tilbage til opsætning'),
