@@ -118,8 +118,12 @@ jobs:
 
       - name: Skriv service account til fil
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        # Secret'en sendes via env (ikke interpoleret ind i script-teksten), så
+        # en JSON med et apostrof-tegn ikke kan knække/injicere scriptet.
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$HOME/firebase-sa.json"
+          printf '%s' "$SA_JSON" > "$HOME/firebase-sa.json"
 
       - name: Deploy til Firebase Hosting
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
@@ -180,3 +184,7 @@ jobs:
             echo "- Førstegangs-deploy: prøv 'Re-run jobs' (transient propagering)."
             echo "- Ellers: se logs for trinet 'Deploy Cloud Functions'."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fjern service account-fil
+        if: always()
+        run: rm -f "$HOME/firebase-sa.json"

@@ -3,24 +3,30 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isSignedIn() { return request.auth != null; }
+
+    // Admin = whitelisted email OG verificeret email. email_verified-kravet
+    // forhindrer at en nyoprettet uverificeret konto med den rigtige adresse
+    // (email/password sætter email_verified=false indtil verifikation) kan
+    // opnå admin-rettigheder.
     function isAdmin() {
       return isSignedIn() &&
         request.auth.token.email != null &&
+        request.auth.token.email_verified == true &&
         request.auth.token.email.lower() in [
           'cvejleaa@gmail.com'
         ];
     }
 
-    // Kortregel-konfiguration: alle kan læse. Indtil admin-flowet er
-    // bekræftet (oprette konto + logge ind som admin) tillader vi at alle
-    // indloggede brugere kan skrive. Strammes til isAdmin() når flow er ok.
+    // Kortregel-konfiguration: alle kan læse (nye spil arver den). KUN admin
+    // må skrive — ellers kunne enhver indlogget bruger gøre spillet uspilleligt
+    // for alle på tværs af siten. Admin-skærmen er den eneste skriver.
     match /config/{document} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if isAdmin();
     }
 
-    // Brugerprofiler. Læsbar af alle indloggede (så søgning kan finde dem).
-    // Skrivbar kun af ejeren selv.
+    // Brugerprofiler. Læsbar af alle indloggede (så venne-søgning kan finde
+    // dem). Skrivbar kun af ejeren selv.
     match /users/{uid} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == uid;
@@ -31,32 +37,52 @@ service cloud.firestore {
         allow read, write: if isSignedIn() && request.auth.uid == uid;
       }
 
-      // Indbakke — invitationer fra andre. Ejeren kan læse og slette.
-      // Andre indloggede må oprette nye dokumenter (så de kan sende
-      // invitationer), men ikke ændre eller slette eksisterende.
+      // Indbakke — invitationer fra andre. Ejeren kan læse, opdatere og slette.
+      // Andre indloggede må KUN oprette en invitation, og kun med deres EGEN
+      // uid som afsender (fromUid) — så afsendernavn/-id ikke kan forfalskes,
+      // og af typen 'gameInvite'. Forhindrer spoofede invitationer + push-spam
+      // med falsk afsender (Cloud Function onInboxCreate sender push herpå).
       match /inbox/{inviteId} {
         allow read: if isSignedIn() && request.auth.uid == uid;
-        allow create: if isSignedIn();
+        allow create: if isSignedIn()
+          && request.resource.data.fromUid == request.auth.uid
+          && request.resource.data.type == 'gameInvite'
+          && request.resource.data.fromName is string
+          && request.resource.data.fromName.size() <= 60
+          && request.resource.data.gameCode is string
+          && request.resource.data.gameCode.size() <= 12;
         allow update: if isSignedIn() && request.auth.uid == uid;
         allow delete: if isSignedIn() && request.auth.uid == uid;
       }
     }
 
-    // Spil. Indloggede må læse + skrive (inviteret/joine/heartbeat/applyMove);
-    // slet er låst til værten eller en admin så ingen kan rive andres spil ned.
+    // Spil.
+    //  - create: enhver indlogget, men kun med sig selv som vært.
+    //  - update: KUN medlemmer af spillet, ELLER hvis spillet stadig er i
+    //    lobby (så nye spillere kan joine en åben lobby). Når spillet er
+    //    'playing' kan udenforstående ikke længere pille ved state — det
+    //    lukker for at en tilfældig bruger overskriver et igangværende spil.
+    //  - delete: kun vært eller admin.
     match /games/{game} {
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.hostUid == request.auth.uid;
+      allow update: if isSignedIn() && (
+        request.auth.uid in resource.data.members ||
+        resource.data.status == 'lobby'
+      );
       allow delete: if isSignedIn() &&
         (resource.data.hostUid == request.auth.uid || isAdmin());
     }
 
-    // Stats-cache pr. bruger: alle indloggede må læse (profilskærmen viser
-    // andres stats); skrivning sker fra klienten der lige har afsluttet et
-    // spil (foreløbig: alle indloggede må skrive).
+    // Stats-cache pr. bruger: alle indloggede må læse (ranglisterne viser
+    // andres stats). Skrivning: KUN ejeren af doc'et (hver klient skriver sin
+    // egen ved spil-slut), eller admin (genberegning/nulstilling). Forhindrer
+    // at en bruger forfalsker eller saboterer ANDRES stats.
     match /userStats/{uid} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow write: if isSignedIn() &&
+        (request.auth.uid == uid || isAdmin());
     }
   }
 }

@@ -32,8 +32,16 @@ exports.onInboxCreate = onDocumentCreated(
     const tokens = (userSnap.data() || {}).fcmTokens || [];
     if (!tokens.length) return;
 
-    const fromName = invite.fromName || "En ven";
-    const gameCode = invite.gameCode || "";
+    // Defensiv validering af klient-leveret indhold, så en manipuleret
+    // afsender ikke kan lave vildledende/overlange notifikationer eller
+    // manipulere deep-link'et. (Firestore-reglerne validerer også, men
+    // functionen bør ikke stole blindt på input.)
+    const sanitize = (v, max) =>
+      (typeof v === "string" ? v : "").replace(/[\r\n]+/g, " ").slice(0, max);
+    const fromName = sanitize(invite.fromName, 60) || "En ven";
+    const rawCode = sanitize(invite.gameCode, 12);
+    // Kun et gyldigt spil-kode-format (A-Z0-9) må ind i deep-link'et.
+    const gameCode = /^[A-Za-z0-9]{1,12}$/.test(rawCode) ? rawCode : "";
 
     const res = await getMessaging().sendEachForMulticast({
       tokens,

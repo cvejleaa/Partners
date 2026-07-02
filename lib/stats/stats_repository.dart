@@ -36,11 +36,28 @@ class StatsRepository {
     await batch.commit();
   }
 
-  /// Beregn + cache i én operation.
+  /// Beregn + cache ALLE brugere i én operation. Kræver admin-rettigheder mod
+  /// Firestore-reglerne (kun admin må skrive andres `userStats`). Bruges af
+  /// admin-skærmen.
   Future<Map<String, UserStats>> recomputeAndSave() async {
     final stats = await computeAllUsers();
     await save(stats);
     return stats;
+  }
+
+  /// Skriv KUN [uid]'s egen stats-doc. Bruges af almindelige klienter (fx ved
+  /// spil-slut eller pull-to-refresh), fordi Firestore-reglerne kun tillader
+  /// en bruger at skrive sin egen `userStats/{uid}` (admin må skrive alles).
+  Future<void> saveOwn(String uid, Map<String, UserStats> all) async {
+    final own = all[uid];
+    if (own == null) return;
+    await _db.collection('userStats').doc(uid).set(own.toJson());
+  }
+
+  /// Beregn alle spil og gem KUN [uid]'s egen stats-doc.
+  Future<void> recomputeAndSaveOwn(String uid) async {
+    final stats = await computeAllUsers();
+    await saveOwn(uid, stats);
   }
 
   /// Hent én brugers stats fra cachen.

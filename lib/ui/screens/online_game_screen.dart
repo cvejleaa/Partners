@@ -109,8 +109,14 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
 
           if (state.winningTeamIndex != null && !_statsRecomputed) {
             _statsRecomputed = true;
-            // ignore: discarded_futures
-            StatsRepository().recomputeAndSave();
+            // Hver klient skriver KUN sin egen stats-doc (Firestore-reglerne
+            // tillader ikke at skrive andres). Alle 4 menneskelige klienter
+            // observerer slut-tilstanden og opdaterer hver deres egen.
+            final myUid = _svc.uid;
+            if (myUid != null && mySeat >= 0) {
+              // ignore: discarded_futures
+              StatsRepository().recomputeAndSaveOwn(myUid);
+            }
             // Naviger til WinScreen — én gang. addPostFrameCallback sikrer
             // at vi ikke kalder Navigator midt i en build.
             WidgetsBinding.instance.addPostFrameCallback((_) {

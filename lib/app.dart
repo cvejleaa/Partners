@@ -205,9 +205,11 @@ class GameController extends StateNotifier<GameState> {
         'finishedAt': FieldValue.serverTimestamp(),
         'mode': 'ai',
       });
-      // Genberegn stats-cachen så profilen opdaterer sig.
+      // Genberegn stats-cachen så profilen opdaterer sig — kun værtens egen
+      // doc (AI-pladser har ingen uid). Firestore-reglerne tillader ikke at
+      // skrive andres userStats.
       // ignore: discarded_futures
-      StatsRepository().recomputeAndSave();
+      StatsRepository().recomputeAndSaveOwn(uid);
     } catch (e) {
       debugPrint('[AI persist] $e');
     }

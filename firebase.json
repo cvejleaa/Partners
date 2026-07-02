@@ -45,21 +45,22 @@
         ]
       },
       {
+        "comment": "canvaskit + wasm har IKKE content-hash i filnavnet i Flutter web — de hedder det samme på tværs af builds men skifter indhold ved engine-opgradering. 'immutable' ville servere en forældet binær sammen med nyt main.dart.js → render-crash. max-age med ETag-revalidering giver stadig billig caching uden det problem.",
         "source": "**/*.@(wasm)",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+          { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
         ]
       },
       {
         "source": "/canvaskit/**",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+          { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
         ]
       },
       {
         "source": "/assets/**",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=3600" }
+          { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
         ]
       },
       {

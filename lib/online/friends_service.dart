@@ -226,9 +226,13 @@ class FriendsService {
   Future<void> sendGameInvite(String toUid, String gameCode) async {
     final user = _auth.currentUser;
     if (user == null) throw 'Du er ikke logget ind';
-    final fromName = (user.displayName ?? '').isNotEmpty
+    final rawName = (user.displayName ?? '').isNotEmpty
         ? user.displayName!
         : (user.email ?? 'Spiller');
+    // Trim til ≤60 tegn — matcher Firestore-reglens grænse, så lange emails
+    // ikke får invitationen afvist.
+    final fromName =
+        rawName.length > 60 ? rawName.substring(0, 60) : rawName;
     await _users.doc(toUid).collection('inbox').add(<String, dynamic>{
       'type': 'gameInvite',
       'fromUid': user.uid,

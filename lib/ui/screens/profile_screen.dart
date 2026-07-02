@@ -26,7 +26,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _error = null;
     });
     try {
-      await _repo.recomputeAndSave();
+      // Skriv kun min egen stats-doc (Firestore-reglerne tillader ikke at
+      // skrive andres). Admin-genberegning af alle sker fra statistik-skærmen.
+      final uid = ref.read(authStateProvider).valueOrNull?.uid;
+      if (uid != null) {
+        await _repo.recomputeAndSaveOwn(uid);
+      }
     } catch (e) {
       setState(() => _error = '$e');
     } finally {
