@@ -145,11 +145,14 @@ jobs:
         run: npm --prefix functions install
 
       - name: Deploy Cloud Functions
+        id: functions_deploy
         # continue-on-error bevares som sikkerhedsnet: et førstegangs-deploy af
         # en 2nd-gen function kan ramme transiente service-agent-propagerings-
         # fejl. Hosting og Firestore er allerede ude på dette tidspunkt — vi vil
         # ikke have at en functions-fejl fælder hele CI'en og markerer det
-        # live-deployede spil som rødt.
+        # live-deployede spil som rødt. MEN: et efterfølgende trin gør fejlen
+        # SYNLIG (advarsel + job-summary) så en reel/permanent fejl ikke bare
+        # forsvinder i en grøn kørsel.
         continue-on-error: true
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
         run: |
@@ -165,3 +168,15 @@ jobs:
             --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
+
+      - name: Advar hvis Cloud Functions-deploy fejlede
+        if: steps.functions_deploy.outcome == 'failure'
+        run: |
+          echo "::warning title=Cloud Functions-deploy fejlede::Push-funktionen (onInboxCreate) blev IKKE deployet. Ved et førstegangs-deploy kan det være en transient service-agent-fejl — kør workflow'et igen. Ellers tjek functions/index.js og IAM."
+          {
+            echo "## ⚠️ Cloud Functions-deploy FEJLEDE"
+            echo ""
+            echo "onInboxCreate blev ikke deployet. Hosting + Firestore er ude, men push-notifikationer kan være forældede/døde."
+            echo "- Førstegangs-deploy: prøv 'Re-run jobs' (transient propagering)."
+            echo "- Ellers: se logs for trinet 'Deploy Cloud Functions'."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -2,7 +2,7 @@
   "name": "partners-functions",
   "description": "Cloud Functions for Partners — sender push når en spil-invitation lander i en brugers inbox.",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {

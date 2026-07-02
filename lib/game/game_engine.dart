@@ -116,30 +116,54 @@ class GameEngine extends ChangeNotifier {
   bool canPlay(int playerIndex) => allLegalMoves(playerIndex).isNotEmpty;
 
   /// Spilleren kan ikke rykke nogen brik: smid resten af hånden og sid over
-  /// resten af runden.
+  /// resten af runden. Afvises hvis det ikke er spillerens tur, hvis fasen
+  /// ikke er play, eller hvis spilleren FAKTISK kan spille et træk (§13: man
+  /// må kun sidde over når intet kort kan bruges).
   void passHand(int playerIndex) {
+    if (state.phase != GamePhase.play) return;
+    if (playerIndex != state.currentPlayerIndex) return;
+    if (canPlay(playerIndex)) return;
     final Player player = state.players[playerIndex];
     state.discard.addAll(player.hand);
     player.hand.clear();
     _afterMove(playerIndex);
   }
 
-  /// Spil et træk. Re-validerer mod aktuel state for at fange edge-case
-  /// bugs hvor en stale move-genereret ifølge gammel state har overlevet
-  /// (fx en AI der vælger move BAS på et tidligere state-snapshot). Hvis
-  /// move'et ikke findes blandt aktuelle gyldige træk → afvis og log.
+  /// Spil et træk. Re-validerer mod aktuel state for at fange stale moves
+  /// (fx en online-AI der valgte move ud fra et forældet snapshot). Guarden
+  /// tjekker: rigtig fase, rigtig tur, kortet er på hånden, og at trækket
+  /// findes blandt de aktuelle lovlige træk. VIGTIGT: vi udfører det MATCHEDE
+  /// lovlige move fra motoren — ikke det indsendte — så et move med forældet
+  /// capture/brænd-info ikke kan sende en forkert brik hjem.
   void applyMove(int playerIndex, Move move) {
-    final List<Move> legal = rules.legalMoves(
-        state, state.players[playerIndex], move.card);
-    final bool isLegal = legal.any((Move m) => _movesEqual(m, move));
-    if (!isLegal) {
-      // ignore: avoid_print
-      print('[applyMove] AFVIST ULOVLIGT MOVE for player $playerIndex: '
-          '${_moveDebug(move)}');
+    if (state.phase != GamePhase.play) {
+      _reject(playerIndex, move, 'forkert fase (${state.phase.name})');
+      return;
+    }
+    if (playerIndex != state.currentPlayerIndex) {
+      _reject(playerIndex, move, 'ikke spillerens tur');
       return;
     }
     final Player player = state.players[playerIndex];
-    for (final MoveStep step in move.steps) {
+    if (!player.hand.contains(move.card)) {
+      _reject(playerIndex, move, 'kort ikke på hånden');
+      return;
+    }
+    final List<Move> legal = rules.legalMoves(state, player, move.card);
+    Move? matched;
+    for (final Move m in legal) {
+      if (_movesEqual(m, move)) {
+        matched = m;
+        break;
+      }
+    }
+    if (matched == null) {
+      _reject(playerIndex, move, 'ikke et lovligt træk');
+      return;
+    }
+
+    // Udfør det MOTOR-genererede move (matched), ikke det indsendte.
+    for (final MoveStep step in matched.steps) {
       final Piece moving = state.pieceById(step.pieceId);
       // Selv-brænd: landede på en modstander-dobbelt → den flyttende brik
       // slås selv hjem til en fri start-slot. Ingen modstander slås.
@@ -165,13 +189,24 @@ class GameEngine extends ChangeNotifier {
         moving.hasLeftStart = true;
       }
     }
-    player.hand.remove(move.card);
-    state.discard.add(move.card);
+    player.hand.remove(matched.card);
+    state.discard.add(matched.card);
     _afterMove(playerIndex);
   }
 
-  /// Smid et kort uden effekt (når der ikke findes gyldigt træk).
+  void _reject(int playerIndex, Move move, String reason) {
+    // ignore: avoid_print
+    print('[applyMove] AFVIST ($reason) for player $playerIndex: '
+        '${_moveDebug(move)}');
+  }
+
+  /// Smid ét kort uden effekt. Kun tilladt når spilleren FAKTISK ikke kan
+  /// spille noget kort (§13) — ellers ville man kunne springe et tvunget træk
+  /// over. Håndhæver også fase og tur.
   void discardCard(int playerIndex, PlayingCard card) {
+    if (state.phase != GamePhase.play) return;
+    if (playerIndex != state.currentPlayerIndex) return;
+    if (canPlay(playerIndex)) return;
     final Player player = state.players[playerIndex];
     if (!player.hand.remove(card)) return;
     state.discard.add(card);

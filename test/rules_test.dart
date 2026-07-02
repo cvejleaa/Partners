@@ -141,8 +141,11 @@ void main() {
       expect(targets, containsAll(<int>[24, 16]));
     });
 
-    test('4 baglæns wrap-around (60-ring)', () {
-      // Brik på 2 — 4 baglæns krydser felt 0 → 58 (2-4+60).
+    test('4 baglæns wrap-around springer eget UD over (60-ring)', () {
+      // Brik på idx 2 (spiller 0's felt 2). 4 baglæns: idx 0 er spiller 0's
+      // EGET UD-felt og er ikke et tællende felt (§6), så det springes over
+      // uden at tælle: 2 → 1 → [spring 0] → 59 → 58 → 57. Resultat 57 (ikke
+      // 58 som en naiv 2-4+60 ville give).
       final state = makeState(piecePositions: _onlyOneAt(const TrackPosition(2)));
       final moves = rules.legalMoves(state, state.players[0],
           const PlayingCard(Rank.four, Suit.clubs));
@@ -150,11 +153,47 @@ void main() {
           .where((Move m) => m.steps.first.to is TrackPosition)
           .map((Move m) => (m.steps.first.to as TrackPosition).index)
           .toSet();
-      expect(targets, contains(58));
+      expect(targets, contains(57));
+      expect(targets, isNot(contains(0)),
+          reason: 'må aldrig lande på eget UD-felt baglæns');
     });
   });
 
   group('7-kort split', () {
+    test('split kan frigøre en hjem-slot for en anden brik (rækkefølge)', () {
+      // p0.0 på idx 58 (spiller 0's felt 13), p0.1 på HS(0,0). En lovlig fuld-7:
+      // FØRST p0.1 rykker 3 (HS slot 0 → slot 3, frigør slot 0-2), DEREFTER
+      // p0.0 rykker 4 (58 → 59 → [spring UD 0] → HS slot 0, 1, 2). Det kræver
+      // at slot 0-2 er frie når p0.0 flyttes — hvilket kun sker hvis p0.1
+      // flyttes først. Den gamle faste-rækkefølge-generator (p0.0 før p0.1)
+      // fandt aldrig dette.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(58),
+          const HomeStretchPosition(0, 0),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.seven, Suit.hearts));
+      // Find et træk hvor p0.1 ender på HS slot 3 OG p0.0 ender på HS slot 2.
+      final wanted = moves.any((Move m) {
+        if (m.steps.length != 2) return false;
+        final p1 = m.steps.firstWhere((s) => s.pieceId == 'p0.1',
+            orElse: () => m.steps.first);
+        final p0 = m.steps.firstWhere((s) => s.pieceId == 'p0.0',
+            orElse: () => m.steps.first);
+        return p1.to == const HomeStretchPosition(0, 3) &&
+            p0.to == const HomeStretchPosition(0, 2);
+      });
+      expect(wanted, isTrue,
+          reason: 'fuld-7 der kræver p0.1 flyttet før p0.0 skal findes');
+    });
+
     test('split over to brikker er muligt', () {
       final state = makeState(piecePositions: <List<PiecePosition>>[
         <PiecePosition>[

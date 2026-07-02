@@ -206,16 +206,17 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
-    // Baglæns: fremmede UD-felter springes også over uden at tælle (1 → 14
-    // direkte imod urets retning), medmindre der står brikker på dem — så
-    // spærrer feltet.
+    // Baglæns: ALLE UD-felter (egne som fremmede) springes over uden at tælle —
+    // UD er ikke et tællende ringfelt (regler.md §6), så man kan hverken lande
+    // på eller "bruge" et UD-felt ved baglæns-bevægelse. Et besat UD spærrer
+    // passage begge veje.
     final int len = geometry.trackLength;
     int idx = pos.index;
     int remaining = steps;
     while (remaining > 0) {
       final int next = (idx - 1 + len) % len;
       final int? udOwner = _entryOwner(next);
-      if (udOwner != null && udOwner != piece.ownerIndex) {
+      if (udOwner != null) {
         if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
         idx = next;
         continue;
@@ -352,13 +353,18 @@ class Rules {
     PlayingCard card,
     int total,
   ) sync* {
-    // 7'eren skal som hovedregel bruge ALLE 7 felter (regler.md afsnit 9).
+    // 7'eren skal som hovedregel bruge ALLE [total] felter (regler.md §9).
     // Eneste undtagelse: en kortere fordeling der AFSLUTTER spillet (holdets
-    // 8 brikker alle i hus). Vi genererer derfor fuld-7 fordelinger uden
-    // win-krav, plus kortere fordelinger der KUN medtages hvis sim'en viser
-    // at holdet har vundet. Delskridtene beregnes sekventielt (sim klones og
-    // muteres pr. brik), så en brik der frigør en hjem-slot åbner den for en
-    // senere brik i samme 7-træk.
+    // 8 brikker alle i hus).
+    //
+    // Vi laver en REKURSIV søgning over (brik, afstand)-sekvenser: hvert
+    // delskridt vælger en endnu-ubrugt brik og en afstand, anvender det på en
+    // enkelt genbrugt sim (apply/undo) og går videre. Fordi vi prøver ALLE
+    // rækkefølger, findes også fordelinger hvor en brik SKAL flyttes før en
+    // anden for at frigøre en hjem-slot (§9's sekventielle regel) — det gjorde
+    // den gamle faste-rækkefølge-generator ikke. Resultater dedup'es på
+    // slut-positionerne, så de mange rækkefølger der giver samme træk kun
+    // yieldes én gang.
     final List<Piece> ownMovable = player.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
@@ -366,127 +372,145 @@ class Rules {
     final List<Piece> partnerMovable = partner.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
-    final int ownCount = ownMovable.length;
-    final List<Piece> movable = <Piece>[...ownMovable, ...partnerMovable];
-    if (movable.isEmpty) return;
+    final List<String> ownIds = ownMovable.map((Piece p) => p.id).toList();
+    final List<String> movableIds = <String>[
+      ...ownIds,
+      ...partnerMovable.map((Piece p) => p.id),
+    ];
+    if (movableIds.isEmpty) return;
 
-    final Set<String> seenAcrossSums = <String>{};
+    final GameState sim = _shallowClone(state);
+    final Map<String, Move> results = <String, Move>{};
+    final List<MoveStep> path = <MoveStep>[];
+    final Set<String> used = <String>{};
 
-    // Fuld 7: altid lovligt (hvis en fordeling overhovedet kan placere alle 7).
-    for (final Move m in _splitMovesForSum(
-        state, player, partner, card, movable, ownCount, total,
-        requireWin: false)) {
-      final String key = _splitKey(m);
-      if (seenAcrossSums.add(key)) yield m;
-    }
+    _searchSplit(sim, player, partner, card, movableIds, ownIds.toSet(), total,
+        total, path, used, results);
 
-    // Kortere fordelinger (1..total-1) er KUN lovlige hvis de afslutter spillet
-    // — dvs. holdet får alle 8 brikker i hus ved at bruge færre end 7 felter.
-    // Det er den eneste undtagelse fra "brug alle 7"-reglen (regler.md afsnit 9).
-    for (int sum = total - 1; sum >= 1; sum--) {
-      for (final Move m in _splitMovesForSum(
-          state, player, partner, card, movable, ownCount, sum,
-          requireWin: true)) {
-        final String key = _splitKey(m);
-        if (seenAcrossSums.add(key)) yield m;
-      }
-    }
+    yield* results.values;
   }
 
-  String _splitKey(Move m) => m.steps
-      .map((MoveStep s) =>
-          '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')
-      .join('|');
-
-  List<Move> _splitMovesForSum(
-    GameState state,
+  /// Rekursiv split-søgning. Muterer [sim] via apply/undo. [remaining] er
+  /// tilbageværende felter; [total] den oprindelige sum (til win-undtagelsen).
+  void _searchSplit(
+    GameState sim,
     Player player,
     Player partner,
     PlayingCard card,
-    List<Piece> movable,
-    int ownCount,
-    int sum, {
-    required bool requireWin,
-  }) {
-    final List<Move> out = <Move>[];
-    final List<List<int>> distributions = _compositions(sum, movable.length);
-    final Set<String> seen = <String>{};
+    List<String> movableIds,
+    Set<String> ownIds,
+    int total,
+    int remaining,
+    List<MoveStep> path,
+    Set<String> used,
+    Map<String, Move> results,
+  ) {
+    // Registrér gyldige stop-punkter: hele budgettet brugt, ELLER en kortere
+    // fordeling der har vundet spillet.
+    if (path.isNotEmpty) {
+      if (remaining == 0) {
+        _recordSplit(path, card, results);
+        return;
+      }
+      if (remaining < total && sim.teamHasWon(player.teamIndex)) {
+        _recordSplit(path, card, results);
+        return; // Spillet er vundet — ingen grund til at flytte mere.
+      }
+    }
+    if (remaining == 0) return;
 
-    for (final List<int> dist in distributions) {
-      final List<MoveStep> steps = <MoveStep>[];
-      final GameState sim = _shallowClone(state);
-      bool ok = true;
-      for (int i = 0; i < movable.length; i++) {
-        final int n = dist[i];
-        if (n == 0) continue;
-        final bool isPartnerPiece = i >= ownCount;
-        if (isPartnerPiece) {
-          final bool allOwnLocked = sim.players[player.index].pieces
-              .every((Piece p) => p.position is HomeStretchPosition);
-          if (!allOwnLocked) {
-            ok = false;
-            break;
-          }
-        }
-        final int moverIndex = isPartnerPiece ? partner.index : player.index;
-        final Piece simPiece = sim.pieceById(movable[i].id);
-        final Player simPlayer = sim.players[moverIndex];
-        final PiecePosition? to = _advanceFrom(sim, simPlayer, simPiece, n);
-        if (to == null) {
-          ok = false;
-          break;
-        }
+    for (final String id in movableIds) {
+      if (used.contains(id)) continue;
+      final bool isPartnerPiece = !ownIds.contains(id);
+      // Partner-brik må kun bruges når ALLE egne brikker er låst i hjemstræk
+      // (på dette tidspunkt i sim'en).
+      if (isPartnerPiece) {
+        final bool allOwnLocked = sim.players[player.index].pieces
+            .every((Piece p) => p.position is HomeStretchPosition);
+        if (!allOwnLocked) continue;
+      }
+      final int moverIndex = isPartnerPiece ? partner.index : player.index;
+      final Piece simPiece = sim.pieceById(id);
+      final Player simPlayer = sim.players[moverIndex];
+
+      for (int dist = 1; dist <= remaining; dist++) {
+        final PiecePosition? to = _advanceFrom(sim, simPlayer, simPiece, dist);
+        if (to == null) continue;
         String? capturedId;
         bool burns = false;
         if (to is TrackPosition) {
           final _Landing landing = _landing(sim, moverIndex, to);
-          if (!landing.legal) {
-            ok = false;
-            break;
-          }
+          if (!landing.legal) continue;
           capturedId = landing.capturedId;
           burns = landing.burnsMover;
         }
-        steps.add(MoveStep(
-          pieceId: simPiece.id,
-          from: simPiece.position,
+
+        // --- apply (gem undo-info) ---
+        final PiecePosition fromPos = simPiece.position;
+        final bool fromLeft = simPiece.hasLeftStart;
+        Piece? capturedPiece;
+        PiecePosition? capturedOldPos;
+        bool capturedOldLeft = false;
+        if (burns) {
+          simPiece.position = StartPosition(
+              simPiece.ownerIndex, _firstFreeStartSlot(sim, simPiece.ownerIndex));
+          simPiece.hasLeftStart = false;
+        } else {
+          if (capturedId != null) {
+            capturedPiece = sim.pieceById(capturedId);
+            capturedOldPos = capturedPiece.position;
+            capturedOldLeft = capturedPiece.hasLeftStart;
+            capturedPiece.position = StartPosition(capturedPiece.ownerIndex,
+                _firstFreeStartSlot(sim, capturedPiece.ownerIndex));
+            capturedPiece.hasLeftStart = false;
+          }
+          simPiece.position = to;
+        }
+        path.add(MoveStep(
+          pieceId: id,
+          from: fromPos,
           to: to,
           capturedPieceId: capturedId,
           burnsMover: burns,
         ));
-        if (burns) {
-          simPiece.position = StartPosition(
-            simPiece.ownerIndex,
-            _firstFreeStartSlot(sim, simPiece.ownerIndex),
-          );
-          simPiece.hasLeftStart = false;
-          continue;
+        used.add(id);
+
+        _searchSplit(sim, player, partner, card, movableIds, ownIds, total,
+            remaining - dist, path, used, results);
+
+        // --- undo ---
+        used.remove(id);
+        path.removeLast();
+        simPiece.position = fromPos;
+        simPiece.hasLeftStart = fromLeft;
+        if (capturedPiece != null) {
+          capturedPiece.position = capturedOldPos!;
+          capturedPiece.hasLeftStart = capturedOldLeft;
         }
-        if (capturedId != null) {
-          final Piece captured = sim.pieceById(capturedId);
-          captured.position = StartPosition(
-            captured.ownerIndex,
-            _firstFreeStartSlot(sim, captured.ownerIndex),
-          );
-          captured.hasLeftStart = false;
-        }
-        simPiece.position = to;
-      }
-      if (!ok || steps.isEmpty) continue;
-      // Kortere-end-7 fordelinger er kun lovlige hvis de afslutter spillet —
-      // dvs. holdet (spillerens team) har alle 8 brikker i hus i sim'en efter
-      // trækket. Fuld-7 fordelinger har requireWin=false og slipper altid
-      // igennem (hvis hvert delskridt var lovligt).
-      if (requireWin && !sim.teamHasWon(player.teamIndex)) continue;
-      final String key = steps
-          .map((MoveStep s) =>
-              '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')
-          .join('|');
-      if (seen.add(key)) {
-        out.add(Move(card: card, steps: steps));
       }
     }
-    return out;
+  }
+
+  void _recordSplit(
+      List<MoveStep> path, PlayingCard card, Map<String, Move> results) {
+    // Dedup på (brik → slutposition)-sæt, uafhængigt af rækkefølge.
+    final List<String> parts = path
+        .map((MoveStep s) =>
+            '${s.pieceId}->${_posKey(s.to)}${s.burnsMover ? '!' : ''}')
+        .toList()
+      ..sort();
+    final String key = parts.join('|');
+    if (results.containsKey(key)) return;
+    results[key] = Move(
+      card: card,
+      steps: path.map((MoveStep s) => MoveStep(
+            pieceId: s.pieceId,
+            from: s.from,
+            to: s.to,
+            capturedPieceId: s.capturedPieceId,
+            burnsMover: s.burnsMover,
+          )).toList(),
+    );
   }
 
   String _posKey(PiecePosition p) {
@@ -525,22 +549,5 @@ class Rules {
       winningTeamIndex: src.winningTeamIndex,
       cardRules: src.cardRules,
     );
-  }
-
-  /// Alle kompositioner af [total] over [parts] ikke-negative heltal.
-  List<List<int>> _compositions(int total, int parts) {
-    final List<List<int>> out = <List<int>>[];
-    void recurse(List<int> acc, int remaining, int slots) {
-      if (slots == 1) {
-        out.add(<int>[...acc, remaining]);
-        return;
-      }
-      for (int v = 0; v <= remaining; v++) {
-        recurse(<int>[...acc, v], remaining - v, slots - 1);
-      }
-    }
-
-    recurse(<int>[], total, parts);
-    return out;
   }
 }
