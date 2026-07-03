@@ -200,18 +200,10 @@ class GameEngine extends ChangeNotifier {
         '${_moveDebug(move)}');
   }
 
-  /// Smid ét kort uden effekt. Kun tilladt når spilleren FAKTISK ikke kan
-  /// spille noget kort (§13) — ellers ville man kunne springe et tvunget træk
-  /// over. Håndhæver også fase og tur.
-  void discardCard(int playerIndex, PlayingCard card) {
-    if (state.phase != GamePhase.play) return;
-    if (playerIndex != state.currentPlayerIndex) return;
-    if (canPlay(playerIndex)) return;
-    final Player player = state.players[playerIndex];
-    if (!player.hand.remove(card)) return;
-    state.discard.add(card);
-    _afterMove(playerIndex);
-  }
+  // Bemærk: der findes bevidst INGEN "smid ét kort"-metode. Reglerne (§13)
+  // kender kun "smid HELE hånden og sid over når intet kort kan spilles" —
+  // det er passHand(). En enkelt-kort-discard ville lade en spiller springe
+  // et tvunget træk over, så den er fjernet.
 
   void _afterMove(int playerIndex) {
     // Tjek vinder

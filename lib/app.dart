@@ -158,11 +158,6 @@ class GameController extends StateNotifier<GameState> {
     _bump();
   }
 
-  void discard(int playerIndex, PlayingCard card) {
-    _engine?.discardCard(playerIndex, card);
-    _bump();
-  }
-
   bool canPlay(int playerIndex) => _engine?.canPlay(playerIndex) ?? false;
 
   void passHand(int playerIndex) {

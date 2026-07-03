@@ -91,6 +91,7 @@ void main() {
   test('56 kort pr. kortgiver-cyklus; blandes om når starter skifter', () {
     final state = makeState();
     final engine = GameEngine(state: state, rng: Random(11));
+    final ai = HeuristicAi(rng: Random(11));
 
     engine.startNewHand();
     final List<int> deckAfterDeal = <int>[];
@@ -125,7 +126,7 @@ void main() {
           engine.submitExchangeCard(i, state.players[i].hand.first);
         }
       } else if (state.phase == GamePhase.play) {
-        engine.passHand(state.currentPlayerIndex);
+        _advancePlay(engine, state, ai);
       }
       maybeRecord();
     }
@@ -166,6 +167,7 @@ void main() {
     final state = makeState();
     state.deck.addAll(_freshDeck());
     final engine = GameEngine(state: state, rng: Random(5));
+    final ai = HeuristicAi(rng: Random(5));
 
     engine.startNewHand();
     final List<int> starters = <int>[];
@@ -184,8 +186,9 @@ void main() {
           engine.submitExchangeCard(i, state.players[i].hand.first);
         }
       } else if (state.phase == GamePhase.play) {
-        // Alle passer på skift → runden slutter, og motoren starter næste.
-        engine.passHand(state.currentPlayerIndex);
+        // Spil lovligt (eller pas hvis intet kan spilles) → runden slutter,
+        // og motoren starter næste.
+        _advancePlay(engine, state, ai);
       }
       maybeRecord();
     }
@@ -196,21 +199,43 @@ void main() {
     expect(starters[3], 1);
   });
 
-  test('discardCard fjerner kort og avancerer spiller', () {
+  test('passHand afvises når spilleren FAKTISK kan spille (§13)', () {
+    // Erstatter den gamle discardCard-test: en spiller med et lovligt træk må
+    // ikke kunne sidde over / smide hånden.
     final state = makeState();
     state.deck.addAll(_freshDeck());
     final engine = GameEngine(state: state, rng: Random(2));
     engine.startNewHand();
-    // Hop direkte forbi exchange — bare for at få play-fase
     for (int i = 0; i < 4; i++) {
       engine.submitExchangeCard(i, state.players[i].hand.first);
     }
-    final beforeHand = state.players[state.currentPlayerIndex].hand.length;
-    final beforePlayer = state.currentPlayerIndex;
-    engine.discardCard(beforePlayer, state.players[beforePlayer].hand.first);
-    expect(state.players[beforePlayer].hand.length, beforeHand - 1);
-    expect(state.currentPlayerIndex, isNot(beforePlayer));
+    // Find en spiller der KAN spille; passHand skal være en no-op for dem.
+    final int idx = state.currentPlayerIndex;
+    if (engine.canPlay(idx)) {
+      final int before = state.players[idx].hand.length;
+      engine.passHand(idx);
+      expect(state.players[idx].hand.length, before,
+          reason: 'passHand må ikke tømme hånden når man kan spille');
+      expect(state.currentPlayerIndex, idx,
+          reason: 'turen må ikke avancere');
+    }
   });
+}
+
+/// Fører ét play-fase-træk fremad på lovlig vis: spil et lovligt AI-træk hvis
+/// spilleren kan, ellers smid hånden (passHand). Bruges til at drive hænder
+/// til ende i cyklus-/rotations-tests uden at bryde §13-reglen om at man kun
+/// må sidde over når intet kort kan spilles.
+void _advancePlay(GameEngine engine, GameState state, HeuristicAi ai) {
+  final int idx = state.currentPlayerIndex;
+  if (engine.canPlay(idx)) {
+    final move = ai.chooseMove(state, idx);
+    if (move != null) {
+      engine.applyMove(idx, move);
+      return;
+    }
+  }
+  engine.passHand(idx);
 }
 
 List<PlayingCard> _freshDeck() {
