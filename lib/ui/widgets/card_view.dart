@@ -45,7 +45,12 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
   }
   final CardRuleConfig c = rules.forRank(card.rank!);
   final bool hasForward = c.forwardSteps.isNotEmpty;
+  final bool hasBackward = c.backwardSteps != null;
   final String forwardText = c.forwardSteps.join(' / ');
+  final bool sameFwdBack = hasForward &&
+      hasBackward &&
+      c.forwardSteps.length == 1 &&
+      c.forwardSteps.first == c.backwardSteps;
 
   // 7'er / split.
   if (c.splitTotal != null) {
@@ -59,38 +64,45 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
     );
   }
 
-  // Ud af start (Es/Konge): grøn accent + hjerte-chip.
+  // Kort med bevægelse (frem og/eller tilbage). Teksten følger den AKTUELLE
+  // konfiguration — ikke hardkodet.
+  if (hasForward || hasBackward) {
+    // Beregn stort tal + retningstekst ud fra hvad kortet faktisk kan.
+    final String bigNumber =
+        hasForward ? forwardText : '${c.backwardSteps}';
+    String? unit;
+    String? sub;
+    if (sameFwdBack) {
+      // Fx 4: samme antal frem eller tilbage.
+      sub = 'frem eller tilbage';
+    } else if (hasForward && hasBackward) {
+      // Forskellige tal frem/tilbage.
+      unit = 'frem';
+      sub = 'eller ${c.backwardSteps} tilbage';
+    } else if (hasForward) {
+      unit = 'frem';
+    } else {
+      unit = 'tilbage';
+    }
+    return CardFace(
+      // Ud af start → grøn accent + hjerte-chip; ellers grå "Flyt".
+      eyebrow: 'Flyt',
+      accent: c.exitStart ? _cStart : _cMove,
+      bigNumber: bigNumber,
+      unit: unit,
+      sub: sub,
+      startChip: c.exitStart,
+      extraChip: c.swap ? 'Byt to brikker' : null,
+    );
+  }
+
+  // Rent ud-af-start-kort (ingen bevægelse) → stort hjerte.
   if (c.exitStart) {
     return CardFace(
-      eyebrow: 'Flyt',
+      eyebrow: 'Start',
       accent: _cStart,
-      bigNumber: hasForward ? forwardText : null,
-      icon: hasForward ? null : '♥',
-      unit: hasForward ? 'frem' : null,
-      sub: hasForward ? null : 'ud af start',
-      startChip: true,
-      extraChip: c.swap ? 'Byt to brikker' : null,
-    );
-  }
-
-  // 4'er (frem eller tilbage).
-  if (c.backwardSteps != null) {
-    return CardFace(
-      eyebrow: 'Flyt',
-      accent: _cMove,
-      bigNumber: hasForward ? forwardText : '${c.backwardSteps}',
-      sub: 'frem eller tilbage',
-      extraChip: c.swap ? 'Byt to brikker' : null,
-    );
-  }
-
-  // Almindelig fremad.
-  if (hasForward) {
-    return CardFace(
-      eyebrow: 'Flyt',
-      accent: _cMove,
-      bigNumber: forwardText,
-      unit: 'frem',
+      icon: '♥',
+      sub: 'Ud af start',
       extraChip: c.swap ? 'Byt to brikker' : null,
     );
   }
@@ -257,52 +269,58 @@ class CardView extends StatelessWidget {
 
   Widget _center(CardFace f) {
     final bool dual = f.bigNumber != null && f.bigNumber!.contains('/');
+    // FittedBox(scaleDown) sikrer at tal + tekst ALTID skaleres ned til den
+    // plads Expanded giver — så en hjerte-/byt-chip nedenunder aldrig
+    // overlappes, uanset korthøjde.
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          if (f.icon != null)
-            Text(f.icon!,
-                style: TextStyle(
-                    fontSize: width * 0.5,
-                    color: f.accent,
-                    height: 1.0)),
-          if (f.bigNumber != null)
-            Text(
-              f.bigNumber!,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: dual ? width * 0.34 : width * 0.52,
-                fontWeight: FontWeight.w800,
-                height: 0.95,
-                letterSpacing: -0.5,
-                color: const Color(0xFF1F2933),
-              ),
-            ),
-          if (f.unit != null)
-            Text(
-              f.unit!,
-              style: TextStyle(
-                fontSize: (width * 0.17).clamp(9.0, 18.0),
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF1F2933),
-              ),
-            ),
-          if (f.sub != null)
-            Padding(
-              padding: EdgeInsets.only(top: width * 0.03),
-              child: Text(
-                f.sub!,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            if (f.icon != null)
+              Text(f.icon!,
+                  style: TextStyle(
+                      fontSize: width * 0.5,
+                      color: f.accent,
+                      height: 1.0)),
+            if (f.bigNumber != null)
+              Text(
+                f.bigNumber!,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: (width * 0.14).clamp(8.0, 15.0),
-                  height: 1.2,
-                  color: const Color(0xFF5B6670),
+                  fontSize: dual ? width * 0.34 : width * 0.52,
+                  fontWeight: FontWeight.w800,
+                  height: 0.95,
+                  letterSpacing: -0.5,
+                  color: const Color(0xFF1F2933),
                 ),
               ),
-            ),
-        ],
+            if (f.unit != null)
+              Text(
+                f.unit!,
+                style: TextStyle(
+                  fontSize: (width * 0.17).clamp(9.0, 18.0),
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1F2933),
+                ),
+              ),
+            if (f.sub != null)
+              Padding(
+                padding: EdgeInsets.only(top: width * 0.03),
+                child: Text(
+                  f.sub!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: (width * 0.14).clamp(8.0, 15.0),
+                    height: 1.2,
+                    color: const Color(0xFF5B6670),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
