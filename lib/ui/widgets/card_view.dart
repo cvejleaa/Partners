@@ -265,7 +265,7 @@ class CardView extends StatelessWidget {
                     ),
                   ),
                   Expanded(child: _center(f)),
-                  if (f.startChip) _chip('♥ Ud af start', _cStart),
+                  if (f.startChip) _startChip(),
                   if (f.extraChip != null) ...<Widget>[
                     if (f.startChip) SizedBox(height: width * 0.04),
                     _chip(f.extraChip!, _cSpecial),
@@ -357,6 +357,37 @@ class CardView extends StatelessWidget {
       f.bigNumber!,
       textAlign: TextAlign.center,
       style: style.copyWith(color: solid),
+    );
+  }
+
+  /// "♥ Ud af start"-chip på grøn bund — hjertet er ALTID rødt, teksten hvid.
+  Widget _startChip() {
+    final double fs = (width * 0.125).clamp(7.0, 13.0);
+    return Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: width * 0.09, vertical: width * 0.03),
+      decoration: BoxDecoration(
+        color: _cStart,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text.rich(
+        TextSpan(
+          children: <InlineSpan>[
+            TextSpan(
+                text: '♥',
+                style: TextStyle(
+                    // Altid rødt hjerte. En lysere rød så det popper klart på
+                    // den grønne chip (mørk rød ville drukne).
+                    color: const Color(0xFFFF5A5A),
+                    fontSize: fs)),
+            TextSpan(
+                text: ' Ud af start',
+                style: TextStyle(color: Colors.white, fontSize: fs)),
+          ],
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 
