@@ -17,6 +17,7 @@ class PlayerPanel extends StatelessWidget {
     this.satOut = false,
     this.lastCard,
     this.compact = false,
+    this.colorOverride,
   });
 
   final Player player;
@@ -29,8 +30,13 @@ class PlayerPanel extends StatelessWidget {
   final PlayingCard? lastCard;
   final bool compact;
 
+  /// Lokal vis-farve der overstyrer [player.color] (farve-rotation). null =
+  /// brug spillerens rigtige farve.
+  final Color? colorOverride;
+
   @override
   Widget build(BuildContext context) {
+    final Color dotColor = colorOverride ?? player.color;
     final double dotSize = compact ? 14 : 16;
     final double nameSize = compact ? 13 : 14;
     final double countSize = compact ? 12 : 13;
@@ -51,7 +57,7 @@ class PlayerPanel extends StatelessWidget {
               width: dotSize,
               height: dotSize,
               decoration: BoxDecoration(
-                color: player.color,
+                color: dotColor,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.black26),
               ),
@@ -126,16 +132,16 @@ class PlayerPanel extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(compact ? 7 : 8),
       decoration: BoxDecoration(
-        color: player.color.withValues(alpha: isCurrent ? 0.55 : 0.28),
+        color: dotColor.withValues(alpha: isCurrent ? 0.55 : 0.28),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: player.color,
+          color: dotColor,
           width: isCurrent ? 2.5 : 1.2,
         ),
         boxShadow: isCurrent
             ? <BoxShadow>[
                 BoxShadow(
-                    color: player.color.withValues(alpha: 0.6), blurRadius: 8),
+                    color: dotColor.withValues(alpha: 0.6), blurRadius: 8),
               ]
             : null,
       ),

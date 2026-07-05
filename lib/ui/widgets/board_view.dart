@@ -24,6 +24,7 @@ class BoardView extends StatelessWidget {
     this.highlightedPieceIds = const <String>{},
     this.animation,
     this.onPieceTap,
+    this.colorOffset = 0,
   });
 
   final GameState state;
@@ -31,6 +32,11 @@ class BoardView extends StatelessWidget {
   final Set<String> highlightedPieceIds;
   final BoardAnimation? animation;
   final ValueChanged<String>? onPieceTap;
+
+  /// Lokal farve-rotation (0..3). Plads `s` vises i farven fra plads
+  /// `(s + colorOffset) % antalSpillere` — rent visuelt, ændrer intet i
+  /// spillets data. Bruges så en spiller kan vælge sin egen ønske-farve.
+  final int colorOffset;
 
   double get _rotation => pi - viewerIndex * (pi / 2);
 
@@ -48,6 +54,7 @@ class BoardView extends StatelessWidget {
               rotation: _rotation,
               highlighted: highlightedPieceIds,
               animation: animation,
+              colorOffset: colorOffset,
             ),
           ),
         );
@@ -130,12 +137,20 @@ class _BoardPainter extends CustomPainter {
     required this.rotation,
     required this.highlighted,
     this.animation,
+    this.colorOffset = 0,
   });
 
   final GameState state;
   final double rotation;
   final Set<String> highlighted;
   final BoardAnimation? animation;
+  final int colorOffset;
+
+  /// Vis-farve for en plads efter lokal rotation.
+  Color _seatColor(int seat) {
+    final int n = state.players.length;
+    return state.players[(seat + colorOffset) % n].color;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -176,14 +191,15 @@ class _BoardPainter extends CustomPainter {
 
     // Hjemstræk.
     for (final Player pl in state.players) {
+      final Color plColor = _seatColor(pl.index);
       for (int slot = 0; slot < state.geometry.homeStretchLength; slot++) {
         final Offset p = _homePoint(center, tr, pl.index, slot, trackLen, rotation);
-        canvas.drawCircle(p, cr, Paint()..color = pl.color.withValues(alpha: 0.22));
+        canvas.drawCircle(p, cr, Paint()..color = plColor.withValues(alpha: 0.22));
         canvas.drawCircle(
           p,
           cr,
           Paint()
-            ..color = pl.color
+            ..color = plColor
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.5,
         );
@@ -198,17 +214,18 @@ class _BoardPainter extends CustomPainter {
       final bool isExit = i % quarter == 0;
       final int owner = i ~/ quarter;
       if (isExit) {
+        final Color ownerColor = _seatColor(owner);
         canvas.drawCircle(
-            p, cr, Paint()..color = state.players[owner].color.withValues(alpha: 0.30));
+            p, cr, Paint()..color = ownerColor.withValues(alpha: 0.30));
         canvas.drawCircle(
           p,
           cr,
           Paint()
-            ..color = state.players[owner].color
+            ..color = ownerColor
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2.0,
         );
-        _text(canvas, 'UD', p, cr * 0.85, state.players[owner].color);
+        _text(canvas, 'UD', p, cr * 0.85, ownerColor);
       } else {
         canvas.drawCircle(p, cr, Paint()..color = Colors.white);
         canvas.drawCircle(
@@ -227,14 +244,15 @@ class _BoardPainter extends CustomPainter {
 
     // Start-bås.
     for (final Player pl in state.players) {
+      final Color plColor = _seatColor(pl.index);
       for (int slot = 0; slot < 4; slot++) {
         final Offset p = _startPoint(center, tr, pl.index, slot, trackLen, rotation);
-        canvas.drawCircle(p, cr, Paint()..color = pl.color.withValues(alpha: 0.12));
+        canvas.drawCircle(p, cr, Paint()..color = plColor.withValues(alpha: 0.12));
         canvas.drawCircle(
           p,
           cr,
           Paint()
-            ..color = pl.color
+            ..color = plColor
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1,
         );
@@ -253,7 +271,8 @@ class _BoardPainter extends CustomPainter {
     _text(canvas, 'Partners', center, dim * 0.035, const Color(0xFFEAD9B5));
 
     // Brikker (animeret hvis aktiv).
-    for (final _PiecePoint pp in computePiecePoints(state, dim, rotation)) {
+    for (final _PiecePoint pp
+        in computePiecePoints(state, dim, rotation, colorOffset: colorOffset)) {
       Offset c = pp.center;
       final BoardAnimation? anim = animation;
       if (anim != null && anim.moves.containsKey(pp.pieceId)) {
@@ -319,15 +338,18 @@ class _BoardPainter extends CustomPainter {
   }
 
   static List<_PiecePoint> computePiecePoints(
-      GameState state, double dim, double rotation) {
+      GameState state, double dim, double rotation,
+      {int colorOffset = 0}) {
     final Offset center = Offset(dim / 2, dim / 2);
     final double tr = dim * 0.405;
     final int trackLen = state.geometry.trackLength;
     final double spread = dim * 0.014;
+    final int n = state.players.length;
 
     final List<_PiecePoint> bases = <_PiecePoint>[];
     final List<String> keys = <String>[];
     for (final Player pl in state.players) {
+      final Color plColor = state.players[(pl.index + colorOffset) % n].color;
       for (final Piece piece in pl.pieces) {
         final PiecePosition pos = piece.position;
         final String key;
@@ -341,7 +363,7 @@ class _BoardPainter extends CustomPainter {
           continue;
         }
         bases.add(_PiecePoint(
-            piece.id, _posPoint(pos, center, tr, trackLen, rotation), pl.color));
+            piece.id, _posPoint(pos, center, tr, trackLen, rotation), plColor));
         keys.add(key);
       }
     }
@@ -373,5 +395,6 @@ class _BoardPainter extends CustomPainter {
       old.state != state ||
       old.highlighted != highlighted ||
       old.animation != animation ||
-      old.rotation != rotation;
+      old.rotation != rotation ||
+      old.colorOffset != colorOffset;
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/rules.dart';
 import '../../models/board.dart';
@@ -7,6 +8,7 @@ import '../../models/move.dart';
 import '../../models/piece.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
+import '../../state/settings_controller.dart';
 import 'board_view.dart';
 import 'card_view.dart';
 import 'player_panel.dart';
@@ -18,7 +20,7 @@ import 'player_panel.dart';
 /// Skærmene udenom (single-player vs. online) leverer state'en og håndterer
 /// hvordan ændringer persisteres (lokal engine vs. Firestore-transaktion) via
 /// [onApplyMove] / [onPass] / [onSubmitExchange]-callbacks.
-class GamePlayView extends StatefulWidget {
+class GamePlayView extends ConsumerStatefulWidget {
   const GamePlayView({
     required this.state,
     required this.mySeat,
@@ -57,16 +59,20 @@ class GamePlayView extends StatefulWidget {
   final String? bottomStatusOverride;
 
   @override
-  State<GamePlayView> createState() => _GamePlayViewState();
+  ConsumerState<GamePlayView> createState() => _GamePlayViewState();
 }
 
-class _GamePlayViewState extends State<GamePlayView>
+class _GamePlayViewState extends ConsumerState<GamePlayView>
     with SingleTickerProviderStateMixin {
   PlayingCard? _selectedCard;
   List<Move> _candidateMoves = <Move>[];
   PlayingCard? _humanExchangeChoice;
   String? _swapFirstPiece;
   final List<MoveStep> _splitPath = <MoveStep>[];
+
+  // Lokal farve-rotation: sat i build() ud fra brugerens ønske-farve, brugt af
+  // board + paneler. Rent visuelt for denne enhed.
+  int _colorOffset = 0;
 
   // Brik-animation: når widget.state skifter, sammenligner vi brik-positioner
   // pr. piece-id og animerer alle ændrede brikker fra deres FORRIGE til deres
@@ -164,6 +170,33 @@ class _GamePlayViewState extends State<GamePlayView>
     return null;
   }
 
+  /// Farve-rotation der får MIN plads til at vise brugerens ønske-farve.
+  /// displayColor(seat) = players[(seat + offset) % n].color.
+  int _offsetFor(GameState state, int mySeat, int? preferred) {
+    if (preferred == null) return 0;
+    final int n = state.players.length;
+    for (int k = 0; k < n; k++) {
+      if (state.players[(mySeat + k) % n].color.toARGB32() == preferred) {
+        return k;
+      }
+    }
+    return 0;
+  }
+
+  void _cycleColor(GameState state, int mySeat) {
+    final int n = state.players.length;
+    final int next = (_colorOffset + 1) % n;
+    final int nextColor =
+        state.players[(mySeat + next) % n].color.toARGB32();
+    ref.read(settingsProvider.notifier).setPreferredColorValue(nextColor);
+  }
+
+  /// Vis-farve for en plads efter lokal rotation.
+  Color _displayColor(GameState state, int seat) {
+    final int n = state.players.length;
+    return state.players[(seat + _colorOffset) % n].color;
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = _state;
@@ -171,6 +204,9 @@ class _GamePlayViewState extends State<GamePlayView>
       // Tilskuer: vis kun brættet uden interaktioner.
       return _SpectatorView(state: state, lastPlayedCards: widget.lastPlayedCards);
     }
+    final int? preferred = ref.watch(
+        settingsProvider.select((s) => s.preferredColorValue));
+    _colorOffset = _offsetFor(state, _mySeat, preferred);
     final Player me = state.players[_mySeat];
     final Player partner = state.players[me.partnerIndex];
     final Player left = state.players[(me.index + 1) % state.players.length];
@@ -207,12 +243,28 @@ class _GamePlayViewState extends State<GamePlayView>
         children: <Widget>[panelCell(partner), panelCell(right)],
       ),
     );
+    // Min plads får en lille "skift farve"-knap ved siden af panelet, så jeg
+    // lokalt kan rotere brættets farver til min ønske-farve.
+    final Widget myCell = Flexible(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 190),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            Flexible(child: _panel(state, me, compact: true)),
+            const SizedBox(width: 4),
+            _colorCycleButton(state, me.index),
+          ],
+        ),
+      ),
+    );
     final Widget bottomRow = Padding(
       padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.end,
-        children: <Widget>[panelCell(left), panelCell(me)],
+        children: <Widget>[panelCell(left), myCell],
       ),
     );
     return Column(
@@ -232,6 +284,34 @@ class _GamePlayViewState extends State<GamePlayView>
     );
   }
 
+  /// Lille tap-knap der roterer brættets farver ét skridt, så min egen brik
+  /// skifter farve — rent lokalt for denne enhed. Cirklen viser min nuværende
+  /// vis-farve; swap-ikonet antyder at man kan skifte.
+  Widget _colorCycleButton(GameState state, int mySeat) {
+    final Color mine = _displayColor(state, mySeat);
+    return Tooltip(
+      message: 'Skift din farve (kun for dig)',
+      child: InkResponse(
+        onTap: () => _cycleColor(state, mySeat),
+        radius: 24,
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: mine,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35), blurRadius: 3),
+            ],
+          ),
+          child: const Icon(Icons.palette, size: 18, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
   Widget _boardArea(GameState state, Player me) {
     return Center(
       child: Padding(
@@ -241,6 +321,7 @@ class _GamePlayViewState extends State<GamePlayView>
           child: BoardView(
             state: state,
             viewerIndex: me.index,
+            colorOffset: _colorOffset,
             highlightedPieceIds: _animating ? const <String>{} : _highlightSet(state),
             animation:
                 _animating ? BoardAnimation(_animMoves, _anim.value) : null,
@@ -266,6 +347,7 @@ class _GamePlayViewState extends State<GamePlayView>
         satOut: state.phase == GamePhase.play && p.hand.isEmpty,
         lastCard: widget.lastPlayedCards[p.index],
         compact: compact,
+        colorOverride: _displayColor(state, p.index),
       );
 
   Widget _buildHumanArea(GameState state, Player me,
