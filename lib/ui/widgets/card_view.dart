@@ -22,6 +22,8 @@ class CardFace {
     this.sub,
     this.startChip = false,
     this.extraChip,
+    this.canForward = false,
+    this.canBackward = false,
   });
 
   final String eyebrow;
@@ -32,6 +34,11 @@ class CardFace {
   final String? sub; // fx "frem eller tilbage"
   final bool startChip; // vis "♥ Ud af start"
   final String? extraChip; // fx "Byt to brikker"
+
+  /// Retning — styrer tallets farve: kun tilbage = rødt, kun frem = sort,
+  /// begge = delt sort/rødt.
+  final bool canForward;
+  final bool canBackward;
 }
 
 CardFace describeCardFace(PlayingCard card, CardRules rules) {
@@ -93,6 +100,8 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
       sub: sub,
       startChip: c.exitStart,
       extraChip: c.swap ? 'Byt to brikker' : null,
+      canForward: hasForward,
+      canBackward: hasBackward,
     );
   }
 
@@ -204,19 +213,22 @@ class CardView extends StatelessWidget {
             Container(height: band, color: f.accent),
             Expanded(
               child: Center(
-                child: Text(
-                  glyph,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize:
-                        glyph.contains('/') ? width * 0.34 : width * 0.52,
-                    fontWeight: FontWeight.w800,
-                    height: 0.95,
-                    color: f.icon != null && f.bigNumber == null
-                        ? f.accent
-                        : const Color(0xFF1F2933),
-                  ),
-                ),
+                child: f.bigNumber != null
+                    ? _bigNumber(f, f.bigNumber!.contains('/'))
+                    : Text(
+                        glyph,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: glyph.contains('/')
+                              ? width * 0.34
+                              : width * 0.52,
+                          fontWeight: FontWeight.w800,
+                          height: 0.95,
+                          color: f.icon != null
+                              ? f.accent
+                              : const Color(0xFF1F2933),
+                        ),
+                      ),
               ),
             ),
           ],
@@ -285,18 +297,7 @@ class CardView extends StatelessWidget {
                       fontSize: width * 0.5,
                       color: f.accent,
                       height: 1.0)),
-            if (f.bigNumber != null)
-              Text(
-                f.bigNumber!,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: dual ? width * 0.34 : width * 0.52,
-                  fontWeight: FontWeight.w800,
-                  height: 0.95,
-                  letterSpacing: -0.5,
-                  color: const Color(0xFF1F2933),
-                ),
-              ),
+            if (f.bigNumber != null) _bigNumber(f, dual),
             if (f.unit != null)
               Text(
                 f.unit!,
@@ -322,6 +323,40 @@ class CardView extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// Det store tal, farvet efter retning:
+  ///  - kun frem → sort
+  ///  - kun tilbage → rødt
+  ///  - begge → delt sort (venstre) / rødt (højre)
+  Widget _bigNumber(CardFace f, bool dual) {
+    const Color black = Color(0xFF1F2933);
+    const Color red = Color(0xFFC62828);
+    final TextStyle style = TextStyle(
+      fontSize: dual ? width * 0.34 : width * 0.52,
+      fontWeight: FontWeight.w800,
+      height: 0.95,
+      letterSpacing: -0.5,
+      color: Colors.white, // males af ShaderMask nedenfor
+    );
+    final Text text = Text(f.bigNumber!, textAlign: TextAlign.center, style: style);
+
+    if (f.canBackward && f.canForward) {
+      // Delt sort/rødt: hård overgang ved midten.
+      return ShaderMask(
+        shaderCallback: (Rect r) => const LinearGradient(
+          colors: <Color>[black, black, red, red],
+          stops: <double>[0.0, 0.5, 0.5, 1.0],
+        ).createShader(r),
+        child: text,
+      );
+    }
+    final Color solid = f.canBackward ? red : black;
+    return Text(
+      f.bigNumber!,
+      textAlign: TextAlign.center,
+      style: style.copyWith(color: solid),
     );
   }
 
