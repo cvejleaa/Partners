@@ -45,6 +45,14 @@ final onlineServiceProvider = Provider<OnlineService>((ref) => OnlineService());
 final authStateProvider = StreamProvider<User?>(
     (ref) => ref.read(onlineServiceProvider).authChanges());
 
+/// Den aktuelle brugers profil (navn + avatar). Genberegnes når login skifter,
+/// så et logout/skift ikke efterlader en gammel profil-strøm.
+final myProfileProvider =
+    StreamProvider<({String displayName, String? avatar})>((ref) {
+  ref.watch(authStateProvider);
+  return ref.read(onlineServiceProvider).myProfileStream();
+});
+
 /// Live-stream af ét online-spil.
 final gameStreamProvider = StreamProvider.family<
     DocumentSnapshot<Map<String, dynamic>>, String>(
@@ -166,12 +174,56 @@ class OnlineService {
     }, SetOptions(merge: true));
   }
 
+  /// Opdater brugerens visningsnavn og/eller avatar. Skriver til user-doc'et
+  /// (kun ejeren må, jf. Firestore-reglerne) og synkroniserer Auth-displayName
+  /// så navnet også slår igennem hvor vi læser fra Auth.
+  Future<void> updateProfile({String? displayName, String? avatar}) async {
+    final u = _auth.currentUser;
+    if (u == null) return;
+    final Map<String, dynamic> data = <String, dynamic>{
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    final String? name = displayName?.trim();
+    if (name != null && name.isNotEmpty) {
+      data['displayName'] = name;
+      data['displayNameLower'] = name.toLowerCase();
+      await u.updateDisplayName(name);
+    }
+    if (avatar != null) data['avatar'] = avatar;
+    await _users.doc(u.uid).set(data, SetOptions(merge: true));
+  }
+
+  /// Live-stream af den aktuelle brugers profil (navn + avatar).
+  Stream<({String displayName, String? avatar})> myProfileStream() {
+    final u = _auth.currentUser;
+    if (u == null) {
+      return Stream<({String displayName, String? avatar})>.value(
+          (displayName: 'Spiller', avatar: null));
+    }
+    return _users.doc(u.uid).snapshots().map((s) {
+      final d = s.data() ?? const <String, dynamic>{};
+      final name = (d['displayName'] as String?) ??
+          (u.displayName ?? '').trim();
+      return (
+        displayName: name.isEmpty ? 'Spiller' : name,
+        avatar: d['avatar'] as String?,
+      );
+    });
+  }
+
   Future<String> myDisplayName() async {
     final u = _auth.currentUser;
     if (u == null) return 'Spiller';
     if ((u.displayName ?? '').isNotEmpty) return u.displayName!;
     final doc = await _users.doc(u.uid).get();
     return (doc.data()?['displayName'] as String?) ?? 'Spiller';
+  }
+
+  Future<String?> myAvatar() async {
+    final u = _auth.currentUser;
+    if (u == null) return null;
+    final doc = await _users.doc(u.uid).get();
+    return doc.data()?['avatar'] as String?;
   }
 
   /// Slå en oprettet spiller op via email. Returnerer {uid, displayName}.

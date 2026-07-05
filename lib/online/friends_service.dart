@@ -10,12 +10,14 @@ class FriendRef {
     required this.uid,
     required this.displayName,
     required this.email,
+    this.avatar,
     this.addedAt,
   });
 
   final String uid;
   final String displayName;
   final String email;
+  final String? avatar;
   final DateTime? addedAt;
 
   factory FriendRef.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -25,6 +27,7 @@ class FriendRef {
       uid: doc.id,
       displayName: (d['displayName'] as String?) ?? 'Spiller',
       email: (d['email'] as String?) ?? '',
+      avatar: d['avatar'] as String?,
       addedAt: ts is Timestamp ? ts.toDate() : null,
     );
   }
@@ -36,12 +39,14 @@ class UserRef {
     required this.uid,
     required this.displayName,
     required this.email,
+    this.avatar,
     this.photoURL,
   });
 
   final String uid;
   final String displayName;
   final String email;
+  final String? avatar;
   final String? photoURL;
 
   factory UserRef.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -52,6 +57,7 @@ class UserRef {
       email: (d['email'] as String?) ??
           (d['emailLower'] as String?) ??
           '',
+      avatar: d['avatar'] as String?,
       photoURL: d['photoURL'] as String?,
     );
   }
@@ -209,6 +215,7 @@ class FriendsService {
       'email': (p['email'] as String?) ??
           (p['emailLower'] as String?) ??
           '',
+      if (p['avatar'] != null) 'avatar': p['avatar'],
       'addedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

@@ -5,6 +5,7 @@ import '../../online/online_service.dart';
 import '../../stats/badges.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
+import '../../utils/avatars.dart';
 import '../widgets/badge_chip.dart';
 import 'friends_screen.dart';
 
@@ -19,6 +20,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _repo = StatsRepository();
   bool _recomputing = false;
   String? _error;
+
+  Future<void> _editProfile(BuildContext context, WidgetRef ref) async {
+    final svc = ref.read(onlineServiceProvider);
+    final current = await svc.myProfileStream().first;
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => _EditProfileSheet(
+        initialName: current.displayName,
+        initialAvatarId: current.avatar,
+        onSave: (name, avatarId) async {
+          await svc.updateProfile(displayName: name, avatar: avatarId);
+        },
+      ),
+    );
+  }
 
   Future<void> _recompute() async {
     setState(() {
@@ -52,8 +71,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Min profil'),
+          title: Builder(
+            builder: (context) {
+              final p = ref.watch(myProfileProvider).valueOrNull;
+              final name = p?.displayName ?? 'Min profil';
+              final emoji = avatarEmoji(p?.avatar);
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(emoji, style: const TextStyle(fontSize: 22)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                      child: Text(name, overflow: TextOverflow.ellipsis)),
+                ],
+              );
+            },
+          ),
           actions: <Widget>[
+            IconButton(
+              tooltip: 'Rediger navn & avatar',
+              icon: const Icon(Icons.edit),
+              onPressed: () => _editProfile(context, ref),
+            ),
             IconButton(
               tooltip: 'Mine venner',
               icon: const Icon(Icons.people),
@@ -85,6 +124,141 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _AllTimeTab(uid: user.uid, repo: _repo, error: _error),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bottom-sheet til at redigere navn + vælge avatar.
+class _EditProfileSheet extends StatefulWidget {
+  const _EditProfileSheet({
+    required this.initialName,
+    required this.initialAvatarId,
+    required this.onSave,
+  });
+  final String initialName;
+  final String? initialAvatarId;
+  final Future<void> Function(String name, String avatarId) onSave;
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  late final TextEditingController _nameCtrl;
+  late String _avatarId;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName);
+    _avatarId = avatarById(widget.initialAvatarId).id;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await widget.onSave(name, _avatarId);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Kunne ikke gemme: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 16 + bottomInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Text('Rediger profil',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _nameCtrl,
+            maxLength: 24,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Spillernavn',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 4),
+          const Text('Vælg avatar',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Flexible(
+            child: GridView.builder(
+              shrinkWrap: true,
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 6,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemCount: kAvatars.length,
+              itemBuilder: (ctx, i) {
+                final a = kAvatars[i];
+                final selected = a.id == _avatarId;
+                return InkWell(
+                  onTap: () => setState(() => _avatarId = a.id),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
+                          : Colors.black.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selected
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.black26,
+                        width: selected ? 2.5 : 1,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(a.emoji,
+                          style: const TextStyle(fontSize: 24)),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.check),
+              label: const Text('Gem'),
+            ),
+          ),
+        ],
       ),
     );
   }

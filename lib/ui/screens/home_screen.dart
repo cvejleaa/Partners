@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app.dart';
 import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
+import '../../utils/avatars.dart';
 import 'admin_screen.dart';
 import 'game_screen.dart';
 import 'online_screens.dart';
@@ -286,13 +287,13 @@ class _ResumeButton extends ConsumerWidget {
   }
 }
 
-class _LoginIndicator extends StatelessWidget {
+class _LoginIndicator extends ConsumerWidget {
   const _LoginIndicator({required this.user, required this.admin});
   final dynamic user;
   final bool admin;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (user == null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -312,9 +313,13 @@ class _LoginIndicator extends StatelessWidget {
         ),
       );
     }
-    final name = (user.displayName as String?) ??
+    final fallbackName = (user.displayName as String?) ??
         (user.email as String?) ??
         'Spiller';
+    final profile =
+        ref.watch(myProfileProvider).valueOrNull;
+    final name = profile?.displayName ?? fallbackName;
+    final emoji = avatarEmoji(profile?.avatar);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -325,7 +330,7 @@ class _LoginIndicator extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Icon(Icons.account_circle, color: Colors.white, size: 18),
+          Text(emoji, style: const TextStyle(fontSize: 18)),
           const SizedBox(width: 6),
           Text('Logget ind som $name',
               style: const TextStyle(color: Colors.white, fontSize: 14)),

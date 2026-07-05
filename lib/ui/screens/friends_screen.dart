@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../online/friends_service.dart';
+import '../../utils/avatars.dart';
 
 /// Skærm til at søge, tilføje og fjerne venner.
 ///
@@ -239,7 +240,11 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       color: Colors.white.withValues(alpha: 0.92),
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.person)),
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFFEDE3D3),
+          child: Text(avatarEmoji(u.avatar),
+              style: const TextStyle(fontSize: 20)),
+        ),
         title: Text(u.displayName),
         subtitle: Text(u.email.isEmpty ? '—' : u.email),
         trailing: FilledButton.icon(
@@ -260,7 +265,11 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       color: Colors.white.withValues(alpha: 0.92),
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.person)),
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFFEDE3D3),
+          child: Text(avatarEmoji(f.avatar),
+              style: const TextStyle(fontSize: 20)),
+        ),
         title: Text(f.displayName),
         subtitle: Text(f.email.isEmpty ? '—' : f.email),
         trailing: IconButton(
