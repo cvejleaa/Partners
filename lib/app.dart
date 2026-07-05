@@ -217,6 +217,12 @@ class GameController extends StateNotifier<GameState> {
     _clearSave();
   }
 
+  /// Slet et gemt (igangværende) lokalt AI-spil uden at starte det. Bruges fra
+  /// forsiden når brugeren vil kassere et hængende spil.
+  Future<void> discardSavedGame() async {
+    await _clearSave();
+  }
+
   // ---------------------------------------------------------------------------
   // Autosave / genoptag (kun lokale AI-spil)
   // ---------------------------------------------------------------------------

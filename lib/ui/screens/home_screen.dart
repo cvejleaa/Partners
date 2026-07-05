@@ -206,35 +206,81 @@ class _ResumeButton extends ConsumerWidget {
     if (saved == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: SizedBox(
-        width: double.infinity,
-        child: FilledButton.icon(
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            backgroundColor: const Color(0xFF2E7D32),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                backgroundColor: const Color(0xFF2E7D32),
+              ),
+              onPressed: () async {
+                final bool ok =
+                    ref.read(gameProvider.notifier).resumeFrom(saved);
+                if (!ok) {
+                  // Korrupt/forældet save — det er nu ryddet. Fjern knappen og
+                  // vis en kort besked i stedet for at navigere ind i et tomt
+                  // spil.
+                  ref.invalidate(savedGameProvider);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text(
+                            'Det gemte spil kunne ikke genoptages (for gammelt format).')));
+                  }
+                  return;
+                }
+                await Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(builder: (_) => const GameScreen()));
+                ref.invalidate(savedGameProvider);
+              },
+              icon: const Icon(Icons.play_circle),
+              label: Text('Fortsæt spil (hånd #${saved.handNumber})',
+                  style: const TextStyle(fontSize: 18)),
+            ),
           ),
-          onPressed: () async {
-            final bool ok =
-                ref.read(gameProvider.notifier).resumeFrom(saved);
-            if (!ok) {
-              // Korrupt/forældet save — det er nu ryddet. Fjern knappen og vis
-              // en kort besked i stedet for at navigere ind i et tomt spil.
-              ref.invalidate(savedGameProvider);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          const SizedBox(width: 8),
+          // Slet det gemte spil (med bekræftelse).
+          SizedBox(
+            height: 56,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red.shade300,
+                side: BorderSide(color: Colors.red.shade300),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+              onPressed: () async {
+                final bool? ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Slet gemt spil?'),
                     content: Text(
-                        'Det gemte spil kunne ikke genoptages (for gammelt format).')));
-              }
-              return;
-            }
-            await Navigator.of(context).push<void>(
-                MaterialPageRoute<void>(builder: (_) => const GameScreen()));
-            ref.invalidate(savedGameProvider);
-          },
-          icon: const Icon(Icons.play_circle),
-          label: Text('Fortsæt spil (hånd #${saved.handNumber})',
-              style: const TextStyle(fontSize: 18)),
-        ),
+                        'Det igangværende spil (hånd #${saved.handNumber}) '
+                        'slettes. Handlingen kan ikke fortrydes.'),
+                    actions: <Widget>[
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Annullér')),
+                      FilledButton(
+                          style: FilledButton.styleFrom(
+                              backgroundColor: Colors.red.shade700),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Slet')),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  await ref.read(gameProvider.notifier).discardSavedGame();
+                  ref.invalidate(savedGameProvider);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Gemt spil slettet.')));
+                  }
+                }
+              },
+              child: const Icon(Icons.delete_outline),
+            ),
+          ),
+        ],
       ),
     );
   }
