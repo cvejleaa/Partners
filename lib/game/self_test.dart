@@ -338,7 +338,7 @@ List<CheckResult> _ruleChecks() {
     out.add(CheckResult('Lande på dobbelt brænder egen brik', burns));
   }
 
-  // Andre spillere springer fremmed UD-felt over (14 → 1 direkte)
+  // Andre spillere springer et TOMT fremmed UD-felt over (14 → 1 direkte)
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
@@ -347,13 +347,7 @@ List<CheckResult> _ruleChecks() {
       const StartPosition(0, 2),
       const StartPosition(0, 3),
     ];
-    // Spiller 1's brik på sit eget UD-felt (index 15).
-    positions[1] = <PiecePosition>[
-      const TrackPosition(15),
-      const StartPosition(1, 1),
-      const StartPosition(1, 2),
-      const StartPosition(1, 3),
-    ];
+    // Spiller 1's UD-felt (index 15) er TOMT — springes over uden at tælle.
     final s = _stateWith(positions);
     final moves = rules.legalMoves(
         s, s.players[0], const PlayingCard(Rank.five, Suit.hearts));
@@ -368,7 +362,32 @@ List<CheckResult> _ruleChecks() {
     out.add(CheckResult('Andre springer fremmed UD-felt over', to19 && !onUd));
   }
 
-  // 4 baglæns wrap-around (60-ring)
+  // Besat fremmed UD-felt spærrer passage
+  {
+    final positions = _allStart();
+    positions[0] = <PiecePosition>[
+      const TrackPosition(13),
+      const StartPosition(0, 1),
+      const StartPosition(0, 2),
+      const StartPosition(0, 3),
+    ];
+    // Spiller 1's egen brik PÅ deres UD-felt (index 15) → mur for spiller 0.
+    positions[1] = <PiecePosition>[
+      const TrackPosition(15),
+      const StartPosition(1, 1),
+      const StartPosition(1, 2),
+      const StartPosition(1, 3),
+    ];
+    final s = _stateWith(positions, leftStartFor: <int>{1});
+    final moves = rules.legalMoves(
+        s, s.players[0], const PlayingCard(Rank.five, Suit.hearts));
+    final forward = moves.any((Move m) =>
+        m.steps.first.from is TrackPosition &&
+        (m.steps.first.from as TrackPosition).index == 13);
+    out.add(CheckResult('Besat fremmed UD-felt spærrer', !forward));
+  }
+
+  // 4 baglæns wrap-around (60-ring) — eget UD tæller ikke
   {
     final positions = _allStart();
     positions[0] = <PiecePosition>[
@@ -384,8 +403,8 @@ List<CheckResult> _ruleChecks() {
         .where((Move m) => m.steps.first.to is TrackPosition)
         .map((Move m) => (m.steps.first.to as TrackPosition).index)
         .toSet();
-    // 2 - 4 = -2 → 58 på 60-ringen.
-    out.add(CheckResult('4 baglæns wrap-around (→58)', targets.contains(58)));
+    // 2 → 1 → [eget UD (0) springes over uden at tælle] → 59 → 58 → 57.
+    out.add(CheckResult('4 baglæns wrap-around (→57)', targets.contains(57)));
   }
 
   // Hjemstræk-indgang
