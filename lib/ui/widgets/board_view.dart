@@ -208,7 +208,7 @@ class _BoardPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2.0,
         );
-        _text(canvas, 'UD', p, cr * 0.7, state.players[owner].color);
+        _text(canvas, 'UD', p, cr * 0.85, state.players[owner].color);
       } else {
         canvas.drawCircle(p, cr, Paint()..color = Colors.white);
         canvas.drawCircle(
@@ -219,7 +219,9 @@ class _BoardPainter extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 0.8,
         );
-        _text(canvas, '${i % quarter}', p, cr * 0.85, Colors.black54);
+        // Font ≈ 1.2 × celle-radius: tallet fylder cirklen ud uden at
+        // to-cifrede (10-14) rører kanten.
+        _text(canvas, '${i % quarter}', p, cr * 1.2, Colors.black87);
       }
     }
 
