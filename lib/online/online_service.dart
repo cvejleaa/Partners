@@ -70,6 +70,10 @@ class GameSummary {
 
 /// Hvor længe der maks. må gå uden handling/heartbeat fra en spiller, før en
 /// AI overtager dennes tur. Holdes konfigurerbar ét sted.
+///
+/// Gælder KUN spil med mindst én AI-plads. I et spil med 4 rigtige spillere
+/// er der ingen timeout overhovedet — der ventes på spilleren uanset hvor
+/// længe de er væk (håndhævet både i _maybeHostAct og i aiTakeoverMove).
 const Duration kAiTakeoverTimeout = Duration(seconds: 35);
 
 /// Hvor ofte en aktiv klient opdaterer sit "presence"-stempel.
@@ -526,6 +530,11 @@ class OnlineService {
       if (state.winningTeamIndex != null) return;
       if (state.phase != GamePhase.play) return;
       if (state.currentPlayerIndex != seat) return;
+      // AI-OVERTAGELSE af et menneske er kun tilladt i spil med mindst én
+      // AI-plads. I et spil med 4 rigtige spillere er der ingen timeout —
+      // værnet ligger her i transaktionen (ud over UI-tjekket), så selv en
+      // gammel/stale klient ikke kan udløse en overtagelse.
+      if (asTakeover && state.players.every((p) => p.isHuman)) return;
 
       final wasOver = state.winningTeamIndex != null;
       final engine = GameEngine(state: state);

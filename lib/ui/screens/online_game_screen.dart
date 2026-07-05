@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/board.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
+import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../online/online_service.dart';
 import '../../online/serialize.dart';
@@ -340,8 +341,13 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
       final idx = state.currentPlayerIndex;
       final bool isAiSeat = !state.currentPlayer.isHuman;
 
+      // AI-overtagelse gælder KUN spil der har mindst én AI-plads. I et spil
+      // med 4 rigtige spillere er der ingen timeout — vi venter på spilleren
+      // uanset hvor længe de er væk (afbrudt netværk, telefonopkald, kaffe).
+      final bool allHuman = state.players.every((Player p) => p.isHuman);
+
       bool takeover = false;
-      if (!isAiSeat) {
+      if (!isAiSeat && !allHuman) {
         final since = OnlineService.timeSinceLastAction(d);
         final away = OnlineService.seatLooksAway(d, idx);
         if (away && since != null && since > kAiTakeoverTimeout) {
