@@ -141,6 +141,34 @@ void main() {
       expect(targets, containsAll(<int>[24, 16]));
     });
 
+    test('egen brik på eget UD-felt blokerer IKKE egen baglæns (-4)', () {
+      // Spiller 0 har en brik PÅ sit eget UD-felt (idx 0) og en anden på
+      // idx 2. -4 fra idx 2 krydser eget UD: det springes over uden at tælle
+      // og spærrer IKKE (blokaden gælder kun modstandere/makker, ikke ejeren
+      // selv). 2 → 1 → [spring eget besatte UD] → 59 → 58 → 57.
+      final positions = <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(0), // egen brik på eget UD
+          const TrackPosition(2),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(i, s)],
+      ];
+      final state = makeState(piecePositions: positions);
+      final moves = rules.legalMoves(state, state.players[0],
+          const PlayingCard(Rank.four, Suit.clubs));
+      final backTargets = moves
+          .where((Move m) =>
+              m.steps.first.from == const TrackPosition(2) &&
+              m.steps.first.to is TrackPosition)
+          .map((Move m) => (m.steps.first.to as TrackPosition).index)
+          .toSet();
+      expect(backTargets, contains(57),
+          reason: 'eget besat UD må ikke spærre egen -4');
+    });
+
     test('4 baglæns wrap-around springer eget UD over (60-ring)', () {
       // Brik på idx 2 (spiller 0's felt 2). 4 baglæns: idx 0 er spiller 0's
       // EGET UD-felt og er ikke et tællende felt (§6), så det springes over

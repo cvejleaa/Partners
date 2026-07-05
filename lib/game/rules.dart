@@ -208,8 +208,9 @@ class Rules {
     if (pos is! TrackPosition) return null;
     // Baglæns: ALLE UD-felter (egne som fremmede) springes over uden at tælle —
     // UD er ikke et tællende ringfelt (regler.md §6), så man kan hverken lande
-    // på eller "bruge" et UD-felt ved baglæns-bevægelse. Et besat UD spærrer
-    // passage begge veje.
+    // på eller "bruge" et UD-felt ved baglæns-bevægelse. Et besat FREMMED UD
+    // spærrer passage; ens EGET UD spærrer aldrig en selv — ens egen brik på
+    // eget UD-felt er en mur for modstandere, ikke for ejeren.
     final int len = geometry.trackLength;
     int idx = pos.index;
     int remaining = steps;
@@ -217,7 +218,10 @@ class Rules {
       final int next = (idx - 1 + len) % len;
       final int? udOwner = _entryOwner(next);
       if (udOwner != null) {
-        if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
+        if (udOwner != piece.ownerIndex &&
+            state.piecesAt(TrackPosition(next)).isNotEmpty) {
+          return null;
+        }
         idx = next;
         continue;
       }

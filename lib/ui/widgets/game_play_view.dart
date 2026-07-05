@@ -176,41 +176,12 @@ class _GamePlayViewState extends State<GamePlayView>
     final Player left = state.players[(me.index + 1) % state.players.length];
     final Player right = state.players[(me.index + 3) % state.players.length];
 
-    return LayoutBuilder(
-      builder: (context, c) {
-        final bool isMobile = c.maxWidth < 720;
-        return isMobile
-            ? _buildMobile(state, me, partner, left, right)
-            : _buildWide(state, me, partner, left, right);
-      },
-    );
-  }
-
-  Widget _buildWide(GameState state, Player me, Player partner, Player left,
-      Player right) {
-    return Column(
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.all(6),
-          child: Center(child: _panel(state, partner)),
-        ),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: _panel(state, left)),
-              Expanded(child: _boardArea(state, me)),
-              Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: _panel(state, right)),
-            ],
-          ),
-        ),
-        _buildHumanArea(state, me, showPanel: true, fill: false),
-      ],
-    );
+    // Samme layout på ALLE skærmstørrelser (telefon-opsætningen): paneler i
+    // rækker over/under brættet. Det gamle "wide"-layout satte panelerne ved
+    // SIDEN af brættet, hvilket på iPad gjorde selve brættet unødigt lille —
+    // højden (ikke bredden) er den knappe ressource, og side-paneler stjæler
+    // netop bredde som brættet kunne have brugt via sin AspectRatio.
+    return _buildMobile(state, me, partner, left, right);
   }
 
   Widget _buildMobile(GameState state, Player me, Player partner, Player left,
@@ -941,7 +912,7 @@ class _GamePlayViewState extends State<GamePlayView>
       final int fwd = (to.index - from.index + len) % len;
       final int back = (from.index - to.index + len) % len;
       if (fwd == 0) return 'bliv stå';
-      return fwd <= back ? '$fwd frem' : '$back tilbage';
+      return fwd <= back ? '$fwd frem' : '-$back (baglæns)';
     }
     return 'træk';
   }

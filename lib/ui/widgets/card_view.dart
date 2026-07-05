@@ -22,7 +22,9 @@ List<CardCapability> describeCard(PlayingCard card, CardRules rules) {
     out.add(CardCapability('→', c.forwardSteps.join('/')));
   }
   if (c.backwardSteps != null) {
-    out.add(CardCapability('←', '${c.backwardSteps}'));
+    // Eksplicit minus-tegn: "-4" i stedet for kun en pil — flere spillere
+    // overså at pilen betød baglæns.
+    out.add(CardCapability('←', '-${c.backwardSteps}'));
   }
   if (c.splitTotal != null) {
     out.add(CardCapability('✂', '${c.splitTotal}'));

@@ -63,6 +63,7 @@ class PlayerPanel extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: nameSize,
+                  color: Colors.white,
                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
                 ),
               ),
@@ -97,10 +98,10 @@ class PlayerPanel extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(Icons.style, size: 12, color: Colors.grey.shade700),
+            const Icon(Icons.style, size: 12, color: Colors.white70),
             const SizedBox(width: 2),
             Text(satOut ? 'over' : '$cardCount',
-                style: TextStyle(fontSize: countSize)),
+                style: TextStyle(fontSize: countSize, color: Colors.white)),
             const SizedBox(width: 6),
             _StartBadge(count: starterCount),
           ],

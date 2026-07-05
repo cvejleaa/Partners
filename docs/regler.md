@@ -87,9 +87,11 @@ Hver kort-konfiguration har disse knapper i admin: `exitStart` (ud af start),
   retninger).
 - **Står der ≥1 brik på et fremmed UD-felt SPÆRRER feltet fuldstændigt** —
   ingen anden spiller kan passere det, hverken fremad eller bagud. Trækket
-  er ulovligt. Denne regel gælder uanset om brikken på UD-feltet tilhører
-  ejeren selv eller (i teorien) nogen andre — i praksis kan kun ejeren stå
-  der, og deres brik gør feltet til en mur for alle andre.
+  er ulovligt. I praksis kan kun ejeren stå der, og deres brik gør feltet
+  til en mur for alle andre.
+- **Blokaden gælder KUN modstandere/makker — aldrig ejeren selv.** Ejerens
+  egen brik på eget UD-felt spærrer ikke ejerens andre brikker: de springer
+  feltet over som normalt, både fremad og baglæns (fx -4 forbi eget besat UD).
 - En anden spiller kan **aldrig lande på** et fremmed UD-felt — det er som
   om feltet ikke findes som landingsplads for dem.
 - **Ejeren** bruger sit UD-felt **kun som exit-plads**: en brik der kommer ud
