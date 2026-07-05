@@ -3,35 +3,109 @@ import 'package:flutter/material.dart';
 import '../../game/card_rules.dart';
 import '../../models/playing_card.dart';
 
-/// En linje på kortet der viser én funktion (fx "→ 7").
-class CardCapability {
-  const CardCapability(this.glyph, this.text);
-  final String glyph;
-  final String text;
+/// Kort-typernes accentfarver (bånd i toppen).
+const Color _cMove = Color(0xFF334155); // flyt
+const Color _cStart = Color(0xFF2F7D34); // ud af start
+const Color _cSpecial = Color(0xFFB7791F); // 7 / byt
+const Color _cExit = Color(0xFFC62828); // UD-kort
+
+/// Hvad et kort viser — udledt fra de aktuelle regler (ikke hardkodet, så
+/// admin-ændringer slår igennem). Ingen pile, ingen kulør, ingen A/K/Q/J: kun
+/// hvad kortet gør i spillet. "Ud af start" markeres med et hjerte.
+class CardFace {
+  const CardFace({
+    required this.eyebrow,
+    required this.accent,
+    this.bigNumber,
+    this.icon,
+    this.unit,
+    this.sub,
+    this.startChip = false,
+    this.extraChip,
+  });
+
+  final String eyebrow;
+  final Color accent;
+  final String? bigNumber; // fx "4", "1 / 11", "13", "7"
+  final String? icon; // emoji når der ikke er et tal (UD, byt)
+  final String? unit; // fx "frem"
+  final String? sub; // fx "frem eller tilbage"
+  final bool startChip; // vis "♥ Ud af start"
+  final String? extraChip; // fx "Byt to brikker"
 }
 
-/// Udled hvad et kort kan, ud fra de aktuelle regler.
-List<CardCapability> describeCard(PlayingCard card, CardRules rules) {
+CardFace describeCardFace(PlayingCard card, CardRules rules) {
   if (card.isExit) {
-    return const <CardCapability>[CardCapability('♥', 'Ud')];
+    return const CardFace(
+      eyebrow: 'Ud-kort',
+      accent: _cExit,
+      icon: '♥',
+      sub: 'Sæt en brik ud',
+    );
   }
   final CardRuleConfig c = rules.forRank(card.rank!);
-  final out = <CardCapability>[];
-  if (c.exitStart) out.add(const CardCapability('⤴', 'ud'));
-  if (c.forwardSteps.isNotEmpty) {
-    out.add(CardCapability('→', c.forwardSteps.join('/')));
-  }
-  if (c.backwardSteps != null) {
-    // Eksplicit minus-tegn: "-4" i stedet for kun en pil — flere spillere
-    // overså at pilen betød baglæns.
-    out.add(CardCapability('←', '-${c.backwardSteps}'));
-  }
+  final bool hasForward = c.forwardSteps.isNotEmpty;
+  final String forwardText = c.forwardSteps.join(' / ');
+
+  // 7'er / split.
   if (c.splitTotal != null) {
-    out.add(CardCapability('✂', '${c.splitTotal}'));
+    return CardFace(
+      eyebrow: 'Special',
+      accent: _cSpecial,
+      bigNumber: '${c.splitTotal}',
+      sub: 'del over dine brikker',
+      startChip: c.exitStart,
+      extraChip: c.swap ? 'Byt to brikker' : null,
+    );
   }
-  if (c.swap) out.add(const CardCapability('⇄', 'byt'));
-  if (out.isEmpty) out.add(const CardCapability('–', ''));
-  return out;
+
+  // Ud af start (Es/Konge): grøn accent + hjerte-chip.
+  if (c.exitStart) {
+    return CardFace(
+      eyebrow: 'Flyt',
+      accent: _cStart,
+      bigNumber: hasForward ? forwardText : null,
+      icon: hasForward ? null : '♥',
+      unit: hasForward ? 'frem' : null,
+      sub: hasForward ? null : 'ud af start',
+      startChip: true,
+      extraChip: c.swap ? 'Byt to brikker' : null,
+    );
+  }
+
+  // 4'er (frem eller tilbage).
+  if (c.backwardSteps != null) {
+    return CardFace(
+      eyebrow: 'Flyt',
+      accent: _cMove,
+      bigNumber: hasForward ? forwardText : '${c.backwardSteps}',
+      sub: 'frem eller tilbage',
+      extraChip: c.swap ? 'Byt to brikker' : null,
+    );
+  }
+
+  // Almindelig fremad.
+  if (hasForward) {
+    return CardFace(
+      eyebrow: 'Flyt',
+      accent: _cMove,
+      bigNumber: forwardText,
+      unit: 'frem',
+      extraChip: c.swap ? 'Byt to brikker' : null,
+    );
+  }
+
+  // Ren byt (fx en Knægt sat til byt).
+  if (c.swap) {
+    return const CardFace(
+      eyebrow: 'Special',
+      accent: _cSpecial,
+      icon: '🔁',
+      sub: 'byt to brikker',
+    );
+  }
+
+  return const CardFace(eyebrow: '—', accent: _cMove, sub: 'ingen effekt');
 }
 
 class CardView extends StatelessWidget {
@@ -55,10 +129,6 @@ class CardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double height = width * 1.5;
-    final bool exit = card.isExit;
-    final Color accent =
-        exit ? const Color(0xFFE53935) : (card.isRed ? const Color(0xFFD32F2F) : const Color(0xFF263238));
-
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -67,17 +137,6 @@ class CardView extends StatelessWidget {
         height: height,
         margin: EdgeInsets.only(bottom: selected ? 14 : 0),
         decoration: BoxDecoration(
-          gradient: faceUp
-              ? const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[Colors.white, Color(0xFFF3F4F6)],
-                )
-              : const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: <Color>[Color(0xFF1B5E8A), Color(0xFF0D3B5C)],
-                ),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected ? Colors.amber.shade700 : Colors.black26,
@@ -91,61 +150,179 @@ class CardView extends StatelessWidget {
             ),
           ],
         ),
-        child: faceUp ? _buildFace(accent, exit) : null,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(9),
+          child: faceUp ? _buildFace() : _buildBack(),
+        ),
       ),
     );
   }
 
-  Widget _buildFace(Color accent, bool exit) {
-    final caps = describeCard(card, rules);
-    return Padding(
-      padding: const EdgeInsets.all(5),
+  Widget _buildBack() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFF1B5E8A), Color(0xFF0D3B5C)],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFace() {
+    final CardFace f = describeCardFace(card, rules);
+    final double band = (width * 0.06).clamp(3.0, 7.0);
+    // Meget små kort (fx "sidst spillede"-thumbnail i spiller-panelet, ~32 px)
+    // har ikke plads til eyebrow/chips — vis en kompakt udgave: bånd +
+    // det store tal eller ikon i typens farve.
+    if (width < 46) {
+      final String glyph = f.bigNumber ?? f.icon ?? '·';
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[Colors.white, Color(0xFFEEF0F2)],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Container(height: band, color: f.accent),
+            Expanded(
+              child: Center(
+                child: Text(
+                  glyph,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize:
+                        glyph.contains('/') ? width * 0.34 : width * 0.52,
+                    fontWeight: FontWeight.w800,
+                    height: 0.95,
+                    color: f.icon != null && f.bigNumber == null
+                        ? f.accent
+                        : const Color(0xFF1F2933),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Colors.white, Color(0xFFEEF0F2)],
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(
-            card.rankLabel,
-            style: TextStyle(
-              fontSize: width * 0.22,
-              fontWeight: FontWeight.bold,
-              color: accent,
-            ),
-          ),
+          // Farvet type-bånd i toppen.
+          Container(height: band, color: f.accent),
           Expanded(
-            child: Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                  horizontal: width * 0.09, vertical: width * 0.07),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
-                  if (exit)
-                    Text('♥',
-                        style: TextStyle(
-                            fontSize: width * 0.5, color: accent))
-                  else
-                    for (final CardCapability cap in caps)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 1),
-                        child: Text(
-                          '${cap.glyph} ${cap.text}'.trim(),
-                          style: TextStyle(
-                            fontSize: width * 0.22,
-                            color: accent,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+                  Text(
+                    f.eyebrow.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: (width * 0.135).clamp(7.0, 13.0),
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.6,
+                      color: f.accent,
+                    ),
+                  ),
+                  Expanded(child: _center(f)),
+                  if (f.startChip) _chip('♥ Ud af start', _cStart),
+                  if (f.extraChip != null) ...<Widget>[
+                    if (f.startChip) SizedBox(height: width * 0.04),
+                    _chip(f.extraChip!, _cSpecial),
+                  ],
                 ],
               ),
             ),
           ),
-          Text(
-            exit ? 'UD' : caps.map((c) => c.glyph).join(' '),
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: width * 0.18,
-              color: accent.withValues(alpha: 0.7),
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _center(CardFace f) {
+    final bool dual = f.bigNumber != null && f.bigNumber!.contains('/');
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          if (f.icon != null)
+            Text(f.icon!,
+                style: TextStyle(
+                    fontSize: width * 0.5,
+                    color: f.accent,
+                    height: 1.0)),
+          if (f.bigNumber != null)
+            Text(
+              f.bigNumber!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: dual ? width * 0.34 : width * 0.52,
+                fontWeight: FontWeight.w800,
+                height: 0.95,
+                letterSpacing: -0.5,
+                color: const Color(0xFF1F2933),
+              ),
+            ),
+          if (f.unit != null)
+            Text(
+              f.unit!,
+              style: TextStyle(
+                fontSize: (width * 0.17).clamp(9.0, 18.0),
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1F2933),
+              ),
+            ),
+          if (f.sub != null)
+            Padding(
+              padding: EdgeInsets.only(top: width * 0.03),
+              child: Text(
+                f.sub!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: (width * 0.14).clamp(8.0, 15.0),
+                  height: 1.2,
+                  color: const Color(0xFF5B6670),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String text, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: width * 0.09, vertical: width * 0.03),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: (width * 0.125).clamp(7.0, 13.0),
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
       ),
     );
   }
