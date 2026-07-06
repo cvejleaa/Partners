@@ -1,8 +1,13 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
 import '../../game/ai/heuristic_ai.dart';
+import '../../game/progress.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
 import '../../models/player.dart';
@@ -10,6 +15,7 @@ import '../../models/playing_card.dart';
 import '../../services/feedback_service.dart';
 import '../widgets/card_counter_panel.dart';
 import '../widgets/game_play_view.dart';
+import 'setup_screen.dart';
 import 'win_screen.dart';
 
 /// Single-player skærm: bruger den fælles [GamePlayView] og driver AI-pladser
@@ -26,6 +32,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   final HeuristicAi _ai = HeuristicAi();
   bool _showCardCounter = false;
   final Map<int, PlayingCard> _lastPlayedCard = <int, PlayingCard>{};
+  final GlobalKey _boardKey = GlobalKey();
+  bool _winNavigated = false;
+
+  Future<Uint8List?> _captureBoard() async {
+    try {
+      final obj = _boardKey.currentContext?.findRenderObject();
+      if (obj is! RenderRepaintBoundary) return null;
+      final ui.Image image = await obj.toImage(pixelRatio: 2.0);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void initState() {
@@ -112,18 +132,49 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(gameProvider);
-    if (state.phase == GamePhase.gameOver && state.winningTeamIndex != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+    final Player human = state.players.firstWhere((Player p) => p.isHuman,
+        orElse: () => state.players.first);
+    if (state.phase == GamePhase.gameOver &&
+        state.winningTeamIndex != null &&
+        !_winNavigated) {
+      _winNavigated = true;
+      final int winner = state.winningTeamIndex!;
+      final int? margin = winMarginFields(state);
+      final bool viewerWon = human.index % 2 == winner;
+      final winnerNames = <String>[];
+      final winnerColors = <Color>[];
+      for (int i = 0; i < state.players.length; i++) {
+        if (i % 2 == winner) {
+          winnerNames.add(state.players[i].name);
+          winnerColors.add(state.players[i].color);
+        }
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final shot = await _captureBoard();
+        if (!mounted) return;
         Navigator.of(context).pushReplacement<void, void>(
           MaterialPageRoute<void>(
-            builder: (_) =>
-                WinScreen(winningTeamIndex: state.winningTeamIndex!),
+            builder: (_) => WinScreen(
+              winningTeamIndex: winner,
+              boardImage: shot,
+              marginFields: margin,
+              viewerWon: viewerWon,
+              winnerNames: winnerNames,
+              winnerColors: winnerColors,
+              rematchLabel: 'Spil igen',
+              onRematch: (ctx) async {
+                ref.read(gameProvider.notifier).reset();
+                Navigator.of(ctx).pushReplacement<void, void>(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const SetupScreen()),
+                );
+              },
+            ),
           ),
         );
       });
     }
-    final Player human = state.players.firstWhere((Player p) => p.isHuman,
-        orElse: () => state.players.first);
     return Scaffold(
       backgroundColor: const Color(0xFF0E2A1A),
       appBar: AppBar(
@@ -142,24 +193,27 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         ],
       ),
       body: SafeArea(
-        child: Stack(
-          children: <Widget>[
-            GamePlayView(
-              state: state,
-              mySeat: human.index,
-              onApplyMove: _applyMove,
-              onPass: _passHand,
-              onSubmitExchange: _submitExchange,
-              lastPlayedCards: _lastPlayedCard,
-            ),
-            if (_showCardCounter)
-              Positioned(
-                top: 4,
-                right: 4,
-                width: 220,
-                child: CardCounterPanel(state: state),
+        child: RepaintBoundary(
+          key: _boardKey,
+          child: Stack(
+            children: <Widget>[
+              GamePlayView(
+                state: state,
+                mySeat: human.index,
+                onApplyMove: _applyMove,
+                onPass: _passHand,
+                onSubmitExchange: _submitExchange,
+                lastPlayedCards: _lastPlayedCard,
               ),
-          ],
+              if (_showCardCounter)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  width: 220,
+                  child: CardCounterPanel(state: state),
+                ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../game/progress.dart';
 import '../../models/board.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
@@ -13,6 +17,7 @@ import '../../online/serialize.dart';
 import '../../stats/stats_repository.dart';
 import '../widgets/card_view.dart';
 import '../widgets/game_play_view.dart';
+import 'online_screens.dart';
 import 'win_screen.dart';
 
 /// Online-skærm. Selve UI-laget (tap, valg, split-7, byt, paneler, board)
@@ -32,6 +37,21 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   String _lastProcessed = '';
   bool _busy = false;
   bool _aiActionPending = false;
+
+  /// Nøgle til at fange et billede af brættet ved spil-slut.
+  final GlobalKey _boardKey = GlobalKey();
+
+  Future<Uint8List?> _captureBoard() async {
+    try {
+      final obj = _boardKey.currentContext?.findRenderObject();
+      if (obj is! RenderRepaintBoundary) return null;
+      final ui.Image image = await obj.toImage(pixelRatio: 2.0);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
 
   int _replayIndex = 0;
   bool _replayActive = false;
@@ -109,45 +129,77 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
 
           if (!_replayActive) _maybeHostAct(state, isHost, d);
 
+          final names = (d['names'] as List).map((e) => e as String).toList();
+
           if (state.winningTeamIndex != null && !_statsRecomputed) {
             _statsRecomputed = true;
-            // Hver klient skriver KUN sin egen stats-doc (Firestore-reglerne
-            // tillader ikke at skrive andres). Alle 4 menneskelige klienter
-            // observerer slut-tilstanden og opdaterer hver deres egen.
             final myUid = _svc.uid;
             if (myUid != null && mySeat >= 0) {
               // ignore: discarded_futures
               StatsRepository().recomputeAndSaveOwn(myUid);
             }
-            // Naviger til WinScreen — én gang. addPostFrameCallback sikrer
-            // at vi ikke kalder Navigator midt i en build.
-            WidgetsBinding.instance.addPostFrameCallback((_) {
+            final int winner = state.winningTeamIndex!;
+            final int? margin = winMarginFields(state);
+            final bool? viewerWon =
+                mySeat < 0 ? null : (mySeat % 2 == winner);
+            // Vinderholdets navne + farver (pladser winner, winner+2).
+            final winnerNames = <String>[];
+            final winnerColors = <Color>[];
+            for (int i = 0; i < state.players.length; i++) {
+              if (i % 2 == winner) {
+                winnerNames.add(i < names.length ? names[i] : 'Spiller');
+                winnerColors.add(state.players[i].color);
+              }
+            }
+            final String oldCode = widget.code;
+            // Naviger til WinScreen — fang først et billede af slutstillingen.
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              if (!mounted) return;
+              final shot = await _captureBoard();
               if (!mounted) return;
               Navigator.of(context).pushReplacement<void, void>(
                 MaterialPageRoute<void>(
                   builder: (_) => WinScreen(
-                      winningTeamIndex: state.winningTeamIndex!,
-                      fromOnline: true),
+                    winningTeamIndex: winner,
+                    fromOnline: true,
+                    boardImage: shot,
+                    marginFields: margin,
+                    viewerWon: viewerWon,
+                    winnerNames: winnerNames,
+                    winnerColors: winnerColors,
+                    rematchLabel: 'Revanche',
+                    onRematch: (ctx) async {
+                      final code = await _svc.createRematch(oldCode);
+                      if (!ctx.mounted) return;
+                      Navigator.of(ctx).pushReplacement<void, void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => LobbyScreen(code: code),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               );
             });
           }
 
-          final names = (d['names'] as List).map((e) => e as String).toList();
           return SafeArea(
-            child: Stack(
-              children: <Widget>[
-                GamePlayView(
-                  state: state,
-                  mySeat: mySeat,
-                  onApplyMove: (seat, move) => _applyMove(seat, move),
-                  onPass: (seat) => _passHand(state, seat),
-                  onSubmitExchange: (seat, card) =>
-                      _submitExchange(seat, card),
-                  lastPlayedCards: lastByPlayer,
-                ),
-                if (_replayActive) _replayOverlay(log, names, state),
-              ],
+            child: RepaintBoundary(
+              key: _boardKey,
+              child: Stack(
+                children: <Widget>[
+                  GamePlayView(
+                    state: state,
+                    mySeat: mySeat,
+                    onApplyMove: (seat, move) => _applyMove(seat, move),
+                    onPass: (seat) => _passHand(state, seat),
+                    onSubmitExchange: (seat, card) =>
+                        _submitExchange(seat, card),
+                    lastPlayedCards: lastByPlayer,
+                  ),
+                  if (_replayActive) _replayOverlay(log, names, state),
+                ],
+              ),
             ),
           );
         },

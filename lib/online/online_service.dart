@@ -306,6 +306,46 @@ class OnlineService {
     });
   }
 
+  /// Revanche: opret et NYT spil med de samme menneskelige deltagere som
+  /// [oldCode]. Kalderen (mig) bliver vært; de andre menneskelige spillere
+  /// inviteres (så de får det i deres "Mine spil" + evt. push). Returnerer
+  /// den nye spil-kode. AI-pladser genskabes ikke — de fyldes fra lobbyen.
+  Future<String> createRematch(String oldCode) async {
+    final me = _auth.currentUser;
+    if (me == null) throw 'Du er ikke logget ind';
+    final old = await _games.doc(oldCode).get();
+    final d = old.data() ?? const <String, dynamic>{};
+    final oldUids = (d['uids'] as List?)?.cast<dynamic>() ?? const <dynamic>[];
+    final oldColors =
+        (d['colors'] as List?)?.map((e) => (e as num).toInt()).toList() ??
+            <int>[0xFFE53935, 0xFF1E88E5, 0xFF43A047, 0xFFFDD835];
+    final rulesMap = d['cardRules'];
+    final rules = rulesMap is Map
+        ? CardRules.fromJson(Map<String, dynamic>.from(rulesMap))
+        : CardRules.defaults();
+
+    // Min farve fra det gamle spil (fallback: første i paletten).
+    int myColor = oldColors.isNotEmpty ? oldColors.first : 0xFFE53935;
+    for (int i = 0; i < oldUids.length; i++) {
+      if (oldUids[i] == me.uid && i < oldColors.length) myColor = oldColors[i];
+    }
+
+    final code = await createGame(colorValue: myColor, rules: rules);
+
+    // Invitér de øvrige menneskelige spillere fra det gamle spil.
+    final friends = FriendsService();
+    for (final u in oldUids) {
+      if (u == null || u == me.uid) continue;
+      try {
+        await invite(code, u as String);
+        await friends.sendGameInvite(u, code);
+      } catch (_) {
+        // Én fejlet invitation må ikke forhindre revanchen.
+      }
+    }
+    return code;
+  }
+
   Future<void> joinGame({
     required String code,
     required int seat,
