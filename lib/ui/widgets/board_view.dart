@@ -88,6 +88,15 @@ class _PiecePoint {
   final Color color;
 }
 
+/// Kontur-farve til felt-markører på den cremefarvede bane. Lyse farver (fx
+/// gul) mørknes MERE, så de får synlig definition; mørke farver mørknes let.
+Color _boardOutline(Color c) {
+  // Perceptuel lyshed (0..1). Gul ligger højt → mørknes kraftigt.
+  final double lum = c.computeLuminance();
+  final double amount = 0.30 + lum * 0.45; // 0.30 (mørk) .. 0.75 (meget lys)
+  return Color.lerp(c, const Color(0xFF000000), amount) ?? c;
+}
+
 // ---------------------------------------------------------------------------
 // Geometri (statiske, rotation-bevidste hjælpere)
 // ---------------------------------------------------------------------------
@@ -189,19 +198,21 @@ class _BoardPainter extends CustomPainter {
         ..strokeWidth = dim * 0.012,
     );
 
-    // Hjemstræk.
+    // Hjemstræk. Kontur tegnes i en MØRKERE variant af spillerfarven, så lyse
+    // farver (især gul) ikke drukner i den cremefarvede bane.
     for (final Player pl in state.players) {
       final Color plColor = _seatColor(pl.index);
+      final Color outline = _boardOutline(plColor);
       for (int slot = 0; slot < state.geometry.homeStretchLength; slot++) {
         final Offset p = _homePoint(center, tr, pl.index, slot, trackLen, rotation);
-        canvas.drawCircle(p, cr, Paint()..color = plColor.withValues(alpha: 0.22));
+        canvas.drawCircle(p, cr, Paint()..color = plColor.withValues(alpha: 0.38));
         canvas.drawCircle(
           p,
           cr,
           Paint()
-            ..color = plColor
+            ..color = outline
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
+            ..strokeWidth = 2.0,
         );
       }
     }
@@ -215,17 +226,18 @@ class _BoardPainter extends CustomPainter {
       final int owner = i ~/ quarter;
       if (isExit) {
         final Color ownerColor = _seatColor(owner);
+        final Color outline = _boardOutline(ownerColor);
         canvas.drawCircle(
-            p, cr, Paint()..color = ownerColor.withValues(alpha: 0.30));
+            p, cr, Paint()..color = ownerColor.withValues(alpha: 0.42));
         canvas.drawCircle(
           p,
           cr,
           Paint()
-            ..color = ownerColor
+            ..color = outline
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.0,
+            ..strokeWidth = 2.4,
         );
-        _text(canvas, 'UD', p, cr * 0.85, ownerColor);
+        _text(canvas, 'UD', p, cr * 0.85, outline);
       } else {
         canvas.drawCircle(p, cr, Paint()..color = Colors.white);
         canvas.drawCircle(
@@ -245,16 +257,17 @@ class _BoardPainter extends CustomPainter {
     // Start-bås.
     for (final Player pl in state.players) {
       final Color plColor = _seatColor(pl.index);
+      final Color outline = _boardOutline(plColor);
       for (int slot = 0; slot < 4; slot++) {
         final Offset p = _startPoint(center, tr, pl.index, slot, trackLen, rotation);
-        canvas.drawCircle(p, cr, Paint()..color = plColor.withValues(alpha: 0.12));
+        canvas.drawCircle(p, cr, Paint()..color = plColor.withValues(alpha: 0.22));
         canvas.drawCircle(
           p,
           cr,
           Paint()
-            ..color = plColor
+            ..color = outline
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 1,
+            ..strokeWidth = 1.4,
         );
       }
     }

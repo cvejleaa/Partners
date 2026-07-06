@@ -374,6 +374,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   Widget _buildExchangeArea(GameState state, Player me, {required bool fill}) {
     final bool done = state.exchangeBuffer.containsKey(me.index);
     final double maxCardW = fill ? 72 : 54;
+    // Det kort jeg har afgivet ligger i bufferen til byttet udføres — markér
+    // det i hånden indtil jeg får makkerens kort (fasen skifter til play).
+    final PlayingCard? givenCard = done ? state.exchangeBuffer[me.index] : null;
     final Widget cards = _handCards(
       state: state,
       hand: me.hand,
@@ -381,6 +384,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       maxCardW: maxCardW,
       selected: _humanExchangeChoice,
       onTapCard: done ? null : (c) => setState(() => _humanExchangeChoice = c),
+      givenCard: givenCard,
     );
     final Widget cardRow = Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -410,8 +414,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         children: <Widget>[
           Text(
             done
-                ? 'Venter på de andre…'
+                ? _waitingText(state, me)
                 : 'Vælg ét kort til din makker (skjult bytte)',
+            textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
           const SizedBox(height: 8),
@@ -419,6 +424,16 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         ],
       ),
     );
+  }
+
+  /// Hvem mangler at afgive et kort i byttet? Vis navnene tydeligt.
+  String _waitingText(GameState state, Player me) {
+    final missing = <String>[
+      for (final Player p in state.players)
+        if (!state.exchangeBuffer.containsKey(p.index)) p.name,
+    ];
+    if (missing.isEmpty) return 'Bytter kort…';
+    return 'Venter på: ${missing.join(', ')}';
   }
 
   Widget _buildPlayArea(GameState state, Player me, {required bool fill}) {
@@ -531,6 +546,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     required PlayingCard? selected,
     required void Function(PlayingCard)? onTapCard,
     bool dim = false,
+    PlayingCard? givenCard, // markeres som "afgivet" (kortbytte)
   }) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints c) {
@@ -539,24 +555,53 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         double cardW = (c.maxWidth - gap * n) / n;
         if (cardW > maxCardW) cardW = maxCardW;
         if (cardW < 32) cardW = 32;
+        bool givenUsed = false;
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             for (final PlayingCard card in hand)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: gap / 2),
-                child: Opacity(
-                  opacity: dim ? 0.55 : 1.0,
-                  child: CardView(
-                    card: card,
-                    rules: state.cardRules,
-                    faceUp: faceUp,
-                    width: cardW,
-                    selected: selected == card,
-                    onTap: onTapCard == null ? null : () => onTapCard(card),
+              Builder(builder: (_) {
+                // Markér KUN det første match, så to ens kort ikke begge
+                // markeres når man kun har afgivet det ene.
+                final bool isGiven =
+                    !givenUsed && givenCard != null && card == givenCard;
+                if (isGiven) givenUsed = true;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: gap / 2),
+                  child: Opacity(
+                    opacity: isGiven ? 0.5 : (dim ? 0.55 : 1.0),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        CardView(
+                          card: card,
+                          rules: state.cardRules,
+                          faceUp: faceUp,
+                          width: cardW,
+                          selected: selected == card,
+                          onTap:
+                              onTapCard == null ? null : () => onTapCard(card),
+                        ),
+                        if (isGiven)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B5E3C),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text('AFGIVET',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5)),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
           ],
         );
       },

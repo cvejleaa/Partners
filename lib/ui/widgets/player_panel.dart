@@ -50,8 +50,9 @@ class PlayerPanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             if (isStarter) ...<Widget>[
-              const Icon(Icons.flag, size: 14, color: Color(0xFF8B5E3C)),
-              const SizedBox(width: 2),
+              // Klar, lys stjerne på mørk baggrund — det brune flag forsvandt.
+              const Icon(Icons.star, size: 15, color: Color(0xFFFFD54F)),
+              const SizedBox(width: 3),
             ],
             Container(
               width: dotSize,
@@ -83,19 +84,19 @@ class PlayerPanel extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: const Color(0xFF8B5E3C),
+                color: const Color(0xFFFFB300), // klar amber
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Icon(Icons.flag, size: 14, color: Colors.white),
+                  Icon(Icons.star, size: 14, color: Color(0xFF3A2A00)),
                   SizedBox(width: 3),
                   Text('STARTER',
                       style: TextStyle(
-                          color: Colors.white,
+                          color: Color(0xFF3A2A00),
                           fontSize: 11,
-                          fontWeight: FontWeight.bold)),
+                          fontWeight: FontWeight.w900)),
                 ],
               ),
             ),
@@ -129,21 +130,29 @@ class PlayerPanel extends StatelessWidget {
           )
         : infoCol;
 
+    // Starteren får en klar amber ramme + glød, så det er tydeligt hvem der
+    // starter runden — også når det ikke er deres tur.
+    const Color starterGold = Color(0xFFFFC107);
+    final Color borderColor = isStarter ? starterGold : dotColor;
+    final double borderWidth = isStarter ? 3 : (isCurrent ? 2.5 : 1.2);
+    final List<BoxShadow>? glow = isStarter
+        ? <BoxShadow>[
+            BoxShadow(
+                color: starterGold.withValues(alpha: 0.55), blurRadius: 9),
+          ]
+        : (isCurrent
+            ? <BoxShadow>[
+                BoxShadow(
+                    color: dotColor.withValues(alpha: 0.6), blurRadius: 8),
+              ]
+            : null);
     return Container(
       padding: EdgeInsets.all(compact ? 7 : 8),
       decoration: BoxDecoration(
         color: dotColor.withValues(alpha: isCurrent ? 0.55 : 0.28),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: dotColor,
-          width: isCurrent ? 2.5 : 1.2,
-        ),
-        boxShadow: isCurrent
-            ? <BoxShadow>[
-                BoxShadow(
-                    color: dotColor.withValues(alpha: 0.6), blurRadius: 8),
-              ]
-            : null,
+        border: Border.all(color: borderColor, width: borderWidth),
+        boxShadow: glow,
       ),
       child: body,
     );
