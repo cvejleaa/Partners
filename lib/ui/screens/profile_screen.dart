@@ -386,6 +386,16 @@ class _StatsBody extends StatelessWidget {
           if (s.shortestWin != null)
             _statRow(singleGame ? 'Antal hænder' : 'Kortest sejr 🏁',
                 '${s.shortestWin} hænder'),
+          if (singleGame && s.winMarginGames > 0)
+            _statRow('Vandt med 🏆', '${s.winMarginSum} felter'),
+          if (singleGame && s.lossMarginGames > 0)
+            _statRow('Tabte med', '${s.lossMarginSum} felter'),
+          if (!singleGame && s.avgWinMargin != null)
+            _statRow('Vinder i snit med 🏆',
+                '${s.avgWinMargin!.toStringAsFixed(0)} felter'),
+          if (!singleGame && s.avgLossMargin != null)
+            _statRow('Taber i snit med',
+                '${s.avgLossMargin!.toStringAsFixed(0)} felter'),
           if (!singleGame && s.longestWinStreak > 0)
             _statRow('Længste sejrsstime 📈', '${s.longestWinStreak}'),
           if (!singleGame && s.bestPartner != null)

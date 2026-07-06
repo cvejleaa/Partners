@@ -13,6 +13,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../game/card_rules.dart';
+import '../game/progress.dart';
 import '../models/playing_card.dart';
 import '../online/serialize.dart';
 import 'replay_engine.dart';
@@ -49,6 +50,10 @@ class UserStats {
     this.playedGamesWithDuration = 0,
     this.currentWinStreak = 0,
     this.longestWinStreak = 0,
+    this.winMarginSum = 0,
+    this.winMarginGames = 0,
+    this.lossMarginSum = 0,
+    this.lossMarginGames = 0,
   })  : favoriteStarter = favoriteStarter ?? <String, int>{},
         partnerStats = partnerStats ?? <String, PairStats>{},
         rivalStats = rivalStats ?? <String, PairStats>{};
@@ -101,6 +106,18 @@ class UserStats {
   // Streak
   int currentWinStreak;
   int longestWinStreak;
+
+  // Margin — hvor mange felter man vinder/taber med (det tabende holds
+  // resterende felter til mål ved spil-slut).
+  int winMarginSum;
+  int winMarginGames;
+  int lossMarginSum;
+  int lossMarginGames;
+
+  double? get avgWinMargin =>
+      winMarginGames == 0 ? null : winMarginSum / winMarginGames;
+  double? get avgLossMargin =>
+      lossMarginGames == 0 ? null : lossMarginSum / lossMarginGames;
 
   // ---- afledte tal til UI ----
 
@@ -179,6 +196,10 @@ class UserStats {
         'playedGamesWithDuration': playedGamesWithDuration,
         'currentWinStreak': currentWinStreak,
         'longestWinStreak': longestWinStreak,
+        'winMarginSum': winMarginSum,
+        'winMarginGames': winMarginGames,
+        'lossMarginSum': lossMarginSum,
+        'lossMarginGames': lossMarginGames,
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -223,6 +244,10 @@ class UserStats {
           (m['playedGamesWithDuration'] as num?)?.toInt() ?? 0,
       currentWinStreak: (m['currentWinStreak'] as num?)?.toInt() ?? 0,
       longestWinStreak: (m['longestWinStreak'] as num?)?.toInt() ?? 0,
+      winMarginSum: (m['winMarginSum'] as num?)?.toInt() ?? 0,
+      winMarginGames: (m['winMarginGames'] as num?)?.toInt() ?? 0,
+      lossMarginSum: (m['lossMarginSum'] as num?)?.toInt() ?? 0,
+      lossMarginGames: (m['lossMarginGames'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -284,6 +309,19 @@ void _accumulateGame(
   final names = (game['names'] as List?)?.cast<dynamic>() ?? const <dynamic>[];
   final winningTeam = (game['winningTeamIndex'] as num?)?.toInt();
   final handNumber = ((game['state'] as Map?)?['hn'] as num?)?.toInt() ?? 0;
+
+  // Margin: hvor mange felter det tabende hold manglede ved spil-slut.
+  int? marginFields;
+  final stateMap = game['state'];
+  if (winningTeam != null && stateMap is Map) {
+    try {
+      final finalState =
+          gameStateFromMap(Map<String, dynamic>.from(stateMap));
+      marginFields = winMarginFields(finalState);
+    } catch (_) {
+      marginFields = null;
+    }
+  }
   final hostUid = game['hostUid'] as String?;
   final log = ((game['log'] as List?) ?? const <dynamic>[])
       .map((e) => Map<String, dynamic>.from(e as Map))
@@ -450,8 +488,16 @@ void _accumulateGame(
       if (s.currentWinStreak > s.longestWinStreak) {
         s.longestWinStreak = s.currentWinStreak;
       }
+      if (marginFields != null) {
+        s.winMarginSum += marginFields;
+        s.winMarginGames += 1;
+      }
     } else {
       s.currentWinStreak = 0;
+      if (winningTeam != null && marginFields != null) {
+        s.lossMarginSum += marginFields;
+        s.lossMarginGames += 1;
+      }
     }
 
     // Slag.
