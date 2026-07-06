@@ -97,6 +97,17 @@ Color _boardOutline(Color c) {
   return Color.lerp(c, const Color(0xFF000000), amount) ?? c;
 }
 
+/// Brik-fyldfarve: KUN lyse farver (gul o.l.) mørknes til en rigere nuance, så
+/// brikken kontrasterer den cremefarvede bane. Mørke farver (rød/blå/grøn)
+/// røres stort set ikke, så deres identitet bevares.
+Color _pieceFill(Color c) {
+  final double lum = c.computeLuminance();
+  // Kun lyse farver mørknes; jo lysere, jo mere. Gul (lum≈0.72) → ~0.30 så
+  // den bliver et tydeligt guld der kontrasterer banen.
+  final double amount = ((lum - 0.4).clamp(0.0, 1.0)) * 0.95;
+  return Color.lerp(c, const Color(0xFF000000), amount) ?? c;
+}
+
 // ---------------------------------------------------------------------------
 // Geometri (statiske, rotation-bevidste hjælpere)
 // ---------------------------------------------------------------------------
@@ -316,24 +327,30 @@ class _BoardPainter extends CustomPainter {
 
   void _drawPiece(Canvas canvas, Offset c, double r, Color color, bool hl) {
     final double pr = r * 1.15;
-    canvas.drawCircle(
-        c + const Offset(0, 1.5), pr, Paint()..color = Colors.black.withValues(alpha: 0.3));
+    // Lyse farver (især gul) mørknes så brikken læses som en solid token på
+    // den cremefarvede bane — ellers smelter den sammen med felterne.
+    final Color base = _pieceFill(color);
+    // Mindre hvid-highlight på lyse farver, så toppen ikke bliver næsten hvid.
+    final double lum = color.computeLuminance();
+    final double hi = lum > 0.5 ? 0.25 : 0.45;
+    canvas.drawCircle(c + const Offset(0, 1.5), pr,
+        Paint()..color = Colors.black.withValues(alpha: 0.35));
     canvas.drawCircle(
       c,
       pr,
       Paint()
         ..shader = RadialGradient(
           center: const Alignment(-0.3, -0.4),
-          colors: <Color>[Color.lerp(color, Colors.white, 0.45)!, color],
+          colors: <Color>[Color.lerp(base, Colors.white, hi)!, base],
         ).createShader(Rect.fromCircle(center: c, radius: pr)),
     );
     canvas.drawCircle(
       c,
       pr,
       Paint()
-        ..color = hl ? Colors.amber : Colors.black87
+        ..color = hl ? Colors.amber : Colors.black
         ..style = PaintingStyle.stroke
-        ..strokeWidth = hl ? 3.5 : 1.4,
+        ..strokeWidth = hl ? 3.5 : 1.8,
     );
   }
 
