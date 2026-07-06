@@ -393,6 +393,10 @@ class _StatsBody extends StatelessWidget {
           if (!singleGame && s.avgWinMargin != null)
             _statRow('Vinder i snit med 🏆',
                 '${s.avgWinMargin!.toStringAsFixed(0)} felter'),
+          if (!singleGame && s.maxWinMargin != null)
+            _statRow('Største sejr 💪', '${s.maxWinMargin} felter'),
+          if (!singleGame && s.minWinMargin != null)
+            _statRow('Tætteste sejr 😅', '${s.minWinMargin} felter'),
           if (!singleGame && s.avgLossMargin != null)
             _statRow('Taber i snit med',
                 '${s.avgLossMargin!.toStringAsFixed(0)} felter'),

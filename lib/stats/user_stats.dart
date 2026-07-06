@@ -54,6 +54,8 @@ class UserStats {
     this.winMarginGames = 0,
     this.lossMarginSum = 0,
     this.lossMarginGames = 0,
+    this.maxWinMargin,
+    this.minWinMargin,
   })  : favoriteStarter = favoriteStarter ?? <String, int>{},
         partnerStats = partnerStats ?? <String, PairStats>{},
         rivalStats = rivalStats ?? <String, PairStats>{};
@@ -113,6 +115,10 @@ class UserStats {
   int winMarginGames;
   int lossMarginSum;
   int lossMarginGames;
+
+  /// Største og mindste sejrsmargin (felter) på tværs af vundne spil.
+  int? maxWinMargin;
+  int? minWinMargin;
 
   double? get avgWinMargin =>
       winMarginGames == 0 ? null : winMarginSum / winMarginGames;
@@ -200,6 +206,8 @@ class UserStats {
         'winMarginGames': winMarginGames,
         'lossMarginSum': lossMarginSum,
         'lossMarginGames': lossMarginGames,
+        'maxWinMargin': maxWinMargin,
+        'minWinMargin': minWinMargin,
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -248,6 +256,8 @@ class UserStats {
       winMarginGames: (m['winMarginGames'] as num?)?.toInt() ?? 0,
       lossMarginSum: (m['lossMarginSum'] as num?)?.toInt() ?? 0,
       lossMarginGames: (m['lossMarginGames'] as num?)?.toInt() ?? 0,
+      maxWinMargin: (m['maxWinMargin'] as num?)?.toInt(),
+      minWinMargin: (m['minWinMargin'] as num?)?.toInt(),
     );
   }
 }
@@ -491,6 +501,12 @@ void _accumulateGame(
       if (marginFields != null) {
         s.winMarginSum += marginFields;
         s.winMarginGames += 1;
+        if (s.maxWinMargin == null || marginFields > s.maxWinMargin!) {
+          s.maxWinMargin = marginFields;
+        }
+        if (s.minWinMargin == null || marginFields < s.minWinMargin!) {
+          s.minWinMargin = marginFields;
+        }
       }
     } else {
       s.currentWinStreak = 0;
