@@ -60,8 +60,19 @@ final gameStreamProvider = StreamProvider.family<
 );
 
 /// Spil jeg er inviteret til eller deltager i (lobby/igangværende).
-final myGamesProvider = StreamProvider<List<GameSummary>>(
-    (ref) => ref.read(onlineServiceProvider).myGames());
+///
+/// Bygges oven på [authStateProvider], så forespørgslen FØRST abonneres når
+/// login er bekræftet (og auth-token'et er koblet på Firestore). Ellers kunne
+/// et abonnement, der startede før token'et var propageret, få et forbigående
+/// `permission-denied` ved allerførste snapshot — det var årsagen til
+/// "Missing or insufficient permissions" lige efter login.
+final myGamesProvider = StreamProvider<List<GameSummary>>((ref) {
+  final User? user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) {
+    return Stream<List<GameSummary>>.value(const <GameSummary>[]);
+  }
+  return ref.read(onlineServiceProvider).myGamesFor(user.uid);
+});
 
 class GameSummary {
   GameSummary(this.code, this.hostName, this.status, this.playerNames,
@@ -392,24 +403,43 @@ class OnlineService {
   Stream<DocumentSnapshot<Map<String, dynamic>>> watch(String code) =>
       _games.doc(code).snapshots();
 
-  Stream<List<GameSummary>> myGames() {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) {
-      return Stream<List<GameSummary>>.value(const <GameSummary>[]);
+  /// Spil hvor [uid] er medlem. Kaldes med et bekræftet uid fra
+  /// [myGamesProvider], der venter på login før abonnementet startes.
+  ///
+  /// Selv efter login kan Firestore i et kort øjeblik afvise det aller-første
+  /// snapshot med `permission-denied`, hvis auth-token'et endnu ikke er
+  /// propageret til lytteren. Da et fejlet snapshot-listen ellers terminerer
+  /// strømmen (og fejlen bliver hængende på skærmen), prøver vi et par gange
+  /// igen med kort pause, før en ægte fejl får lov at boble op.
+  Stream<List<GameSummary>> myGamesFor(String uid) async* {
+    int attempt = 0;
+    while (true) {
+      try {
+        yield* _games
+            .where('members', arrayContains: uid)
+            .snapshots()
+            .map((q) => q.docs
+                .map((d) => GameSummary(
+                      d.id,
+                      d.data()['hostName'] as String? ?? '?',
+                      d.data()['status'] as String? ?? 'lobby',
+                      (d.data()['names'] as List)
+                          .map((e) => e as String)
+                          .toList(),
+                      hostUid: d.data()['hostUid'] as String?,
+                    ))
+                .where((g) => g.status != 'over')
+                .toList());
+        return; // snapshots() afsluttes normalt aldrig.
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied' && attempt < 3) {
+          attempt++;
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          continue; // forbigående lige efter login — abonnér igen.
+        }
+        rethrow;
+      }
     }
-    return _games
-        .where('members', arrayContains: uid)
-        .snapshots()
-        .map((q) => q.docs
-            .map((d) => GameSummary(
-                  d.id,
-                  d.data()['hostName'] as String? ?? '?',
-                  d.data()['status'] as String? ?? 'lobby',
-                  (d.data()['names'] as List).map((e) => e as String).toList(),
-                  hostUid: d.data()['hostUid'] as String?,
-                ))
-            .where((g) => g.status != 'over')
-            .toList());
   }
 
   Future<void> start(String code) => startGameFromLobby(code);
