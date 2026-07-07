@@ -156,6 +156,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       final gameNotifier = ref.read(gameProvider.notifier);
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
+        // Vent til brik-animationen (480 ms) er faldet til ro, så billedet viser
+        // slutstillingen — det vindende holds sidste brik er nået hjem — og ikke
+        // et øjebliksbillede midt i bevægelsen.
+        await Future<void>.delayed(const Duration(milliseconds: 560));
+        if (!mounted) return;
         final shot = await _captureBoard();
         if (!mounted) return;
         Navigator.of(context).pushReplacement<void, void>(
