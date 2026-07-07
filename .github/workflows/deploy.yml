@@ -50,7 +50,15 @@ jobs:
         # SVG-kilderne ligger i repoet; her rasteres de binære PNG'er som
         # manifest.json og index.html refererer (se docs/branding.md).
         run: |
-          sudo apt-get update
+          # GitHub-runnernes forudinstallerede Microsoft/azure-cli apt-repos
+          # fejler ind imellem clearsign-tjekket, hvilket får hele
+          # `apt-get update` til at returnere fejl (exit 100) selvom Ubuntu-
+          # repoene (hvor librsvg2-bin ligger, i universe) hentes fint. Fjern
+          # de flaky tredjeparts-lister og lad ikke en update-fejl vælte bygget
+          # — install-trinnet fejler stadig hårdt, hvis pakken reelt mangler.
+          sudo rm -f /etc/apt/sources.list.d/*microsoft* \
+                     /etc/apt/sources.list.d/*azure* 2>/dev/null || true
+          sudo apt-get update || true
           sudo apt-get install -y librsvg2-bin
           rsvg-convert -w 192 -h 192 web/icons/Icon.svg -o web/icons/Icon-192.png
           rsvg-convert -w 512 -h 512 web/icons/Icon.svg -o web/icons/Icon-512.png
