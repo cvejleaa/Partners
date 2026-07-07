@@ -98,6 +98,7 @@ Map<String, dynamic> gameStateToMap(GameState s) => {
         for (final e in s.exchangeBuffer.entries)
           '${e.key}': e.value == null ? null : cardToMap(e.value!),
       },
+      'so': s.sittingOut.toList(),
     };
 
 GameState gameStateFromMap(Map<String, dynamic> m) {
@@ -134,5 +135,7 @@ GameState gameStateFromMap(Map<String, dynamic> m) {
         (m['scnt'] as List).map((e) => (e as num).toInt()).toList(),
     cardRules: CardRules.fromJson(Map<String, dynamic>.from(m['cr'] as Map)),
     exchangeBuffer: exchange,
+    sittingOut: (m['so'] as List?)?.map((e) => (e as num).toInt()).toSet() ??
+        <int>{},
   );
 }

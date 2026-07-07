@@ -22,9 +22,11 @@ class GameState {
     List<int>? starterCounts,
     CardRules? cardRules,
     Map<int, PlayingCard?>? exchangeBuffer,
+    Set<int>? sittingOut,
   })  : cardRules = cardRules ?? CardRules.defaults(),
         starterCounts = starterCounts ?? List<int>.filled(4, 0),
-        exchangeBuffer = exchangeBuffer ?? <int, PlayingCard?>{};
+        exchangeBuffer = exchangeBuffer ?? <int, PlayingCard?>{},
+        sittingOut = sittingOut ?? <int>{};
 
   final List<Player> players;
   final BoardGeometry geometry;
@@ -50,6 +52,11 @@ class GameState {
   /// Gemmer det kort, hver spiller har valgt at bytte med sin partner, indtil
   /// alle har valgt og byttet kan udføres.
   final Map<int, PlayingCard?> exchangeBuffer;
+
+  /// Spillere der har SMIDT deres hånd (kunne ikke spille noget) og sidder over
+  /// resten af runden. Adskiller sig fra en spiller der har lagt sit sidste
+  /// kort (tom hånd, men ikke smidt). Nulstilles ved ny hånd.
+  final Set<int> sittingOut;
 
   Iterable<Piece> get allPieces =>
       players.expand<Piece>((Player p) => p.pieces);

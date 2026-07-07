@@ -30,6 +30,7 @@ class GameEngine extends ChangeNotifier {
 
   void startNewHand() {
     state.exchangeBuffer.clear();
+    state.sittingOut.clear();
     // Ny kortgiver-cyklus (samme startende spiller i 3 runder): saml alle 56
     // kort og bland, så der igen er 4 af hver slags. Inden for en cyklus deles
     // der videre fra den samme bunke uden at blande om.
@@ -126,6 +127,9 @@ class GameEngine extends ChangeNotifier {
     final Player player = state.players[playerIndex];
     state.discard.addAll(player.hand);
     player.hand.clear();
+    // Marker at spilleren SMED sin hånd (adskilt fra at have lagt sit sidste
+    // kort), så panelet kan vise "smidt" i stedet for "0".
+    state.sittingOut.add(playerIndex);
     _afterMove(playerIndex);
   }
 

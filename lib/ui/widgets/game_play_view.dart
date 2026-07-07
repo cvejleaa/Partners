@@ -348,7 +348,8 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             ? state.starterCounts[p.index]
             : 0,
         isStarter: state.starterIndex == p.index,
-        satOut: state.phase == GamePhase.play && p.hand.isEmpty,
+        satOut: state.phase == GamePhase.play &&
+            state.sittingOut.contains(p.index),
         lastCard: widget.lastPlayedCards[p.index],
         compact: compact,
         colorOverride: _displayColor(state, p.index),

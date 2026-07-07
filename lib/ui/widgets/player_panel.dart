@@ -105,9 +105,9 @@ class PlayerPanel extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(Icons.style, size: 12, color: Colors.white70),
-            const SizedBox(width: 2),
-            Text(satOut ? 'over' : '$cardCount',
+            const Icon(Icons.filter_none, size: 11, color: Colors.white70),
+            const SizedBox(width: 3),
+            Text(satOut ? 'smidt' : '$cardCount',
                 style: TextStyle(fontSize: countSize, color: Colors.white)),
             const SizedBox(width: 6),
             _StartBadge(count: starterCount),

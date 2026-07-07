@@ -158,9 +158,15 @@ void main() {
     expect(engine.canPlay(0), isFalse);
     engine.passHand(0);
     expect(state.players[0].hand, isEmpty);
+    // Spilleren er markeret som "smidt hånden" (adskilt fra tom hånd efter at
+    // have lagt sit sidste kort).
+    expect(state.sittingOut.contains(0), isTrue);
     // Turen går videre til en spiller med kort (ikke den der sad over).
     expect(state.currentPlayerIndex, isNot(0));
     expect(state.players[state.currentPlayerIndex].hand, isNotEmpty);
+    // Ny hånd nulstiller "smidt"-markeringen.
+    engine.startNewHand();
+    expect(state.sittingOut, isEmpty);
   });
 
   test('startende spiller roterer med uret efter 3 runder', () {
