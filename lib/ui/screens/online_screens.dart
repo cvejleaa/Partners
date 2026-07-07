@@ -187,13 +187,35 @@ class OnlineHomeScreen extends ConsumerWidget {
     final user = FirebaseAuth.instance.currentUser;
     final bool canDelete =
         (user != null && g.hostUid == user.uid) || isAdmin(user);
+    // Deltagere: udelad tomme pladser ('Åben'). Viser hvem man spiller med.
+    final List<String> participants = g.playerNames
+        .where((n) => n.trim().isNotEmpty && n != 'Åben')
+        .toList();
+    final String status = g.isLobby
+        ? 'Venter i lobby'
+        : (g.isPlaying ? 'Tryk for at genindtræde' : 'I gang');
     return Card(
       child: ListTile(
+        isThreeLine: participants.isNotEmpty,
         leading: Icon(g.isPlaying ? Icons.play_circle : Icons.meeting_room),
         title: Text('Spil ${g.code}  ·  vært: ${g.hostName}'),
-        subtitle: Text(g.isLobby
-            ? 'Venter i lobby'
-            : (g.isPlaying ? 'Tryk for at genindtræde' : 'I gang')),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(status),
+            if (participants.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'Spillere: ${participants.join(', ')}',
+                  style: const TextStyle(fontSize: 12),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
