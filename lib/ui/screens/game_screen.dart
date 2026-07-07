@@ -149,6 +149,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           winnerColors.add(state.players[i].color);
         }
       }
+      // Fang notifier'en NU, mens skærmen er i live. WinScreen pushes via
+      // pushReplacement, så GameScreen (og dens ref) disposes — en senere
+      // `ref.read` i revanche-callbacken ville ellers kaste "Cannot use ref
+      // after the widget was disposed".
+      final gameNotifier = ref.read(gameProvider.notifier);
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         final shot = await _captureBoard();
@@ -164,7 +169,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               winnerColors: winnerColors,
               rematchLabel: 'Spil igen',
               onRematch: (ctx) async {
-                ref.read(gameProvider.notifier).reset();
+                gameNotifier.reset();
                 Navigator.of(ctx).pushReplacement<void, void>(
                   MaterialPageRoute<void>(
                       builder: (_) => const SetupScreen()),

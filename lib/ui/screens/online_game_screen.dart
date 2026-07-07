@@ -152,6 +152,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
               }
             }
             final String oldCode = widget.code;
+            // Fang service-instansen NU, mens denne skærm stadig er i live.
+            // WinScreen pushes via pushReplacement, så OnlineGameScreen (og dens
+            // ref) disposes — en senere `ref.read` i revanche-callbacken ville
+            // ellers kaste "Cannot use ref after the widget was disposed".
+            final OnlineService svc = _svc;
             // Naviger til WinScreen — fang først et billede af slutstillingen.
             WidgetsBinding.instance.addPostFrameCallback((_) async {
               if (!mounted) return;
@@ -169,7 +174,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
                     winnerColors: winnerColors,
                     rematchLabel: 'Revanche',
                     onRematch: (ctx) async {
-                      final code = await _svc.createRematch(oldCode);
+                      final code = await svc.createRematch(oldCode);
                       if (!ctx.mounted) return;
                       Navigator.of(ctx).pushReplacement<void, void>(
                         MaterialPageRoute<void>(
