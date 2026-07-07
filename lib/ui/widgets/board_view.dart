@@ -25,6 +25,7 @@ class BoardView extends StatelessWidget {
     this.animation,
     this.onPieceTap,
     this.colorOffset = 0,
+    this.quarterTurn = false,
   });
 
   final GameState state;
@@ -38,7 +39,18 @@ class BoardView extends StatelessWidget {
   /// spillets data. Bruges så en spiller kan vælge sin egen ønske-farve.
   final int colorOffset;
 
-  double get _rotation => pi - viewerIndex * (pi / 2);
+  /// Drej hele opsætningen en kvart-diagonal (45°) med uret, så start-/UD-
+  /// områderne peger mod hjørnerne i stedet for kanterne. Derved kan selve
+  /// skiven fylde mere af en smal (telefon-)skærm. Spillerens eget hjem havner
+  /// nederst til højre. Rent visuelt — ændrer intet i spillets data.
+  final bool quarterTurn;
+
+  double get _rotation =>
+      pi - viewerIndex * (pi / 2) - (quarterTurn ? pi / 4 : 0);
+
+  /// Når brættet er drejet 45° peger start-båsene mod hjørnerne, så der er plads
+  /// til at forstørre skiven en anelse inden for samme (kvadratiske) boks.
+  double get _scale => quarterTurn ? 1.07 : 1.0;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +67,7 @@ class BoardView extends StatelessWidget {
               highlighted: highlightedPieceIds,
               animation: animation,
               colorOffset: colorOffset,
+              scale: _scale,
             ),
           ),
         );
@@ -65,7 +78,7 @@ class BoardView extends StatelessWidget {
   void _handleTap(Offset pos, double size) {
     if (onPieceTap == null) return;
     final List<_PiecePoint> points =
-        _BoardPainter.computePiecePoints(state, size, _rotation);
+        _BoardPainter.computePiecePoints(state, size, _rotation, scale: _scale);
     _PiecePoint? best;
     double bestDist = double.infinity;
     for (final _PiecePoint pp in points) {
@@ -158,6 +171,7 @@ class _BoardPainter extends CustomPainter {
     required this.highlighted,
     this.animation,
     this.colorOffset = 0,
+    this.scale = 1.0,
   });
 
   final GameState state;
@@ -165,6 +179,7 @@ class _BoardPainter extends CustomPainter {
   final Set<String> highlighted;
   final BoardAnimation? animation;
   final int colorOffset;
+  final double scale;
 
   /// Vis-farve for en plads efter lokal rotation.
   Color _seatColor(int seat) {
@@ -176,25 +191,29 @@ class _BoardPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final double dim = size.shortestSide;
     final Offset center = Offset(dim / 2, dim / 2);
-    final double tr = dim * 0.405;
+    final double tr = dim * 0.405 * scale;
     // 60 celler rundt: hold cellerne små nok til ikke at overlappe hinanden
     // (omkreds/60 ≈ 0.042·dim pr. celle; diameter 2·cr ≈ 0.038·dim < det).
-    final double cr = dim * 0.0188;
+    final double cr = dim * 0.0188 * scale;
     final int trackLen = state.geometry.trackLength;
     final int quarter = trackLen ~/ 4;
 
+    // Skiven skaleres med brættet, men klippes til boksen så en forstørret
+    // (drejet) skive ikke løber over kanten.
+    final double discR = min(dim * 0.46 * scale, dim * 0.492);
+    final double shadowR = min(discR * 1.022, dim * 0.499);
     canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF14331F));
-    final Rect boardRect = Rect.fromCircle(center: center, radius: dim * 0.47);
+    final Rect boardRect = Rect.fromCircle(center: center, radius: shadowR);
     canvas.drawCircle(
       center,
-      dim * 0.47,
+      shadowR,
       Paint()
         ..color = Colors.black.withValues(alpha: 0.35)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
     );
     canvas.drawCircle(
       center,
-      dim * 0.46,
+      discR,
       Paint()
         ..shader = const RadialGradient(
           colors: <Color>[Color(0xFFF7ECD2), Color(0xFFE7D2A6)],
@@ -202,7 +221,7 @@ class _BoardPainter extends CustomPainter {
     );
     canvas.drawCircle(
       center,
-      dim * 0.46,
+      discR,
       Paint()
         ..color = const Color(0xFF8B5E3C)
         ..style = PaintingStyle.stroke
@@ -284,19 +303,20 @@ class _BoardPainter extends CustomPainter {
     }
 
     // Center-emblem.
-    canvas.drawCircle(center, dim * 0.11, Paint()..color = const Color(0xFF8B5E3C));
+    final double emblemR = dim * 0.11 * scale;
+    canvas.drawCircle(center, emblemR, Paint()..color = const Color(0xFF8B5E3C));
     canvas.drawCircle(
         center,
-        dim * 0.11,
+        emblemR,
         Paint()
           ..color = const Color(0xFFEAD9B5)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2);
-    _text(canvas, 'Partners', center, dim * 0.035, const Color(0xFFEAD9B5));
+    _text(canvas, 'Partners', center, dim * 0.035 * scale, const Color(0xFFEAD9B5));
 
     // Brikker (animeret hvis aktiv).
-    for (final _PiecePoint pp
-        in computePiecePoints(state, dim, rotation, colorOffset: colorOffset)) {
+    for (final _PiecePoint pp in computePiecePoints(state, dim, rotation,
+        colorOffset: colorOffset, scale: scale)) {
       Offset c = pp.center;
       final BoardAnimation? anim = animation;
       if (anim != null && anim.moves.containsKey(pp.pieceId)) {
@@ -369,11 +389,11 @@ class _BoardPainter extends CustomPainter {
 
   static List<_PiecePoint> computePiecePoints(
       GameState state, double dim, double rotation,
-      {int colorOffset = 0}) {
+      {int colorOffset = 0, double scale = 1.0}) {
     final Offset center = Offset(dim / 2, dim / 2);
-    final double tr = dim * 0.405;
+    final double tr = dim * 0.405 * scale;
     final int trackLen = state.geometry.trackLength;
-    final double spread = dim * 0.014;
+    final double spread = dim * 0.014 * scale;
     final int n = state.players.length;
 
     final List<_PiecePoint> bases = <_PiecePoint>[];
@@ -426,5 +446,6 @@ class _BoardPainter extends CustomPainter {
       old.highlighted != highlighted ||
       old.animation != animation ||
       old.rotation != rotation ||
-      old.colorOffset != colorOffset;
+      old.colorOffset != colorOffset ||
+      old.scale != scale;
 }

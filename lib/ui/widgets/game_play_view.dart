@@ -313,6 +313,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   }
 
   Widget _boardArea(GameState state, Player me) {
+    // På smalle (telefon-)skærme drejes brættet 45°, så det kan fylde mere.
+    // iPad/desktop (shortestSide >= 600) beholder den opretstående opsætning.
+    final bool narrow = MediaQuery.of(context).size.shortestSide < 600;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(1),
@@ -322,6 +325,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             state: state,
             viewerIndex: me.index,
             colorOffset: _colorOffset,
+            quarterTurn: narrow,
             highlightedPieceIds: _animating ? const <String>{} : _highlightSet(state),
             animation:
                 _animating ? BoardAnimation(_animMoves, _anim.value) : null,
