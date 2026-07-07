@@ -31,17 +31,26 @@ Hvis du ændrer Firebase-konfigurationen (`lib/firebase_options.dart`) skal
 samme felter også opdateres i `firebase-messaging-sw.js` — de to er
 manuelle kopier.
 
-## 3. Cloud Function
+## 3. Cloud Functions
 
-FCM-token alene sender ingenting. En Cloud Function (`functions/index.js`)
-lytter på `users/{uid}/inbox/{x}` og kalder FCM Admin SDK med modtagerens
-tokens. CI deployer den automatisk efter hosting (`firebase deploy --only
+FCM-token alene sender ingenting. To Cloud Functions (`functions/index.js`)
+kalder FCM Admin SDK med modtagerens tokens via hjælperen `pushToUser`:
+
+- **`onInboxCreate`** — lytter på `users/{uid}/inbox/{x}` og sender en
+  push når man bliver inviteret til et spil.
+- **`onGameTurn`** — lytter på opdateringer af `games/{code}` og sender en
+  "din tur"-push når det bliver en spillers tur i play-fasen. Springer over
+  hvis pladsen er en AI, eller hvis spilleren er aktiv på brættet (deres
+  `presence`-stempel er nyere end `AWAY_MS` = 20 s). Bruger notifikations-tag
+  `turn-<code>`, så en ny tur-besked erstatter den forrige for samme spil.
+
+CI deployer begge automatisk efter hosting (`firebase deploy --only
 functions` i `.github/workflows/deploy.yml`). Kræver Blaze-plan.
 
-Region: `europe-west1`. Runtime: `nodejs20`. Database: `partners` (navngiven).
+Region: `europe-west1`. Runtime: `nodejs22`. Database: `partners` (navngiven).
 
-Funktionen ligger i `functions/index.js`. CI installerer dependencies og
-deployer den automatisk via `firebase deploy --only functions`.
+Funktionerne ligger i `functions/index.js`. CI installerer dependencies og
+deployer dem automatisk via `firebase deploy --only functions`.
 
 Hvis du vil teste lokalt med Firebase Emulator:
 
