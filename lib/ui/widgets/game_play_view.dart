@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -278,20 +280,59 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         children: <Widget>[panelCell(left), myCell],
       ),
     );
-    return Column(
-      children: <Widget>[
-        topRow,
-        Expanded(
-          child: Center(
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: _boardArea(state, me),
-            ),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints cns) {
+        final double w = cns.maxWidth;
+        final double h = cns.maxHeight.isFinite ? cns.maxHeight : 600;
+        // Brættet har PRIORITET og et læsbart minimum. Panelerne og hånd-
+        // kortene er kompakte, så brættet kan fylde resten. Kun hvis vinduet er
+        // SÅ lavt at selv minimums-brættet + de kompakte paneler/kort ikke kan
+        // være der, scroller siden — så brættet aldrig krymper væk.
+        final double minBoard = min(w, 230.0);
+        const double chrome = 225.0; // skøn: 2 kompakte panel-rækker + kort
+        final bool fits = h - chrome >= minBoard;
+
+        // Kompakte hånd-kort (fill: false), så de fylder mindre end brættet.
+        final Widget human =
+            _buildHumanArea(state, me, showPanel: false, fill: false);
+
+        if (fits) {
+          // Brættet fylder den resterende højde (≥ minimum) — ingen scroll.
+          return Column(
+            children: <Widget>[
+              topRow,
+              Expanded(
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: _boardArea(state, me),
+                  ),
+                ),
+              ),
+              bottomRow,
+              human,
+            ],
+          );
+        }
+        // Meget lavt vindue: fast minimums-bræt, resten kan scrolles.
+        return SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              topRow,
+              Center(
+                child: SizedBox(
+                  width: minBoard,
+                  height: minBoard,
+                  child: _boardArea(state, me),
+                ),
+              ),
+              bottomRow,
+              human,
+            ],
           ),
-        ),
-        bottomRow,
-        _buildHumanArea(state, me, showPanel: false, fill: true),
-      ],
+        );
+      },
     );
   }
 
@@ -399,7 +440,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
   Widget _buildExchangeArea(GameState state, Player me, {required bool fill}) {
     final bool done = state.exchangeBuffer.containsKey(me.index);
-    final double maxCardW = fill ? 72 : 54;
+    final double maxCardW = fill ? 72 : 48;
     // Det kort jeg har afgivet ligger i bufferen til byttet udføres — markér
     // det i hånden indtil jeg får makkerens kort (fasen skifter til play).
     final PlayingCard? givenCard = done ? state.exchangeBuffer[me.index] : null;
@@ -497,7 +538,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             // så du kan planlægge dit næste træk. Dimming markerer i stedet
             // at hånden ikke er tap-bar lige nu.
             faceUp: true,
-            maxCardW: fill ? 84 : 54,
+            maxCardW: fill ? 84 : 48,
             selected: _selectedCard,
             onTapCard: (!myTurn || !canPlay)
                 ? null
