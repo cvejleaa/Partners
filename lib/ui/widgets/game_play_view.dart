@@ -324,9 +324,6 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   }
 
   Widget _boardArea(GameState state, Player me) {
-    // På smalle (telefon-)skærme drejes brættet 45°, så det kan fylde mere.
-    // iPad/desktop (shortestSide >= 600) beholder den opretstående opsætning.
-    final bool narrow = MediaQuery.of(context).size.shortestSide < 600;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(1),
@@ -344,7 +341,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
               state: state,
               viewerIndex: me.index,
               colorOffset: _colorOffset,
-              quarterTurn: narrow,
+              // Drej altid 45°: start-/UD-båsene peger mod hjørnerne, så
+              // brikkerne ikke skæres af kanten (heller ikke på store skærme).
+              quarterTurn: true,
               highlightedPieceIds:
                   _animating ? const <String>{} : _highlightSet(state),
               animation:
@@ -366,9 +365,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         rules: state.cardRules,
         isCurrent: state.currentPlayerIndex == p.index,
         cardCount: p.hand.length,
-        starterCount: p.index < state.starterCounts.length
-            ? state.starterCounts[p.index]
-            : 0,
+        // starterStreak er 0/1/2 gennem starterens tre hænder og nulstilles
+        // ved rotation — vises som "Starter N/3" (kun for starteren).
+        starterStreak: state.starterStreak,
         isStarter: state.starterIndex == p.index,
         satOut: state.phase == GamePhase.play &&
             state.sittingOut.contains(p.index),
