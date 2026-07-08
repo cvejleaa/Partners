@@ -25,6 +25,8 @@ import 'online/serialize.dart';
 import 'state/settings_controller.dart';
 import 'stats/stats_repository.dart';
 import 'ui/screens/home_screen.dart';
+import 'ui/screens/online_game_screen.dart';
+import 'ui/screens/online_screens.dart';
 
 /// Letvægts-info om et gemt, igangværende spil — bruges af forsiden til at
 /// vise en "Fortsæt spil"-knap uden at genskabe hele [GameState].
@@ -371,11 +373,76 @@ class GameController extends StateNotifier<GameState> {
 final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-class PartnersApp extends ConsumerWidget {
+/// Global navigator-nøgle så et notifikations-deeplink (?game=/?invite=) kan
+/// navigere ind i spillet uanset hvilken skærm der er øverst.
+final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+class PartnersApp extends ConsumerStatefulWidget {
   const PartnersApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PartnersApp> createState() => _PartnersAppState();
+}
+
+class _PartnersAppState extends ConsumerState<PartnersApp> {
+  // Ventende deeplink fra opstarts-URL'en (?game=<code> / ?invite=<code>).
+  String? _pendingCode;
+  bool _pendingIsGame = false;
+  bool _linkHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _readInitialDeepLink();
+  }
+
+  /// Læs ?game=/?invite= fra URL'en appen blev åbnet med (fx fra et
+  /// notifikationsklik der åbnede /?game=<code>).
+  void _readInitialDeepLink() {
+    try {
+      final Map<String, String> q = Uri.base.queryParameters;
+      final String? game = _sanitizeCode(q['game']);
+      final String? invite = _sanitizeCode(q['invite']);
+      if (game != null) {
+        _pendingCode = game;
+        _pendingIsGame = true;
+      } else if (invite != null) {
+        _pendingCode = invite;
+        _pendingIsGame = false;
+      }
+    } catch (_) {
+      // URL-parsing må aldrig fælde opstarten.
+    }
+  }
+
+  static String? _sanitizeCode(String? raw) {
+    if (raw == null) return null;
+    final String v = raw.trim();
+    if (v.isEmpty || v.length > 12) return null;
+    return RegExp(r'^[A-Za-z0-9]+$').hasMatch(v) ? v : null;
+  }
+
+  /// Naviger ind i det deeplinkede spil, når vi er klar (logget ind). Kaldes
+  /// efter første frame og hver gang login-tilstanden skifter.
+  void _maybeHandleDeepLink() {
+    if (_linkHandled) return;
+    final String? code = _pendingCode;
+    if (code == null) return;
+    // Online kræver login — vent til brugeren er der.
+    final User? user = ref.read(authStateProvider).valueOrNull;
+    if (user == null) return;
+    final NavigatorState? nav = _navigatorKey.currentState;
+    if (nav == null) return;
+    _linkHandled = true;
+    final bool isGame = _pendingIsGame;
+    nav.push(MaterialPageRoute<void>(
+      builder: (_) =>
+          isGame ? OnlineGameScreen(code: code) : LobbyScreen(code: code),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final ThemeMode themeMode = ref.watch(
       settingsProvider.select((Settings s) => s.themeMode),
     );
@@ -393,8 +460,21 @@ class PartnersApp extends ConsumerWidget {
       ));
     });
 
+    // Når login bliver klar (eller ved opstart), håndtér et evt. deeplink.
+    ref.listen<AsyncValue<User?>>(authStateProvider, (prev, next) {
+      if (next.valueOrNull != null) {
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _maybeHandleDeepLink());
+      }
+    });
+    if (_pendingCode != null && !_linkHandled) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _maybeHandleDeepLink());
+    }
+
     return MaterialApp(
       title: 'Partners',
+      navigatorKey: _navigatorKey,
       scaffoldMessengerKey: _scaffoldMessengerKey,
       theme: ThemeData(
         colorSchemeSeed: const Color(0xFF8B5E3C),

@@ -70,22 +70,16 @@ exports.onInboxCreate = onDocumentCreated(
     // Kun et gyldigt spil-kode-format (A-Z0-9) må ind i deep-link'et.
     const gameCode = /^[A-Za-z0-9]{1,12}$/.test(rawCode) ? rawCode : "";
 
+    // DATA-only: notifikationen vises af service-workeren (onBackgroundMessage)
+    // — IKKE også automatisk af browseren. Ellers fik man to notifikationer.
     await pushToUser(uid, {
-      notification: {
+      data: {
+        type: "invite",
+        gameCode,
         title: "Partners — invitation",
         body: `${fromName} har inviteret dig til et spil`,
       },
-      data: {
-        gameCode,
-        click_action: "/",
-      },
-      webpush: {
-        fcmOptions: {link: gameCode ? `/?invite=${gameCode}` : "/"},
-        notification: {
-          icon: "/icons/Icon-192.png",
-          badge: "/icons/Icon-192.png",
-        },
-      },
+      webpush: {headers: {Urgency: "high", TTL: "600"}},
     });
   }
 );
@@ -129,23 +123,16 @@ exports.onGameTurn = onDocumentUpdated(
     if (ms && nowMs - ms < AWAY_MS) return;
 
     const code = event.params.code;
+    // DATA-only: service-workeren viser notifikationen (én gang) og håndterer
+    // klik → åbner selve spillet (/?game=<code>).
     await pushToUser(uid, {
-      notification: {
+      data: {
+        type: "turn",
+        gameCode: code,
         title: "Partners — din tur",
         body: `Det er din tur i spil ${code}`,
       },
-      data: {
-        gameCode: code,
-        click_action: "/",
-      },
-      webpush: {
-        fcmOptions: {link: `/?game=${code}`},
-        notification: {
-          tag: `turn-${code}`, // erstat en tidligere tur-notifikation
-          icon: "/icons/Icon-192.png",
-          badge: "/icons/Icon-192.png",
-        },
-      },
+      webpush: {headers: {Urgency: "high", TTL: "300"}},
     });
   }
 );

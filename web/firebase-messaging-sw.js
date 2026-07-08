@@ -23,48 +23,63 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Vises når en push lander mens app'en er lukket / i baggrunden.
+// Byg mål-URL'en ud fra notifikationstypen: en "din tur"-push åbner selve
+// spillet (/?game=<code>), en invitation åbner invitations-flowet
+// (/?invite=<code>).
+function targetFor(type, gameCode) {
+  if (!gameCode) return '/';
+  const code = encodeURIComponent(gameCode);
+  return type === 'turn' ? '/?game=' + code : '/?invite=' + code;
+}
+
+// Beskederne sendes DATA-only, så browseren IKKE selv viser en notifikation.
+// Vi viser den her (præcis én gang) ud fra data-feltet.
 messaging.onBackgroundMessage(function (payload) {
-  const notif = (payload && payload.notification) || {};
   const data = (payload && payload.data) || {};
-  const title = notif.title || 'Partners';
-  const body = notif.body || 'Du har en ny besked';
+  const title = data.title || 'Partners';
+  const body = data.body || 'Du har en ny besked';
+  const type = data.type || '';
   const gameCode = data.gameCode || '';
+  // Tag pr. type+spil, så en ny "din tur" erstatter den forrige for samme spil
+  // i stedet for at hobe sig op.
+  const tag = gameCode ? 'partners-' + (type || 'msg') + '-' + gameCode : 'partners';
   self.registration.showNotification(title, {
     body: body,
     icon: '/icons/Icon-192.png',
     badge: '/icons/Icon-192.png',
-    tag: gameCode ? 'partners-invite-' + gameCode : 'partners',
-    data: {
-      gameCode: gameCode,
-      click_action: data.click_action || '/',
-    },
+    tag: tag,
+    renotify: true,
+    data: { type: type, gameCode: gameCode, url: targetFor(type, gameCode) },
   });
 });
 
-// Klik på notifikation: åbn (eller fokusér) Partners-fanen, og send
-// gameCode med så app'en kan navigere ind i spillets lobby.
+// Klik: fokusér (og naviger) en åben Partners-fane ind i spillet — ellers åbn
+// et nyt vindue direkte på spillet.
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  const gameCode = (event.notification.data && event.notification.data.gameCode) || '';
-  const target = gameCode ? '/?invite=' + encodeURIComponent(gameCode) : '/';
+  const d = event.notification.data || {};
+  const url = d.url || targetFor(d.type, d.gameCode);
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then(function (clientList) {
         for (let i = 0; i < clientList.length; i++) {
           const c = clientList[i];
-          // Hvis en Partners-fane allerede er åben: fokusér den og post
-          // gameCode så Flutter-app'en kan reagere.
           if ('focus' in c) {
-            try {
-              c.postMessage({ type: 'partners-invite', gameCode: gameCode });
-            } catch (_) {}
+            // Naviger den eksisterende fane ind i spillet, så app'en læser
+            // ?game=/?invite= og hopper direkte derhen; fokusér bagefter.
+            if ('navigate' in c) {
+              return c.navigate(url).then(function (nc) {
+                return (nc || c).focus();
+              }).catch(function () {
+                return c.focus();
+              });
+            }
             return c.focus();
           }
         }
         if (self.clients.openWindow) {
-          return self.clients.openWindow(target);
+          return self.clients.openWindow(url);
         }
         return null;
       })

@@ -104,9 +104,11 @@ class PushService {
   void _handleForeground(RemoteMessage msg) {
     final notif = msg.notification;
     final data = msg.data;
+    // Beskederne er nu DATA-only (så baggrunds-notifikationen ikke duplikeres);
+    // titel/tekst ligger derfor i data-feltet med notification som fallback.
     _messages.add(PushMessage(
-      title: notif?.title ?? 'Partners',
-      body: notif?.body ?? 'Du har en ny besked',
+      title: notif?.title ?? (data['title'] as String?) ?? 'Partners',
+      body: notif?.body ?? (data['body'] as String?) ?? 'Du har en ny besked',
       gameCode: (data['gameCode'] as String?) ?? '',
       receivedAt: DateTime.now(),
     ));
