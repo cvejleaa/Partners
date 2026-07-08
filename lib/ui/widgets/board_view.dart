@@ -380,13 +380,25 @@ class _BoardPainter extends CustomPainter {
           colors: <Color>[Color.lerp(base, Colors.white, hi)!, base],
         ).createShader(Rect.fromCircle(center: c, radius: pr)),
     );
+    // Kontrast-kant: en hvid ring med en tynd mørk/amber streg ovenpå. Den
+    // hvide ring "løfter" brikken fra baggrunden — også fra et felt i SAMME
+    // farve (fx en gul brik i det gule hus) — så det altid er tydeligt at der
+    // står en brik. Gælder alle farver.
     canvas.drawCircle(
       c,
       pr,
       Paint()
-        ..color = hl ? Colors.amber : Colors.black
+        ..color = Colors.white
         ..style = PaintingStyle.stroke
-        ..strokeWidth = hl ? 3.5 : 1.8,
+        ..strokeWidth = hl ? 4.0 : 3.0,
+    );
+    canvas.drawCircle(
+      c,
+      pr,
+      Paint()
+        ..color = hl ? const Color(0xFFFF8F00) : Colors.black
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = hl ? 3.0 : 1.5,
     );
   }
 
