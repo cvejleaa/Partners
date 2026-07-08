@@ -37,10 +37,10 @@ class PlayerPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color dotColor = colorOverride ?? player.color;
-    final double dotSize = compact ? 14 : 16;
+    final double dotSize = compact ? 12 : 16;
     final double nameSize = compact ? 13 : 14;
     final double countSize = compact ? 12 : 13;
-    final double cardW = compact ? 32 : 36;
+    final double cardW = compact ? 28 : 36;
 
     final Widget infoCol = Column(
       mainAxisSize: MainAxisSize.min,
@@ -51,8 +51,9 @@ class PlayerPanel extends StatelessWidget {
           children: <Widget>[
             if (isStarter) ...<Widget>[
               // Klar, lys stjerne på mørk baggrund — det brune flag forsvandt.
-              const Icon(Icons.star, size: 15, color: Color(0xFFFFD54F)),
-              const SizedBox(width: 3),
+              Icon(Icons.star,
+                  size: compact ? 13 : 15, color: const Color(0xFFFFD54F)),
+              const SizedBox(width: 2),
             ],
             Container(
               width: dotSize,
@@ -101,16 +102,26 @@ class PlayerPanel extends StatelessWidget {
               ),
             ),
           ),
-        const SizedBox(height: 3),
+        SizedBox(height: compact ? 2 : 3),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(Icons.filter_none, size: 11, color: Colors.white70),
+            Icon(Icons.filter_none,
+                size: compact ? 11 : 12, color: Colors.white70),
             const SizedBox(width: 3),
             Text(satOut ? 'smidt' : '$cardCount',
                 style: TextStyle(fontSize: countSize, color: Colors.white)),
-            const SizedBox(width: 6),
-            _StartBadge(count: starterCount),
+            SizedBox(width: compact ? 8 : 10),
+            // Start-tæller: lille flag + tal i stedet for den store blå
+            // "start N"-pille, så start-info fylder mindre i panelet.
+            Icon(Icons.outlined_flag,
+                size: compact ? 11 : 12, color: const Color(0xFF8FBEFF)),
+            const SizedBox(width: 2),
+            Text('$starterCount',
+                style: TextStyle(
+                    fontSize: countSize,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600)),
           ],
         ),
       ],
@@ -147,7 +158,7 @@ class PlayerPanel extends StatelessWidget {
               ]
             : null);
     return Container(
-      padding: EdgeInsets.all(compact ? 7 : 8),
+      padding: EdgeInsets.all(compact ? 5 : 8),
       decoration: BoxDecoration(
         color: dotColor.withValues(alpha: isCurrent ? 0.55 : 0.28),
         borderRadius: BorderRadius.circular(10),
@@ -155,34 +166,6 @@ class PlayerPanel extends StatelessWidget {
         boxShadow: glow,
       ),
       child: body,
-    );
-  }
-}
-
-class _StartBadge extends StatelessWidget {
-  const _StartBadge({required this.count});
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E88E5),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Text('start ',
-              style: TextStyle(color: Colors.white, fontSize: 10)),
-          Text('$count',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold)),
-        ],
-      ),
     );
   }
 }

@@ -83,6 +83,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   late final AnimationController _anim;
   Map<String, ({PiecePosition from, PiecePosition to})> _animMoves = {};
 
+  /// Zoom/panorering af brættet (knib eller scroll). Nulstilles ved spil-slut,
+  /// så slutstillings-billedet ikke fanges zoomet ind.
+  final TransformationController _boardZoom = TransformationController();
+
   GameState get _state => widget.state;
   int get _mySeat => widget.mySeat;
   bool get _animating => _animMoves.isNotEmpty;
@@ -111,6 +115,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   @override
   void dispose() {
     _anim.dispose();
+    _boardZoom.dispose();
     super.dispose();
   }
 
@@ -158,6 +163,12 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     if (newAnim.isNotEmpty) {
       _animMoves = newAnim;
       _anim.forward(from: 0);
+    }
+    // Nulstil zoom ved spil-slut, så slutstillings-billedet fanges i normal
+    // størrelse (ikke zoomet ind).
+    if (_state.phase == GamePhase.gameOver &&
+        old.state.phase != GamePhase.gameOver) {
+      _boardZoom.value = Matrix4.identity();
     }
   }
 
@@ -321,17 +332,28 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         padding: const EdgeInsets.all(1),
         child: AspectRatio(
           aspectRatio: 1,
-          child: BoardView(
-            state: state,
-            viewerIndex: me.index,
-            colorOffset: _colorOffset,
-            quarterTurn: narrow,
-            highlightedPieceIds: _animating ? const <String>{} : _highlightSet(state),
-            animation:
-                _animating ? BoardAnimation(_animMoves, _anim.value) : null,
-            // Deaktivér tap mens en animation kører — ellers risikerer vi
-            // race mellem brugerens valg og den igangværende state-overgang.
-            onPieceTap: _animating ? null : (id) => _handlePieceTap(state, id),
+          // InteractiveViewer: knib/scroll for at zoome ind og træk for at
+          // panorere — så et lille bræt kan forstørres. Et tap på en brik
+          // rammer stadig igennem (kun træk panorerer).
+          child: InteractiveViewer(
+            transformationController: _boardZoom,
+            minScale: 1.0,
+            maxScale: 4.0,
+            clipBehavior: Clip.hardEdge,
+            child: BoardView(
+              state: state,
+              viewerIndex: me.index,
+              colorOffset: _colorOffset,
+              quarterTurn: narrow,
+              highlightedPieceIds:
+                  _animating ? const <String>{} : _highlightSet(state),
+              animation:
+                  _animating ? BoardAnimation(_animMoves, _anim.value) : null,
+              // Deaktivér tap mens en animation kører — ellers risikerer vi
+              // race mellem brugerens valg og den igangværende state-overgang.
+              onPieceTap:
+                  _animating ? null : (id) => _handlePieceTap(state, id),
+            ),
           ),
         ),
       ),

@@ -58,7 +58,10 @@ class BoardView extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints c) {
         final double size = c.biggest.shortestSide;
         return GestureDetector(
-          onTapDown: (TapDownDetails d) => _handleTap(d.localPosition, size),
+          // onTapUp (ikke onTapDown): et rent tap vælger en brik, mens et
+          // træk (panorering i InteractiveViewer når man er zoomet ind) taber
+          // tap-arenaen og derfor IKKE fejlagtigt vælger en brik.
+          onTapUp: (TapUpDetails d) => _handleTap(d.localPosition, size),
           child: CustomPaint(
             size: Size.square(size),
             painter: _BoardPainter(
@@ -247,6 +250,18 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
+    // Mørkere ring-bånd UNDER felterne: en dybere tan-cirkel langs sporet, så
+    // de hvide felter og tallene får mere kontrast — især vigtigt når brættet
+    // vises småt på et lille vindue.
+    canvas.drawCircle(
+      center,
+      tr,
+      Paint()
+        ..color = const Color(0xFFB08A50).withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = cr * 2.6,
+    );
+
     // Spor-felter. Ringen er på [trackLen] felter (60 = 4 UD + 4×14
     // nummererede). For hvert ringindeks: UD-felter (i % quarter == 0) tegnes
     // i ejer-spillerens farve, øvrige som hvide cirkler med felt-nummer 1..14.
@@ -274,13 +289,14 @@ class _BoardPainter extends CustomPainter {
           p,
           cr,
           Paint()
-            ..color = Colors.black38
+            ..color = Colors.black54
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 0.8,
+            ..strokeWidth = 1.0,
         );
-        // Font ≈ 1.2 × celle-radius: tallet fylder cirklen ud uden at
-        // to-cifrede (10-14) rører kanten.
-        _text(canvas, '${i % quarter}', p, cr * 1.2, Colors.black87);
+        // Font ≈ 1.32 × celle-radius, ekstra fed og helt sort: tallet fylder
+        // cirklen ud og er læsbart selv når brættet vises småt.
+        _text(canvas, '${i % quarter}', p, cr * 1.32, Colors.black,
+            weight: FontWeight.w800);
       }
     }
 
@@ -375,12 +391,13 @@ class _BoardPainter extends CustomPainter {
   }
 
   static void _text(
-      Canvas canvas, String s, Offset center, double fontSize, Color color) {
+      Canvas canvas, String s, Offset center, double fontSize, Color color,
+      {FontWeight weight = FontWeight.w700}) {
     final TextPainter tp = TextPainter(
       text: TextSpan(
         text: s,
         style: TextStyle(
-            fontSize: fontSize, color: color, fontWeight: FontWeight.w700),
+            fontSize: fontSize, color: color, fontWeight: weight),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
