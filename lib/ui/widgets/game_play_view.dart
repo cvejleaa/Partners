@@ -257,8 +257,17 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[panelCell(partner), panelCell(right)],
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          panelCell(partner),
+          // "Starter N/3" placeret i det tomme midterfelt mellem panelerne —
+          // sparer den højde en etikette under panelet ellers lagde til.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _starterChip(state),
+          ),
+          panelCell(right),
+        ],
       ),
     );
     // Min plads får en lille "skift farve"-knap ved siden af panelet, så jeg
@@ -369,6 +378,37 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     );
   }
 
+  /// "Starter N/3"-chip til det tomme midterfelt mellem top-panelerne. Farven
+  /// følger den AKTUELLE spiller (hvis tur det er); guldrammen på panelet
+  /// viser stadig hvem der er starter. N nulstilles ved starter-rotation.
+  Widget _starterChip(GameState state) {
+    final int n = (state.starterStreak % 3) + 1;
+    final Color c = _displayColor(state, state.currentPlayerIndex);
+    final Color fg =
+        c.computeLuminance() < 0.5 ? Colors.white : const Color(0xFF1A1A1A);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: c,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+        boxShadow: <BoxShadow>[
+          BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 6),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(Icons.outlined_flag, size: 12, color: fg),
+          const SizedBox(width: 4),
+          Text('Starter $n/3',
+              style: TextStyle(
+                  color: fg, fontSize: 11, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+
   Widget _boardArea(GameState state, Player me) {
     return Center(
       child: Padding(
@@ -411,9 +451,6 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         rules: state.cardRules,
         isCurrent: state.currentPlayerIndex == p.index,
         cardCount: p.hand.length,
-        // starterStreak er 0/1/2 gennem starterens tre hænder og nulstilles
-        // ved rotation — vises som "Starter N/3" (kun for starteren).
-        starterStreak: state.starterStreak,
         isStarter: state.starterIndex == p.index,
         satOut: state.phase == GamePhase.play &&
             state.sittingOut.contains(p.index),

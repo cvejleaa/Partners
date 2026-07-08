@@ -12,7 +12,6 @@ class PlayerPanel extends StatelessWidget {
     required this.rules,
     required this.isCurrent,
     required this.cardCount,
-    this.starterStreak = 0,
     this.isStarter = false,
     this.satOut = false,
     this.lastCard,
@@ -25,9 +24,6 @@ class PlayerPanel extends StatelessWidget {
   final bool isCurrent;
   final int cardCount;
 
-  /// 0/1/2 gennem starterens tre hænder; nulstilles ved rotation. Vises kun
-  /// (som "Starter N/3", N = streak+1) for den spiller der ER starter.
-  final int starterStreak;
   final bool isStarter;
   final bool satOut;
   final PlayingCard? lastCard;
@@ -125,49 +121,9 @@ class PlayerPanel extends StatelessWidget {
       ),
     );
 
-    // "Starter N/3"-etikette UNDER panelet — kun for den faktiske starter.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        box,
-        if (isStarter)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: _StarterLabel(streak: starterStreak),
-          ),
-      ],
-    );
-  }
-}
-
-class _StarterLabel extends StatelessWidget {
-  const _StarterLabel({required this.streak});
-
-  /// 0/1/2 → vises som 1/3, 2/3, 3/3.
-  final int streak;
-
-  @override
-  Widget build(BuildContext context) {
-    final int n = (streak % 3) + 1;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFB300),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(Icons.outlined_flag, size: 12, color: Color(0xFF3A2A00)),
-          const SizedBox(width: 4),
-          Text('Starter $n/3',
-              style: const TextStyle(
-                  color: Color(0xFF3A2A00),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800)),
-        ],
-      ),
-    );
+    // Guldrammen markerer stadig HVEM der er starter; selve "Starter N/3"-
+    // etiketten er flyttet op mellem panelerne (se game_play_view) for at
+    // spare højde.
+    return box;
   }
 }
