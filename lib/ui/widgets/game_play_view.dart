@@ -379,11 +379,11 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   }
 
   /// "Starter N/3"-chip til det tomme midterfelt mellem top-panelerne. Farven
-  /// følger den AKTUELLE spiller (hvis tur det er); guldrammen på panelet
-  /// viser stadig hvem der er starter. N nulstilles ved starter-rotation.
+  /// følger STARTEREN (samme farve som starterens panel/brik) og respekterer
+  /// den lokale farve-rotation. N nulstilles ved starter-rotation.
   Widget _starterChip(GameState state) {
     final int n = (state.starterStreak % 3) + 1;
-    final Color c = _displayColor(state, state.currentPlayerIndex);
+    final Color c = _displayColor(state, state.starterIndex);
     final Color fg =
         c.computeLuminance() < 0.5 ? Colors.white : const Color(0xFF1A1A1A);
     return Container(

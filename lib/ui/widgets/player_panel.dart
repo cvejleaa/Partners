@@ -101,11 +101,18 @@ class PlayerPanel extends StatelessWidget {
               ]
             : null);
 
+    // Starterens panel får en MØRK baggrund i stedet for spillerens (evt.
+    // gyldne) farve, så den gyldne ramme ikke drukner i baggrunden. Farve-
+    // identiteten bevares via prikken ved navnet + den centrale starter-chip.
+    final Color panelFill = isStarter
+        ? Colors.black.withValues(alpha: 0.42)
+        : dotColor.withValues(alpha: isCurrent ? 0.55 : 0.28);
+
     final Widget box = Container(
       width: double.infinity,
       padding: EdgeInsets.all(compact ? 5 : 8),
       decoration: BoxDecoration(
-        color: dotColor.withValues(alpha: isCurrent ? 0.55 : 0.28),
+        color: panelFill,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: borderColor, width: borderWidth),
         boxShadow: glow,
