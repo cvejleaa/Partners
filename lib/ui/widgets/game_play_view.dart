@@ -10,6 +10,7 @@ import '../../models/move.dart';
 import '../../models/piece.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
+import '../../state/display_config.dart';
 import '../../state/settings_controller.dart';
 import 'board_view.dart';
 import 'card_view.dart';
@@ -225,16 +226,20 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     final Player left = state.players[(me.index + 1) % state.players.length];
     final Player right = state.players[(me.index + 3) % state.players.length];
 
+    // Admin-justerbart minimum for brættets størrelse (config/ui.boardMinPx).
+    final double boardMin =
+        ref.watch(boardMinPxProvider).valueOrNull ?? kBoardMinDefault;
+
     // Samme layout på ALLE skærmstørrelser (telefon-opsætningen): paneler i
     // rækker over/under brættet. Det gamle "wide"-layout satte panelerne ved
     // SIDEN af brættet, hvilket på iPad gjorde selve brættet unødigt lille —
     // højden (ikke bredden) er den knappe ressource, og side-paneler stjæler
     // netop bredde som brættet kunne have brugt via sin AspectRatio.
-    return _buildMobile(state, me, partner, left, right);
+    return _buildMobile(state, me, partner, left, right, boardMin);
   }
 
   Widget _buildMobile(GameState state, Player me, Player partner, Player left,
-      Player right) {
+      Player right, double boardMin) {
     // Mobil-layout: paneler er nu placeret OVER og UNDER brættet i to rækker,
     // så de ikke længere overlapper brikkerne i brættets hjørner (gjorde det
     // svært at tappe brikker tæt på panelerne). Top-rækken har makker og
@@ -288,7 +293,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         // kortene er kompakte, så brættet kan fylde resten. Kun hvis vinduet er
         // SÅ lavt at selv minimums-brættet + de kompakte paneler/kort ikke kan
         // være der, scroller siden — så brættet aldrig krymper væk.
-        final double minBoard = min(w, 230.0);
+        final double minBoard = min(w, boardMin);
         const double chrome = 225.0; // skøn: 2 kompakte panel-rækker + kort
         final bool fits = h - chrome >= minBoard;
 

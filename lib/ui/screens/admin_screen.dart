@@ -6,6 +6,7 @@ import '../../game/card_rules.dart';
 import '../../models/playing_card.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
+import '../../state/display_config.dart';
 
 class AdminScreen extends ConsumerWidget {
   const AdminScreen({super.key});
@@ -174,6 +175,7 @@ class AdminScreen extends ConsumerWidget {
               ],
             ),
           ),
+          const _BoardMinTile(),
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
             child: Text(
@@ -191,6 +193,86 @@ class AdminScreen extends ConsumerWidget {
               config: rules.forRank(r),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Admin-slider til minimums-brætstørrelse (config/ui.boardMinPx).
+class _BoardMinTile extends ConsumerStatefulWidget {
+  const _BoardMinTile();
+
+  @override
+  ConsumerState<_BoardMinTile> createState() => _BoardMinTileState();
+}
+
+class _BoardMinTileState extends ConsumerState<_BoardMinTile> {
+  // Lokal værdi mens man trækker i slideren (før den gemmes).
+  double? _dragging;
+
+  @override
+  Widget build(BuildContext context) {
+    final double live =
+        ref.watch(boardMinPxProvider).valueOrNull ?? kBoardMinDefault;
+    final double value =
+        (_dragging ?? live).clamp(kBoardMinLower, kBoardMinUpper);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.crop_square, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Minimum brætstørrelse',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Text('${value.round()} px',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            Slider(
+              min: kBoardMinLower,
+              max: kBoardMinUpper,
+              divisions: ((kBoardMinUpper - kBoardMinLower) / 5).round(),
+              value: value,
+              label: '${value.round()} px',
+              onChanged: (double v) => setState(() => _dragging = v),
+              onChangeEnd: (double v) async {
+                setState(() => _dragging = null);
+                try {
+                  await setBoardMinPx(v);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content: Text(
+                              'Minimum brætstørrelse sat til ${v.round()} px')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Kunne ikke gemme: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 6),
+              child: Text(
+                'Brættet gøres aldrig mindre end dette. Højere værdi = større '
+                'bræt, men mere scroll på lave/små skærme. Gælder alle enheder '
+                'med det samme.',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
