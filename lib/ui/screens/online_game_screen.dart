@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -131,6 +132,24 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
 
           final names = (d['names'] as List).map((e) => e as String).toList();
 
+          // Online-status pr. sæde: en spiller er "online" hvis deres presence-
+          // stempel er friskere end AI-overtagelses-vinduet (heartbeat hvert
+          // kPresenceInterval). Doc'et opdateres løbende af de aktive klienters
+          // heartbeat, så markørerne holder sig ajour.
+          final presence = (d['presence'] as Map?) ?? const <String, dynamic>{};
+          final int nowMs = DateTime.now().millisecondsSinceEpoch;
+          final Set<int> onlineSeats = <int>{};
+          for (int seat = 0; seat < uids.length; seat++) {
+            final u = uids[seat];
+            if (u == null) continue; // AI-plads
+            final ts = presence[u];
+            if (ts is Timestamp &&
+                nowMs - ts.millisecondsSinceEpoch <
+                    kAiTakeoverTimeout.inMilliseconds) {
+              onlineSeats.add(seat);
+            }
+          }
+
           if (state.winningTeamIndex != null && !_statsRecomputed) {
             _statsRecomputed = true;
             final myUid = _svc.uid;
@@ -206,6 +225,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
                     onSubmitExchange: (seat, card) =>
                         _submitExchange(seat, card),
                     lastPlayedCards: lastByPlayer,
+                    onlineSeats: onlineSeats,
                   ),
                   if (_replayActive) _replayOverlay(log, names, state),
                 ],

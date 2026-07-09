@@ -32,6 +32,7 @@ class GamePlayView extends ConsumerStatefulWidget {
     required this.onSubmitExchange,
     this.lastPlayedCards = const <int, PlayingCard>{},
     this.bottomStatusOverride,
+    this.onlineSeats,
     super.key,
   });
 
@@ -60,6 +61,11 @@ class GamePlayView extends ConsumerStatefulWidget {
   /// der ikke køres animation lokalt). Hvis null bruger widget'en sin egen
   /// status afhængigt af tilstand.
   final String? bottomStatusOverride;
+
+  /// Sæder (0..3) hvis menneskelige spiller er "online" (frisk presence) i et
+  /// online-spil. `null` = ikke et online-spil (fx AI-/lokalt spil) → ingen
+  /// online-markør vises. En human-plads der IKKE er i sættet vises som "væk".
+  final Set<int>? onlineSeats;
 
   @override
   ConsumerState<GamePlayView> createState() => _GamePlayViewState();
@@ -451,6 +457,11 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         rules: state.cardRules,
         isCurrent: state.currentPlayerIndex == p.index,
         cardCount: p.hand.length,
+        // Online-markør: kun i online-spil (onlineSeats != null) og kun for
+        // menneskelige pladser. AI-pladser får ingen markør.
+        online: widget.onlineSeats == null || !p.isHuman
+            ? null
+            : widget.onlineSeats!.contains(p.index),
         isStarter: state.starterIndex == p.index,
         satOut: state.phase == GamePhase.play &&
             state.sittingOut.contains(p.index),

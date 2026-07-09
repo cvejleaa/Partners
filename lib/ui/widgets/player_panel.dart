@@ -17,6 +17,7 @@ class PlayerPanel extends StatelessWidget {
     this.lastCard,
     this.compact = false,
     this.colorOverride,
+    this.online,
   });
 
   final Player player;
@@ -32,6 +33,10 @@ class PlayerPanel extends StatelessWidget {
   /// Lokal vis-farve der overstyrer [player.color] (farve-rotation). null =
   /// brug spillerens rigtige farve.
   final Color? colorOverride;
+
+  /// Online-status i et online-spil: true = til stede, false = væk, null =
+  /// vis ingen markør (fx AI-plads eller lokalt spil).
+  final bool? online;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +71,10 @@ class PlayerPanel extends StatelessWidget {
             ),
           ),
         ),
+        if (online != null) ...<Widget>[
+          const SizedBox(width: 5),
+          _PresenceDot(online: online!),
+        ],
       ],
     );
 
@@ -132,5 +141,35 @@ class PlayerPanel extends StatelessWidget {
     // etiketten er flyttet op mellem panelerne (se game_play_view) for at
     // spare højde.
     return box;
+  }
+}
+
+/// Lille online-markør: udfyldt grøn prik = til stede, hul grå prik = væk.
+class _PresenceDot extends StatelessWidget {
+  const _PresenceDot({required this.online});
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    const Color onColor = Color(0xFF4CAF50);
+    final Color color = online ? onColor : const Color(0xFF9E9E9E);
+    return Tooltip(
+      message: online ? 'Online' : 'Væk',
+      child: Container(
+        width: 9,
+        height: 9,
+        decoration: BoxDecoration(
+          color: online ? color : Colors.transparent,
+          shape: BoxShape.circle,
+          border: Border.all(color: color, width: online ? 0 : 1.5),
+          boxShadow: online
+              ? <BoxShadow>[
+                  BoxShadow(
+                      color: onColor.withValues(alpha: 0.7), blurRadius: 4),
+                ]
+              : null,
+        ),
+      ),
+    );
   }
 }
