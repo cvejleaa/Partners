@@ -118,15 +118,19 @@ class GameController extends StateNotifier<GameState> {
           ],
         ),
     ];
+    // Tilfældig start-spiller, så det ikke altid er den samme (plads 0) der
+    // starter et nyt spil.
+    final int starter = _rng.nextInt(players.length);
     final GameState s = GameState(
       players: players,
       geometry: geom,
       deck: Deck.fresh(),
       discard: <PlayingCard>[],
-      dealerIndex: 0,
-      currentPlayerIndex: 0,
+      dealerIndex: starter,
+      currentPlayerIndex: starter,
       phase: GamePhase.setup,
       handNumber: 0,
+      starterIndex: starter,
       cardRules: cardRules,
     );
     _engine = GameEngine(state: s, rng: _rng);

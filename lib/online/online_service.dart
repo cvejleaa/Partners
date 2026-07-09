@@ -550,15 +550,18 @@ class OnlineService {
           ],
         ),
     ];
+    // Tilfældig start-spiller — ikke altid værten (plads 0/den der inviterede).
+    final int starter = Random().nextInt(4);
     final s = GameState(
       players: players,
       geometry: const BoardGeometry(),
       deck: Deck.fresh(),
       discard: <PlayingCard>[],
-      dealerIndex: 0,
-      currentPlayerIndex: 0,
+      dealerIndex: starter,
+      currentPlayerIndex: starter,
       phase: GamePhase.setup,
       handNumber: 0,
+      starterIndex: starter,
       cardRules: rules,
     );
     GameEngine(state: s).startNewHand();
