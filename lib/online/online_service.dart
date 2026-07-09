@@ -261,6 +261,26 @@ class OnlineService {
     return List.generate(4, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
+  /// Standard-paletten (rød, blå, grøn, gul).
+  static const List<int> kPalette = <int>[
+    0xFFE53935,
+    0xFF1E88E5,
+    0xFF43A047,
+    0xFFFDD835,
+  ];
+
+  /// Fire FORSKELLIGE farver hvor plads 0 er [first]. De øvrige pladser fyldes
+  /// fra paletten uden at genbruge en farve. (Paletten har 4 forskellige, så
+  /// resultatet er altid 4 unikke.)
+  static List<int> _distinctColors(int first) {
+    final List<int> out = <int>[first];
+    for (final int c in kPalette) {
+      if (out.length >= 4) break;
+      if (!out.contains(c)) out.add(c);
+    }
+    return out;
+  }
+
   Future<String> createGame({
     required int colorValue,
     required CardRules rules,
@@ -292,7 +312,10 @@ class OnlineService {
       'hostUid': uid,
       'hostName': name,
       'names': <String>[name, 'Åben', 'Åben', 'Åben'],
-      'colors': <int>[colorValue, 0xFF1E88E5, 0xFF43A047, 0xFFFDD835],
+      // Værten får sin valgte farve på plads 0; de øvrige pladser fyldes med
+      // paletten MINUS værtens farve, så alle fire farver er forskellige (fx en
+      // vært med blå gav før to blå ved revanche).
+      'colors': _distinctColors(colorValue),
       'uids': <String?>[uid, null, null, null],
       // Pladser markeret som AI fra lobbyen (true = computer-spiller).
       'aiSeats': <bool>[false, false, false, false],
