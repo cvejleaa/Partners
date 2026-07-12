@@ -231,22 +231,13 @@ class _BoardPainter extends CustomPainter {
         ..strokeWidth = dim * 0.012,
     );
 
-    // Hjemstræk. Kontur tegnes i en MØRKERE variant af spillerfarven, så lyse
-    // farver (især gul) ikke drukner i den cremefarvede bane.
+    // Hjemstræk. Felterne tegnes som NEUTRALE brønde med en tynd farvet
+    // ejer-ring — så en brik i samme farve som feltet ikke drukner.
     for (final Player pl in state.players) {
       final Color plColor = _seatColor(pl.index);
-      final Color outline = _boardOutline(plColor);
       for (int slot = 0; slot < state.geometry.homeStretchLength; slot++) {
         final Offset p = _homePoint(center, tr, pl.index, slot, trackLen, rotation);
-        canvas.drawCircle(p, cr, Paint()..color = plColor.withValues(alpha: 0.38));
-        canvas.drawCircle(
-          p,
-          cr,
-          Paint()
-            ..color = outline
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.0,
-        );
+        _drawWell(canvas, p, cr, plColor);
       }
     }
 
@@ -271,18 +262,9 @@ class _BoardPainter extends CustomPainter {
       final int owner = i ~/ quarter;
       if (isExit) {
         final Color ownerColor = _seatColor(owner);
-        final Color outline = _boardOutline(ownerColor);
-        canvas.drawCircle(
-            p, cr, Paint()..color = ownerColor.withValues(alpha: 0.42));
-        canvas.drawCircle(
-          p,
-          cr,
-          Paint()
-            ..color = outline
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.4,
-        );
-        _text(canvas, 'UD', p, cr * 0.85, outline);
+        // UD-felt: neutral brønd + farvet ejer-ring, "UD" i mørk ejer-farve.
+        _drawWell(canvas, p, cr, ownerColor, ringWidth: 0.17);
+        _text(canvas, 'UD', p, cr * 0.85, _boardOutline(ownerColor));
       } else {
         canvas.drawCircle(p, cr, Paint()..color = Colors.white);
         canvas.drawCircle(
@@ -300,21 +282,12 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
-    // Start-bås.
+    // Start-bås — samme neutrale brønd med farvet ejer-ring.
     for (final Player pl in state.players) {
       final Color plColor = _seatColor(pl.index);
-      final Color outline = _boardOutline(plColor);
       for (int slot = 0; slot < 4; slot++) {
         final Offset p = _startPoint(center, tr, pl.index, slot, trackLen, rotation);
-        canvas.drawCircle(p, cr, Paint()..color = plColor.withValues(alpha: 0.22));
-        canvas.drawCircle(
-          p,
-          cr,
-          Paint()
-            ..color = outline
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.4,
-        );
+        _drawWell(canvas, p, cr, plColor, ringWidth: 0.13);
       }
     }
 
@@ -361,6 +334,27 @@ class _BoardPainter extends CustomPainter {
     });
   }
 
+  /// Neutral "brønd" med en tynd farvet ejer-ring: en lys fordybning med en
+  /// mørk kant-rim og en ring i ejerens farve. Erstatter de tidligere
+  /// farve-fyldte felter, så en brik i SAMME farve som feltet ikke drukner.
+  void _drawWell(Canvas canvas, Offset p, double cr, Color ringColor,
+      {double ringWidth = 0.16}) {
+    // Mørk fordybnings-rim under en lys neutral brønd (giver dybde + kontrast).
+    canvas.drawCircle(
+        p, cr, Paint()..color = Colors.black.withValues(alpha: 0.14));
+    canvas.drawCircle(
+        p, cr * 0.92, Paint()..color = const Color(0xFFF2E7CC));
+    // Ejer-ring.
+    canvas.drawCircle(
+      p,
+      cr,
+      Paint()
+        ..color = ringColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = cr * ringWidth,
+    );
+  }
+
   void _drawPiece(Canvas canvas, Offset c, double r, Color color, bool hl) {
     final double pr = r * 1.15;
     // Lyse farver (især gul) mørknes så brikken læses som en solid token på
@@ -400,6 +394,9 @@ class _BoardPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = hl ? 3.0 : 1.5,
     );
+    // Lille glans-prik → brikken læses som en blank, rund token.
+    canvas.drawCircle(c + Offset(-pr * 0.32, -pr * 0.34), pr * 0.18,
+        Paint()..color = Colors.white.withValues(alpha: 0.55));
   }
 
   static void _text(
