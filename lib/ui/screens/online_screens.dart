@@ -194,16 +194,53 @@ class OnlineHomeScreen extends ConsumerWidget {
     final String status = g.isLobby
         ? 'Venter i lobby'
         : (g.isPlaying ? 'Tryk for at genindtræde' : 'I gang');
+
+    // Hvis-tur-markør for igangværende spil: en tydelig grøn "Din tur"-chip når
+    // det er brugerens tur, ellers "<navn>s tur" / "Bytter kort".
+    Widget? turnLine;
+    if (g.isPlaying) {
+      if (g.isMyTurn) {
+        turnLine = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2E7D32),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(Icons.play_arrow, size: 14, color: Colors.white),
+              SizedBox(width: 3),
+              Text('Din tur',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      } else if (g.phase == 'play' && g.currentName != null) {
+        turnLine = Text('${g.currentName}s tur',
+            style: const TextStyle(fontSize: 13));
+      } else if (g.phase == 'exchange') {
+        turnLine =
+            const Text('Bytter kort', style: TextStyle(fontSize: 13));
+      }
+    }
+
     return Card(
       child: ListTile(
         isThreeLine: participants.isNotEmpty,
-        leading: Icon(g.isPlaying ? Icons.play_circle : Icons.meeting_room),
+        leading: Icon(
+          g.isPlaying ? Icons.play_circle : Icons.meeting_room,
+          color: g.isMyTurn ? const Color(0xFF2E7D32) : null,
+        ),
         title: Text('Spil ${g.code}  ·  vært: ${g.hostName}'),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(status),
+            turnLine ?? Text(status),
             if (participants.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),

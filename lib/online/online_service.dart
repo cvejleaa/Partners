@@ -76,12 +76,24 @@ final myGamesProvider = StreamProvider<List<GameSummary>>((ref) {
 
 class GameSummary {
   GameSummary(this.code, this.hostName, this.status, this.playerNames,
-      {this.hostUid});
+      {this.hostUid,
+      this.phase,
+      this.currentName,
+      this.isMyTurn = false});
   final String code;
   final String hostName;
   final String status;
   final List<String> playerNames;
   final String? hostUid;
+
+  /// Spil-fase for igangværende spil ('play', 'exchange', …). Null = ukendt.
+  final String? phase;
+
+  /// Navnet på den spiller hvis tur det er (i play-fasen). Null hvis ukendt.
+  final String? currentName;
+
+  /// True hvis det er DENNE brugers tur netop nu.
+  final bool isMyTurn;
 
   bool get isLobby => status == 'lobby';
   bool get isPlaying => status == 'playing';
@@ -426,6 +438,42 @@ class OnlineService {
   Stream<DocumentSnapshot<Map<String, dynamic>>> watch(String code) =>
       _games.doc(code).snapshots();
 
+  /// Byg en [GameSummary] ud fra spil-dokumentet, inkl. hvis tur det er (for
+  /// igangværende spil) set fra [uid]'s perspektiv.
+  GameSummary _summaryFromDoc(
+      String id, Map<String, dynamic> d, String uid) {
+    final List<String> names =
+        (d['names'] as List? ?? const <dynamic>[]).map((e) => '$e').toList();
+    final String status = d['status'] as String? ?? 'lobby';
+
+    String? phase;
+    String? currentName;
+    bool isMyTurn = false;
+    final state = d['state'];
+    if (status == 'playing' && state is Map) {
+      phase = state['ph'] as String?;
+      final int? cp = (state['cp'] as num?)?.toInt();
+      if (cp != null) {
+        if (cp >= 0 && cp < names.length) currentName = names[cp];
+        final uids = d['uids'] as List?;
+        if (uids != null && cp >= 0 && cp < uids.length) {
+          isMyTurn = uids[cp] == uid;
+        }
+      }
+    }
+
+    return GameSummary(
+      id,
+      d['hostName'] as String? ?? '?',
+      status,
+      names,
+      hostUid: d['hostUid'] as String?,
+      phase: phase,
+      currentName: currentName,
+      isMyTurn: isMyTurn,
+    );
+  }
+
   /// Spil hvor [uid] er medlem. Kaldes med et bekræftet uid fra
   /// [myGamesProvider], der venter på login før abonnementet startes.
   ///
@@ -442,15 +490,7 @@ class OnlineService {
             .where('members', arrayContains: uid)
             .snapshots()
             .map((q) => q.docs
-                .map((d) => GameSummary(
-                      d.id,
-                      d.data()['hostName'] as String? ?? '?',
-                      d.data()['status'] as String? ?? 'lobby',
-                      (d.data()['names'] as List)
-                          .map((e) => e as String)
-                          .toList(),
-                      hostUid: d.data()['hostUid'] as String?,
-                    ))
+                .map((d) => _summaryFromDoc(d.id, d.data(), uid))
                 .where((g) => g.status != 'over')
                 .toList());
         return; // snapshots() afsluttes normalt aldrig.
