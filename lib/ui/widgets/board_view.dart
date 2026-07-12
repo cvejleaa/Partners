@@ -118,10 +118,11 @@ Color _boardOutline(Color c) {
 /// røres stort set ikke, så deres identitet bevares.
 Color _pieceFill(Color c) {
   final double lum = c.computeLuminance();
-  // Kun lyse farver mørknes; jo lysere, jo mere. Gul (lum≈0.72) → ~0.30 så
-  // den bliver et tydeligt guld der kontrasterer banen.
-  final double amount = ((lum - 0.4).clamp(0.0, 1.0)) * 0.95;
-  return Color.lerp(c, const Color(0xFF000000), amount) ?? c;
+  // Kun lyse farver mørknes. Vi mørkner mod en VARM mørk tone (ikke ren sort),
+  // så gul bliver et rigt, mættet guld — ikke en mudret oliven — der stadig
+  // læses som gul, men kontrasterer den varme bane.
+  final double amount = ((lum - 0.45).clamp(0.0, 1.0)) * 0.72;
+  return Color.lerp(c, const Color(0xFF4A3300), amount) ?? c;
 }
 
 // ---------------------------------------------------------------------------
@@ -360,9 +361,12 @@ class _BoardPainter extends CustomPainter {
     // Lyse farver (især gul) mørknes så brikken læses som en solid token på
     // den cremefarvede bane — ellers smelter den sammen med felterne.
     final Color base = _pieceFill(color);
-    // Mindre hvid-highlight på lyse farver, så toppen ikke bliver næsten hvid.
+    // Lyse farver (gul) får MINDRE top-glans, så toppen ikke vaskes ud mod den
+    // lyse bane, og en KRAFTIGERE mørk kant, så brikken står skarpt.
     final double lum = color.computeLuminance();
-    final double hi = lum > 0.5 ? 0.25 : 0.45;
+    final bool light = lum > 0.5;
+    final double hi = light ? 0.12 : 0.45;
+    final double darkEdge = light ? 2.4 : 1.5;
     canvas.drawCircle(c + const Offset(0, 1.5), pr,
         Paint()..color = Colors.black.withValues(alpha: 0.35));
     canvas.drawCircle(
@@ -392,7 +396,7 @@ class _BoardPainter extends CustomPainter {
       Paint()
         ..color = hl ? const Color(0xFFFF8F00) : Colors.black
         ..style = PaintingStyle.stroke
-        ..strokeWidth = hl ? 3.0 : 1.5,
+        ..strokeWidth = hl ? 3.0 : darkEdge,
     );
     // Lille glans-prik → brikken læses som en blank, rund token.
     canvas.drawCircle(c + Offset(-pr * 0.32, -pr * 0.34), pr * 0.18,
