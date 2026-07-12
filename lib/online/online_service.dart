@@ -79,7 +79,8 @@ class GameSummary {
       {this.hostUid,
       this.phase,
       this.currentName,
-      this.isMyTurn = false});
+      this.isMyTurn = false,
+      this.needsExchange = false});
   final String code;
   final String hostName;
   final String status;
@@ -92,8 +93,12 @@ class GameSummary {
   /// Navnet på den spiller hvis tur det er (i play-fasen). Null hvis ukendt.
   final String? currentName;
 
-  /// True hvis det er DENNE brugers tur netop nu.
+  /// True hvis det er DENNE brugers tur netop nu (kun i play-fasen).
   final bool isMyTurn;
+
+  /// True hvis spillet er i byttefasen OG brugeren endnu ikke har afgivet sit
+  /// bytte-kort (dvs. brugeren skal handle).
+  final bool needsExchange;
 
   bool get isLobby => status == 'lobby';
   bool get isPlaying => status == 'playing';
@@ -449,15 +454,27 @@ class OnlineService {
     String? phase;
     String? currentName;
     bool isMyTurn = false;
+    bool needsExchange = false;
     final state = d['state'];
     if (status == 'playing' && state is Map) {
       phase = state['ph'] as String?;
-      final int? cp = (state['cp'] as num?)?.toInt();
-      if (cp != null) {
-        if (cp >= 0 && cp < names.length) currentName = names[cp];
-        final uids = d['uids'] as List?;
-        if (uids != null && cp >= 0 && cp < uids.length) {
-          isMyTurn = uids[cp] == uid;
+      final uids = d['uids'] as List?;
+      if (phase == 'play') {
+        // Kun i play-fasen er currentPlayerIndex en rigtig "tur".
+        final int? cp = (state['cp'] as num?)?.toInt();
+        if (cp != null) {
+          if (cp >= 0 && cp < names.length) currentName = names[cp];
+          if (uids != null && cp >= 0 && cp < uids.length) {
+            isMyTurn = uids[cp] == uid;
+          }
+        }
+      } else if (phase == 'exchange') {
+        // I byttefasen skal brugeren handle hvis de endnu ikke har afgivet et
+        // kort (samme signal som spillet selv: exchangeBuffer[seat]).
+        final int mySeat = uids?.indexOf(uid) ?? -1;
+        final eb = state['eb'];
+        if (mySeat >= 0) {
+          needsExchange = !(eb is Map && eb.containsKey('$mySeat'));
         }
       }
     }
@@ -471,6 +488,7 @@ class OnlineService {
       phase: phase,
       currentName: currentName,
       isMyTurn: isMyTurn,
+      needsExchange: needsExchange,
     );
   }
 
