@@ -112,8 +112,10 @@ class GameSummary {
 /// længe de er væk (håndhævet både i _maybeHostAct og i aiTakeoverMove).
 const Duration kAiTakeoverTimeout = Duration(seconds: 35);
 
-/// Hvor ofte en aktiv klient opdaterer sit "presence"-stempel.
-const Duration kPresenceInterval = Duration(seconds: 15);
+/// Hvor ofte en aktiv klient opdaterer sit "presence"-stempel. Holdes lavere
+/// end push-væk-grænsen (AWAY_MS i functions), så en aktiv spiller aldrig ser
+/// "væk" ud og fejlagtigt får en tur-notifikation.
+const Duration kPresenceInterval = Duration(seconds: 7);
 
 /// Heuristisk AI til at drive computer-pladser fra værtens enhed.
 final HeuristicAi onlineAi = HeuristicAi();

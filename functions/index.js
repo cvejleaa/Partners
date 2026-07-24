@@ -88,7 +88,10 @@ exports.onInboxCreate = onDocumentCreated(
 /// hvis de IKKE er aktive på spillepladen (deres presence-stempel er forældet).
 /// Trigges når spil-dokumentet opdateres; kun rigtige turn-skift (ændret
 /// currentPlayerIndex/hånd i play-fasen) fører til en push.
-const AWAY_MS = 20000; // presence ældre end dette = "ikke aktiv"
+// Presence ældre end dette = "ikke aktiv" → send tur-push. Skal være STØRRE
+// end klientens heartbeat-interval (kPresenceInterval = 7s), så en aktiv
+// spiller ikke fejlagtigt ser "væk" ud mellem to heartbeats.
+const AWAY_MS = 12000;
 
 exports.onGameTurn = onDocumentUpdated(
   {
