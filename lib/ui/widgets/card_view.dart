@@ -147,10 +147,23 @@ class CardView extends StatelessWidget {
   final VoidCallback? onTap;
   final double width;
 
+  /// Kort tekst-opsummering af hvad kortet gør — bruges som tooltip (hold nede/
+  /// hover), så man ALTID kan se kortets funktion, selv når kortet vises småt.
+  String _functionSummary() {
+    final CardFace f = describeCardFace(card, rules);
+    final StringBuffer b = StringBuffer(f.eyebrow);
+    if (f.bigNumber != null) b.write(' ${f.bigNumber}');
+    if (f.unit != null) b.write(' ${f.unit}');
+    if (f.sub != null) b.write(' — ${f.sub}');
+    if (f.startChip) b.write(' · ♥ Ud af start');
+    if (f.extraChip != null) b.write(' · ${f.extraChip}');
+    return b.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final double height = width * 1.5;
-    return GestureDetector(
+    final Widget cardWidget = GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
@@ -177,6 +190,17 @@ class CardView extends StatelessWidget {
         ),
       ),
     );
+    // Kun for face-up-kort: hold nede (eller hover) viser en tooltip med
+    // kortets funktion, så man altid kan se hvad kortet kan — også når det
+    // vises småt på en lille skærm.
+    if (!faceUp) return cardWidget;
+    return Tooltip(
+      message: _functionSummary(),
+      triggerMode: TooltipTriggerMode.longPress,
+      preferBelow: false,
+      showDuration: const Duration(seconds: 3),
+      child: cardWidget,
+    );
   }
 
   Widget _buildBack() {
@@ -196,8 +220,9 @@ class CardView extends StatelessWidget {
     final double band = (width * 0.06).clamp(3.0, 7.0);
     // Meget små kort (fx "sidst spillede"-thumbnail i spiller-panelet, ~32 px)
     // har ikke plads til eyebrow/chips — vis en kompakt udgave: bånd +
-    // det store tal eller ikon i typens farve.
-    if (width < 46) {
+    // det store tal eller ikon i typens farve. Grænsen holdes lav (40 px), så
+    // hånd-kort så vidt muligt viser den fulde funktion.
+    if (width < 40) {
       final String glyph = f.bigNumber ?? f.icon ?? '·';
       return Container(
         decoration: const BoxDecoration(

@@ -493,7 +493,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
   Widget _buildExchangeArea(GameState state, Player me, {required bool fill}) {
     final bool done = state.exchangeBuffer.containsKey(me.index);
-    final double maxCardW = fill ? 72 : 48;
+    // Kortene får HELE bredden (Bekræft-knappen ligger nu nedenunder, ikke ved
+    // siden af), så de kan være store nok til at vise kortets funktion.
+    final double maxCardW = fill ? 84 : 60;
     // Det kort jeg har afgivet ligger i bufferen til byttet udføres — markér
     // det i hånden indtil jeg får makkerens kort (fasen skifter til play).
     final PlayingCard? givenCard = done ? state.exchangeBuffer[me.index] : null;
@@ -505,24 +507,6 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       selected: _humanExchangeChoice,
       onTapCard: done ? null : (c) => setState(() => _humanExchangeChoice = c),
       givenCard: givenCard,
-    );
-    final Widget cardRow = Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        Expanded(child: cards),
-        if (!done) ...<Widget>[
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: _humanExchangeChoice == null
-                ? null
-                : () {
-                    widget.onSubmitExchange(me.index, _humanExchangeChoice!);
-                    setState(() => _humanExchangeChoice = null);
-                  },
-            child: const Text('Bekræft\nbytte', textAlign: TextAlign.center),
-          ),
-        ],
-      ],
     );
     return Container(
       width: double.infinity,
@@ -540,7 +524,20 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
           const SizedBox(height: 8),
-          cardRow,
+          cards,
+          if (!done) ...<Widget>[
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: _humanExchangeChoice == null
+                  ? null
+                  : () {
+                      widget.onSubmitExchange(me.index, _humanExchangeChoice!);
+                      setState(() => _humanExchangeChoice = null);
+                    },
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text('Bekræft bytte'),
+            ),
+          ],
         ],
       ),
     );
