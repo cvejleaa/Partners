@@ -34,7 +34,8 @@ class OnlineGameScreen extends ConsumerStatefulWidget {
   ConsumerState<OnlineGameScreen> createState() => _OnlineGameScreenState();
 }
 
-class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
+class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
+    with WidgetsBindingObserver {
   String _lastProcessed = '';
   bool _busy = false;
   bool _aiActionPending = false;
@@ -72,11 +73,17 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // ignore: discarded_futures
     _svc.heartbeat(widget.code);
     _heartbeat = Timer.periodic(kPresenceInterval, (_) {
-      // ignore: discarded_futures
-      _svc.heartbeat(widget.code);
+      // Opdater KUN presence når appen er synlig/i forgrunden. Ellers lader vi
+      // presence blive forældet, så en fraværende spiller (fx en Android-PWA
+      // der lever i baggrunden) faktisk ser "væk" ud og får en tur-push.
+      if (_appVisible()) {
+        // ignore: discarded_futures
+        _svc.heartbeat(widget.code);
+      }
       // Sikkerhedsnet mod AI-freeze: hvis _maybeHostAct har markeret en sig
       // som behandlet men handlingen aldrig trådte i kraft (transient fejl,
       // app i baggrunden, mistet snapshot), står vi fast indtil Firestore-
@@ -92,8 +99,26 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     });
   }
 
+  /// True når appen er synlig/i forgrunden (så vi bør opdatere presence).
+  bool _appVisible() {
+    final AppLifecycleState? s = WidgetsBinding.instance.lifecycleState;
+    return s != AppLifecycleState.hidden && s != AppLifecycleState.paused;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Tilbage i forgrunden: opdater presence STRAKS (så online-markør/AI-
+    // overtagelse ser at spilleren er tilbage, uden at vente på næste tick).
+    if (state == AppLifecycleState.resumed) {
+      // ignore: discarded_futures
+      _svc.heartbeat(widget.code);
+      if (mounted) setState(() {});
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _heartbeat?.cancel();
     super.dispose();
   }
