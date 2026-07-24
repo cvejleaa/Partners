@@ -695,8 +695,17 @@ class OnlineService {
         // Tilføj klient-side timestamp (server-timestamp virker ikke inde i
         // array-elementer — vi accepterer mindre clock-skew for stats-formål).
         final entry = Map<String, dynamic>.from(logEntry);
-        entry['t'] = Timestamp.now();
-        upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
+        // Undgå dublet: skriv IKKE et træk der er identisk med det seneste i
+        // log'en (kan ske hvis samme handling skrives to gange). Da hvert
+        // element har et unikt timestamp, ville arrayUnion ellers ikke fange
+        // dubletten — så det tjekker vi selv mod den friske log.
+        final List log = (d['log'] as List?) ?? const <dynamic>[];
+        final bool dup = log.isNotEmpty &&
+            sameLoggedMove(entry, Map<String, dynamic>.from(log.last as Map));
+        if (!dup) {
+          entry['t'] = Timestamp.now();
+          upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
+        }
       }
       tx.update(ref, upd);
     });
@@ -764,12 +773,19 @@ class OnlineService {
         upd['winningTeamIndex'] = state.winningTeamIndex;
       }
       final entry = Map<String, dynamic>.from(logEntry);
-      entry['t'] = Timestamp.now();
       if (asTakeover) {
         // Marker at trækket blev lavet af AI på vegne af en fraværende spiller.
         entry['ai'] = true;
       }
-      upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
+      // Samme dublet-værn som i mutate: skriv ikke et træk identisk med det
+      // seneste i log'en.
+      final List log = (d['log'] as List?) ?? const <dynamic>[];
+      final bool dup = log.isNotEmpty &&
+          sameLoggedMove(entry, Map<String, dynamic>.from(log.last as Map));
+      if (!dup) {
+        entry['t'] = Timestamp.now();
+        upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
+      }
       tx.update(ref, upd);
       acted = true;
     });

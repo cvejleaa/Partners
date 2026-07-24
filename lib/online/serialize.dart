@@ -139,3 +139,32 @@ GameState gameStateFromMap(Map<String, dynamic> m) {
         <int>{},
   );
 }
+
+/// Sammenlign to log-entries som "samme træk" (ignorér tidsstempel [t] og
+/// ai-flag). Bruges til at filtrere utilsigtede dubletter fra — både ved
+/// skrivning (så log'en ikke vokser med gentagne identiske træk) og i
+/// "mens du var væk"-replay'en.
+bool sameLoggedMove(Map<String, dynamic> a, Map<String, dynamic> b) {
+  return a['player'] == b['player'] &&
+      a['type'] == b['type'] &&
+      _logDeepEq(a['card'], b['card']) &&
+      _logDeepEq(a['steps'], b['steps']);
+}
+
+bool _logDeepEq(dynamic a, dynamic b) {
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (!b.containsKey(k) || !_logDeepEq(a[k], b[k])) return false;
+    }
+    return true;
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (!_logDeepEq(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  return a == b;
+}

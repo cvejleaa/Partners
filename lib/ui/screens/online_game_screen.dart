@@ -54,9 +54,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     }
   }
 
-  int _replayIndex = 0;
   bool _replayActive = false;
-  int _replayTarget = 0;
+  int _replayTarget = 0; // rå log-længde (til markSeen)
+  // De træk der vises i "mens du var væk"-replay'en, med utilsigtede dubletter
+  // filtreret fra, samt den aktuelle position i den liste.
+  List<Map<String, dynamic>> _replayItems = <Map<String, dynamic>>[];
+  int _replayPos = 0;
 
   bool _statsRecomputed = false;
   Timer? _heartbeat;
@@ -280,13 +283,29 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
     }
     if (!_initialReplayChecked) {
       _initialReplayChecked = true;
+      // Byg listen af træk der skal vises, med utilsigtede dubletter fjernet
+      // (samme spiller/kort/felt i træk = samme handling logget flere gange).
+      final List<Map<String, dynamic>> items = <Map<String, dynamic>>[];
+      for (int i = mySeen; i < log.length; i++) {
+        final e = Map<String, dynamic>.from(log[i] as Map);
+        if (items.isNotEmpty && sameLoggedMove(e, items.last)) continue;
+        items.add(e);
+      }
+      if (items.isEmpty) {
+        // Alt var dubletter (bør ikke ske) — marker set og lad være at vise.
+        _liveSeenAck = log.length;
+        // ignore: discarded_futures
+        _svc.markSeen(widget.code, log.length);
+        return;
+      }
       // _maybeStartReplay kaldes fra build() — setState må ikke kaldes midt i
       // en build. Udskyd til efter frame'en.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() {
           _replayActive = true;
-          _replayIndex = mySeen;
+          _replayItems = items;
+          _replayPos = 0;
           _replayTarget = log.length;
         });
       });
@@ -309,11 +328,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
   }
 
   Widget _replayOverlay(List log, List<String> names, GameState state) {
-    if (_replayIndex >= log.length) {
+    if (_replayPos >= _replayItems.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _finishReplay());
       return const SizedBox.shrink();
     }
-    final m = Map<String, dynamic>.from(log[_replayIndex] as Map);
+    final m = _replayItems[_replayPos];
     final int seat = (m['player'] as num).toInt();
     final PlayingCard? card = m['card'] == null
         ? null
@@ -330,7 +349,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Text('Mens du var væk (${_replayIndex + 1}/${log.length})',
+                  Text(
+                      'Mens du var væk (${_replayPos + 1}/${_replayItems.length})',
                       style: const TextStyle(
                           fontSize: 12, color: Colors.grey)),
                   const SizedBox(height: 8),
@@ -348,15 +368,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen> {
                     children: <Widget>[
                       TextButton(
                         onPressed: () {
-                          setState(() => _replayIndex = log.length);
+                          setState(() => _replayPos = _replayItems.length);
                         },
                         child: const Text('Spring over'),
                       ),
                       FilledButton(
                         onPressed: () {
-                          setState(() => _replayIndex += 1);
+                          setState(() => _replayPos += 1);
                         },
-                        child: Text(_replayIndex + 1 >= log.length
+                        child: Text(_replayPos + 1 >= _replayItems.length
                             ? 'Færdig'
                             : 'Næste'),
                       ),
