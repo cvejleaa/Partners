@@ -16,7 +16,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Partners">
-  <link rel="apple-touch-icon" href="icons/Icon.svg">
+  <!-- iOS understøtter IKKE SVG som apple-touch-icon — brug PNG, ellers får
+       hjemmeskærms-appen (og iOS-notifikationen) et tomt/forkert ikon. -->
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
