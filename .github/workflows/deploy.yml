@@ -65,6 +65,9 @@ jobs:
           rsvg-convert -w 192 -h 192 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-192.png
           rsvg-convert -w 512 -h 512 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-512.png
           rsvg-convert -w 64  -h 64  web/favicon.svg -o web/favicon.png
+          # Monokromt notifikations-badge (hvid silhuet på gennemsigtig) til
+          # Androids lille status-ikon.
+          rsvg-convert -w 96  -h 96  web/icons/notification-badge.svg -o web/icons/notification-badge.png
           echo "Genererede ikoner:" && ls -la web/icons/*.png web/favicon.png
 
       - name: Byg web (release)

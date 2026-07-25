@@ -46,7 +46,9 @@ messaging.onBackgroundMessage(function (payload) {
   self.registration.showNotification(title, {
     body: body,
     icon: '/icons/Icon-192.png',
-    badge: '/icons/Icon-192.png',
+    // Badge = Androids lille status-ikon: SKAL være monokromt/gennemsigtigt,
+    // ellers vises det som en sort firkant. (icon ovenfor må gerne være farvet.)
+    badge: '/icons/notification-badge.png',
     tag: tag,
     renotify: true,
     data: { type: type, gameCode: gameCode, url: targetFor(type, gameCode) },
