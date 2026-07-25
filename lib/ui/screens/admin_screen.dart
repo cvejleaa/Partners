@@ -177,7 +177,7 @@ class AdminScreen extends ConsumerWidget {
             ),
           ),
           const _BoardMinTile(),
-          const _AiSmartnessTile(),
+          const _AiLevelsTile(),
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
             child: Text(
@@ -200,16 +200,40 @@ class AdminScreen extends ConsumerWidget {
   }
 }
 
-/// Admin-vælger til AI-smarthed (config/ui.aiSmartness).
-class _AiSmartnessTile extends ConsumerWidget {
-  const _AiSmartnessTile();
-
-  static const List<String> _labels = <String>['Begynder', 'Normal', 'Skarp'];
+/// Admin-editor for parametrene bag de tre AI-sværhedsgrader (config/ai). Selve
+/// GRADEN vælger spilleren ved spilstart; her defineres HVAD hver grad gør.
+class _AiLevelsTile extends ConsumerStatefulWidget {
+  const _AiLevelsTile();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final int level =
-        ref.watch(aiSmartnessProvider).valueOrNull ?? kAiSmartnessDefault;
+  ConsumerState<_AiLevelsTile> createState() => _AiLevelsTileState();
+}
+
+class _AiLevelsTileState extends ConsumerState<_AiLevelsTile> {
+  // Lokal redigeringskopi mens man trækker i sliderne.
+  List<AiParams>? _local;
+
+  Future<void> _save(List<AiParams> levels) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await setAiLevels(levels);
+    } catch (e) {
+      messenger
+          .showSnackBar(SnackBar(content: Text('Kunne ikke gemme: $e')));
+    }
+  }
+
+  List<AiParams> _with(List<AiParams> levels, int i, AiParams p) {
+    final List<AiParams> copy = List<AiParams>.from(levels);
+    copy[i] = p;
+    return copy;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<AiParams> live =
+        ref.watch(aiLevelsProvider).valueOrNull ?? kDefaultAiLevels;
+    final List<AiParams> levels = _local ?? live;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -222,49 +246,120 @@ class _AiSmartnessTile extends ConsumerWidget {
                 const Icon(Icons.smart_toy, size: 20),
                 const SizedBox(width: 8),
                 const Expanded(
-                  child: Text('AI-smarthed',
+                  child: Text('AI-sværhedsgrader',
                       style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
-                Text(_labels[level],
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                TextButton(
+                  onPressed: () {
+                    setState(() => _local = List<AiParams>.from(
+                        kDefaultAiLevels));
+                    _save(kDefaultAiLevels);
+                  },
+                  child: const Text('Nulstil'),
+                ),
               ],
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<int>(
-                segments: <ButtonSegment<int>>[
-                  for (int i = 0; i < _labels.length; i++)
-                    ButtonSegment<int>(value: i, label: Text(_labels[i])),
-                ],
-                selected: <int>{level},
-                showSelectedIcon: false,
-                onSelectionChanged: (Set<int> sel) async {
-                  final int v = sel.first;
-                  final messenger = ScaffoldMessenger.of(context);
-                  try {
-                    await setAiSmartness(v);
-                    messenger.showSnackBar(SnackBar(
-                        content: Text('AI-smarthed sat til ${_labels[v]}')));
-                  } catch (e) {
-                    messenger.showSnackBar(
-                        SnackBar(content: Text('Kunne ikke gemme: $e')));
-                  }
-                },
-              ),
+            const Text(
+              'Spilleren vælger selv graden ved spilstart. Her justeres HVAD '
+              'hver grad gør.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
             ),
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text(
-                'Begynder spiller kluntet og kan forære sit eneste '
-                'ud-af-start-kort væk. Skarp spiller mest konsekvent. Gælder '
-                'alle AI-spillere med det samme.',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
+            for (int i = 0; i < levels.length; i++)
+              _levelEditor(i, levels[i], levels),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _levelEditor(int i, AiParams p, List<AiParams> levels) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F5F7),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              i < kAiLevelNames.length ? kAiLevelNames[i] : 'Grad $i',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            // Støj: 0 = altid bedste træk, højt = kluntet.
+            _sliderRow(
+              label: 'Tilfældighed (støj)',
+              value: p.noise,
+              min: 0,
+              max: 20,
+              display: p.noise.toStringAsFixed(0),
+              onChanged: (double v) => setState(
+                  () => _local = _with(levels, i, p.copyWith(noise: v))),
+              onEnd: (double v) =>
+                  _save(_with(levels, i, p.copyWith(noise: v))),
+            ),
+            // Sandsynlighed for et helt tilfældigt træk (%).
+            _sliderRow(
+              label: 'Tilfældigt træk',
+              value: p.randomMoveChance,
+              min: 0,
+              max: 1,
+              display: '${(p.randomMoveChance * 100).round()}%',
+              onChanged: (double v) => setState(() => _local =
+                  _with(levels, i, p.copyWith(randomMoveChance: v))),
+              onEnd: (double v) => _save(
+                  _with(levels, i, p.copyWith(randomMoveChance: v))),
+            ),
+            SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Beholder eget ud-af-start-kort',
+                  style: TextStyle(fontSize: 13)),
+              value: p.protectExitCard,
+              onChanged: (bool v) {
+                final List<AiParams> next =
+                    _with(levels, i, p.copyWith(protectExitCard: v));
+                setState(() => _local = next);
+                _save(next);
+              },
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _sliderRow({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required String display,
+    required ValueChanged<double> onChanged,
+    required ValueChanged<double> onEnd,
+  }) {
+    return Row(
+      children: <Widget>[
+        SizedBox(
+            width: 120,
+            child: Text(label, style: const TextStyle(fontSize: 12))),
+        Expanded(
+          child: Slider(
+            min: min,
+            max: max,
+            value: value.clamp(min, max),
+            onChanged: onChanged,
+            onChangeEnd: onEnd,
+          ),
+        ),
+        SizedBox(
+            width: 42,
+            child: Text(display,
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontSize: 12))),
+      ],
     );
   }
 }

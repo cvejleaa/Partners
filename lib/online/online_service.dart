@@ -304,6 +304,7 @@ class OnlineService {
   Future<String> createGame({
     required int colorValue,
     required CardRules rules,
+    int aiLevel = kAiLevelDefault,
   }) async {
     final uid = _auth.currentUser!.uid;
     final name = await myDisplayName();
@@ -346,6 +347,9 @@ class OnlineService {
       // Tilstedeværelses-stempel pr. uid (heartbeat) til reconnect/AI-overtag.
       'presence': <String, dynamic>{uid: Timestamp.now()},
       'cardRules': effective.toJson(),
+      // Spillerens valgte AI-sværhedsgrad (0=Begynder,1=Normal,2=Skarp).
+      // Parametrene bag graderne sættes af admin (config/ai).
+      'aiLevel': aiLevel,
       'seq': 0,
       'log': <dynamic>[],
       'createdAt': FieldValue.serverTimestamp(),
@@ -384,7 +388,9 @@ class OnlineService {
       if (oldUids[i] == me.uid && i < oldColors.length) myColor = oldColors[i];
     }
 
-    final code = await createGame(colorValue: myColor, rules: rules);
+    final int oldAiLevel = (d['aiLevel'] as num?)?.toInt() ?? kAiLevelDefault;
+    final code = await createGame(
+        colorValue: myColor, rules: rules, aiLevel: oldAiLevel);
 
     // Invitér de øvrige menneskelige spillere fra det gamle spil.
     final friends = FriendsService();
@@ -562,6 +568,14 @@ class OnlineService {
     });
   }
 
+  /// Sæt AI-sværhedsgraden for spillet (vælges i lobbyen). Gemmes i doc'et og
+  /// bruges når værtens klient driver AI-pladser.
+  Future<void> setAiLevel(String code, int level) async {
+    await _games.doc(code).update(<String, dynamic>{
+      'aiLevel': level.clamp(0, kDefaultAiLevels.length - 1),
+    });
+  }
+
   /// Værten markerer en åben plads til at blive en AI-spiller (eller fortryder).
   Future<void> fillSeatWithAi(String code, int seat, {bool ai = true}) async {
     await _db.runTransaction((tx) async {
@@ -722,9 +736,8 @@ class OnlineService {
   ///    for taberen ved samtidig skrivning).
   /// Returnerer true hvis et træk faktisk blev udført.
   Future<bool> aiTakeoverMove(String code, int seat,
-      {int smartness = kAiSmartnessDefault}) async {
-    return _aiSeatMoveInternal(code, seat,
-        asTakeover: true, smartness: smartness);
+      {AiParams params = kAiNormal}) async {
+    return _aiSeatMoveInternal(code, seat, asTakeover: true, params: params);
   }
 
   /// Lad en AI tage trækket for en almindelig AI-plads. Lige som
@@ -733,13 +746,12 @@ class OnlineService {
   /// vælger et træk på baggrund af en gammel snapshot, og applyMoves
   /// runtime-guard afviser det fordi friske state har bevæget sig videre.
   Future<bool> aiSeatMove(String code, int seat,
-      {int smartness = kAiSmartnessDefault}) async {
-    return _aiSeatMoveInternal(code, seat,
-        asTakeover: false, smartness: smartness);
+      {AiParams params = kAiNormal}) async {
+    return _aiSeatMoveInternal(code, seat, asTakeover: false, params: params);
   }
 
   Future<bool> _aiSeatMoveInternal(String code, int seat,
-      {required bool asTakeover, int smartness = kAiSmartnessDefault}) async {
+      {required bool asTakeover, AiParams params = kAiNormal}) async {
     bool acted = false;
     await _db.runTransaction((tx) async {
       acted = false;
@@ -760,7 +772,7 @@ class OnlineService {
 
       final wasOver = state.winningTeamIndex != null;
       final engine = GameEngine(state: state);
-      final Move? m = onlineAi.chooseMove(state, seat, smartness: smartness);
+      final Move? m = onlineAi.chooseMove(state, seat, params: params);
       final int discardedCount = state.players[seat].hand.length;
       final Map<String, dynamic> logEntry;
       if (m != null) {

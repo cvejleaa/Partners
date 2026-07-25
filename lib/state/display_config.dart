@@ -47,25 +47,32 @@ Future<void> setBoardMinPx(double px) async {
   );
 }
 
-/// Live AI-smarthed fra `config/ui.aiSmartness` (0=Begynder, 1=Normal,
-/// 2=Skarp). Admin-justerbar; gælder både online- og lokale AI-spillere.
-final aiSmartnessProvider = StreamProvider<int>((ref) {
+/// Parametrene for de tre AI-sværhedsgrader (Begynder/Normal/Skarp), som admin
+/// kan justere, fra `config/ai.levels`. Spilleren vælger selv graden pr. spil;
+/// disse parametre bestemmer HVAD hver grad gør. Falder tilbage til defaults
+/// hvis intet er sat.
+final aiLevelsProvider = StreamProvider<List<AiParams>>((ref) {
   try {
-    return firestore.collection('config').doc('ui').snapshots().map((snap) {
-      final v = snap.data()?['aiSmartness'];
-      if (v is num) return v.toInt().clamp(0, 2);
-      return kAiSmartnessDefault;
+    return firestore.collection('config').doc('ai').snapshots().map((snap) {
+      final levels = snap.data()?['levels'];
+      if (levels is List && levels.length == kDefaultAiLevels.length) {
+        return <AiParams>[
+          for (final dynamic l in levels)
+            AiParams.fromJson(Map<String, dynamic>.from(l as Map)),
+        ];
+      }
+      return kDefaultAiLevels;
     });
   } catch (_) {
-    return Stream<int>.value(kAiSmartnessDefault);
+    return Stream<List<AiParams>>.value(kDefaultAiLevels);
   }
 });
 
-/// Skriv ny AI-smarthed (0..2). Kun admin må ifølge Firestore-reglerne.
-Future<void> setAiSmartness(int level) async {
-  await firestore.collection('config').doc('ui').set(
+/// Skriv de tre graders parametre. Kun admin må ifølge Firestore-reglerne.
+Future<void> setAiLevels(List<AiParams> levels) async {
+  await firestore.collection('config').doc('ai').set(
     <String, dynamic>{
-      'aiSmartness': level.clamp(0, 2),
+      'levels': <dynamic>[for (final AiParams l in levels) l.toJson()],
       'updatedAt': FieldValue.serverTimestamp(),
     },
     SetOptions(merge: true),

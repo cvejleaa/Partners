@@ -65,15 +65,18 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _scheduleAi() {
     final state = ref.read(gameProvider);
-    final int smartness =
-        ref.read(aiSmartnessProvider).valueOrNull ?? kAiSmartnessDefault;
+    // Resolve spillerens valgte AI-grad → parametre (admin-styret).
+    final List<AiParams> levels =
+        ref.read(aiLevelsProvider).valueOrNull ?? kDefaultAiLevels;
+    final int level = ref.read(gameProvider.notifier).aiLevel;
+    final AiParams params = levels[level.clamp(0, levels.length - 1)];
     if (state.phase == GamePhase.exchange) {
       _lastPlayedCard.clear();
       final game = ref.read(gameProvider.notifier);
       for (final Player p in state.players) {
         if (!p.isHuman && !state.exchangeBuffer.containsKey(p.index)) {
           game.submitExchange(p.index,
-              _ai.chooseExchangeCard(state, p.index, smartness: smartness));
+              _ai.chooseExchangeCard(state, p.index, params: params));
         }
       }
       setState(() {});
@@ -85,7 +88,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         final s = ref.read(gameProvider);
         if (s.phase != GamePhase.play || s.currentPlayer.isHuman) return;
         final int idx = s.currentPlayerIndex;
-        final Move? move = _ai.chooseMove(s, idx, smartness: smartness);
+        final Move? move = _ai.chooseMove(s, idx, params: params);
         if (move != null) {
           _applyMove(idx, move);
         } else {

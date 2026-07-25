@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'game/ai/ai_player.dart';
 import 'game/card_rules.dart';
 import 'game/deck.dart';
 import 'game/game_engine.dart';
@@ -73,6 +74,10 @@ class GameController extends StateNotifier<GameState> {
   final Uuid _uuid = const Uuid();
   final Random _rng = Random();
 
+  /// Spillerens valgte AI-sværhedsgrad for det lokale spil (0/1/2). Læses af
+  /// game_screen når AI'en skal handle. Parametrene bag graden sættes af admin.
+  int aiLevel = kAiLevelDefault;
+
   // Træk-log for AI-spil (svarende til online-spillets log).
   final List<Map<String, dynamic>> _aiLog = <Map<String, dynamic>>[];
   String? _aiGameCode;
@@ -99,7 +104,9 @@ class GameController extends StateNotifier<GameState> {
     );
   }
 
-  void startGame(List<PlayerSetup> setups, {CardRules? cardRules}) {
+  void startGame(List<PlayerSetup> setups,
+      {CardRules? cardRules, int aiLevel = kAiLevelDefault}) {
+    this.aiLevel = aiLevel;
     const BoardGeometry geom = BoardGeometry();
     final List<Player> players = <Player>[
       for (int i = 0; i < setups.length; i++)

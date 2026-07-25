@@ -16,7 +16,7 @@ class HeuristicAi implements AiPlayer {
 
   @override
   PlayingCard chooseExchangeCard(GameState state, int playerIndex,
-      {int smartness = kAiSmartnessDefault}) {
+      {AiParams params = kAiNormal}) {
     final Player me = state.players[playerIndex];
     final Player partner = state.players[me.partnerIndex];
 
@@ -38,8 +38,8 @@ class HeuristicAi implements AiPlayer {
     final bool hasSurplusExit = exitCards.length > keepExit;
 
     if (partnerNeedsStart &&
-        (smartness <= 0 ? exitCards.isNotEmpty : hasSurplusExit)) {
-      // Hjælp partneren ud — men (medmindre begynder) kun hvis jeg har et
+        (!params.protectExitCard ? exitCards.isNotEmpty : hasSurplusExit)) {
+      // Hjælp partneren ud — men (når protectExitCard) kun hvis jeg har et
       // exit-kort i overskud, så jeg selv stadig kan komme ud.
       exitCards.sort((PlayingCard a, PlayingCard b) =>
           _cardScore(a).compareTo(_cardScore(b)));
@@ -50,7 +50,7 @@ class HeuristicAi implements AiPlayer {
     // selv skal bruge det og ikke har overskud.
     hand.sort((PlayingCard a, PlayingCard b) =>
         _cardScore(a).compareTo(_cardScore(b)));
-    if (smartness >= 1 && iNeedStart && !hasSurplusExit) {
+    if (params.protectExitCard && iNeedStart && !hasSurplusExit) {
       final Iterable<PlayingCard> nonExit =
           hand.where((PlayingCard c) => !c.canExitStart);
       if (nonExit.isNotEmpty) return nonExit.first;
@@ -60,21 +60,24 @@ class HeuristicAi implements AiPlayer {
 
   @override
   Move? chooseMove(GameState state, int playerIndex,
-      {int smartness = kAiSmartnessDefault}) {
+      {AiParams params = kAiNormal}) {
     final Rules rules = Rules(state.geometry);
     final Player me = state.players[playerIndex];
     final List<({Move move, double score})> scored =
         <({Move move, double score})>[];
     for (final PlayingCard card in me.hand) {
       for (final Move move in rules.legalMoves(state, me, card)) {
-        scored.add((move: move, score: _scoreMove(state, me, move, smartness)));
+        scored
+            .add((move: move, score: _scoreMove(state, me, move, params.noise)));
       }
     }
     if (scored.isEmpty) return null;
     scored.sort((a, b) => b.score.compareTo(a.score));
-    // Begynder-AI'en vælger indimellem et tilfældigt lovligt træk i stedet for
-    // det bedste, så den spiller mærkbart svagere.
-    if (smartness <= 0 && scored.length > 1 && _rng.nextDouble() < 0.35) {
+    // Svagere grader vælger indimellem et tilfældigt lovligt træk i stedet for
+    // det bedste.
+    if (params.randomMoveChance > 0 &&
+        scored.length > 1 &&
+        _rng.nextDouble() < params.randomMoveChance) {
       return scored[_rng.nextInt(scored.length)].move;
     }
     return scored.first.move;
@@ -82,7 +85,7 @@ class HeuristicAi implements AiPlayer {
 
   @override
   PlayingCard chooseDiscard(GameState state, int playerIndex,
-      {int smartness = kAiSmartnessDefault}) {
+      {AiParams params = kAiNormal}) {
     final Player me = state.players[playerIndex];
     final List<PlayingCard> hand = List<PlayingCard>.from(me.hand);
     // Hvis vi har brikker i start, behold Es/Konge.
@@ -132,7 +135,7 @@ class HeuristicAi implements AiPlayer {
     }
   }
 
-  double _scoreMove(GameState state, Player me, Move move, int smartness) {
+  double _scoreMove(GameState state, Player me, Move move, double noiseAmp) {
     double score = 0;
     for (final MoveStep step in move.steps) {
       final Piece movedPiece = state.pieceById(step.pieceId);
@@ -181,13 +184,8 @@ class HeuristicAi implements AiPlayer {
             : progress;
       }
     }
-    // Støj i vurderingen: meget på begynder (kluntede valg), lidt på normal,
-    // næsten intet på skarp (spiller konsekvent bedst).
-    final double noiseAmp = smartness <= 0
-        ? 18.0
-        : smartness >= 2
-            ? 1.0
-            : 5.0;
+    // Støj i vurderingen (admin-styret pr. grad): meget = kluntet, lidt =
+    // konsekvent bedste spil.
     score += _rng.nextDouble() * noiseAmp - noiseAmp / 2;
     return score;
   }

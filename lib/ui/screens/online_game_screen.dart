@@ -449,8 +449,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   void _maybeHostAct(GameState state, bool isHost, Map<String, dynamic> d) {
     if (!isHost || _busy) return;
     if (state.winningTeamIndex != null) return;
-    final int smartness =
-        ref.read(aiSmartnessProvider).valueOrNull ?? kAiSmartnessDefault;
+    // Spillets valgte AI-grad (fra doc'et) → parametre (admin-styret).
+    final List<AiParams> aiLevels =
+        ref.read(aiLevelsProvider).valueOrNull ?? kDefaultAiLevels;
+    final int gameAiLevel = (d['aiLevel'] as num?)?.toInt() ?? kAiLevelDefault;
+    final AiParams aiParams =
+        aiLevels[gameAiLevel.clamp(0, aiLevels.length - 1)];
     final sig =
         '${state.handNumber}:${state.phase.name}:${state.currentPlayerIndex}:${state.exchangeBuffer.length}';
 
@@ -466,7 +470,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       _run(() => _svc.mutate(widget.code, (engine, s) {
             for (final i in missingAi) {
               engine.submitExchangeCard(
-                  i, onlineAi.chooseExchangeCard(s, i, smartness: smartness));
+                  i, onlineAi.chooseExchangeCard(s, i, params: aiParams));
             }
           }));
     } else if (state.phase == GamePhase.play) {
@@ -499,7 +503,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         Future<void>.delayed(const Duration(milliseconds: 600), () {
           _run(() async {
             final acted = await _svc.aiSeatMove(widget.code, idx,
-                smartness: smartness);
+                params: aiParams);
             if (!acted && mounted) _lastProcessed = '';
           }).whenComplete(() => _aiActionPending = false);
         });
@@ -508,7 +512,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         _lastTakeoverSig = sig;
         _run(() async {
           final acted = await _svc.aiTakeoverMove(widget.code, idx,
-              smartness: smartness);
+              params: aiParams);
           if (!acted && mounted) _lastTakeoverSig = '';
         });
       }

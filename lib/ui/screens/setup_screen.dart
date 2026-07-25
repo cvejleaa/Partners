@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../utils/palette.dart';
 import '../../app.dart';
+import '../../game/ai/ai_player.dart';
 import '../../state/card_rules_controller.dart';
 import 'admin_screen.dart';
 import 'game_screen.dart';
@@ -27,6 +28,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
   /// Hvilken plads spilleren selv sidder på.
   int _humanSeat = 0;
+
+  /// Valgt AI-sværhedsgrad (0=Begynder, 1=Normal, 2=Skarp).
+  int _aiLevel = kAiLevelDefault;
 
   @override
   void dispose() {
@@ -101,6 +105,31 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               ),
             ),
             const Spacer(),
+            // AI-sværhedsgrad. Parametrene bag graderne kan justeres i Admin.
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: <Widget>[
+                  const Icon(Icons.smart_toy, size: 18),
+                  const SizedBox(width: 8),
+                  const Text('AI-sværhed:'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SegmentedButton<int>(
+                      segments: <ButtonSegment<int>>[
+                        for (int i = 0; i < kAiLevelNames.length; i++)
+                          ButtonSegment<int>(
+                              value: i, label: Text(kAiLevelNames[i])),
+                      ],
+                      selected: <int>{_aiLevel},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (Set<int> s) =>
+                          setState(() => _aiLevel = s.first),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             if (!unique)
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
@@ -133,6 +162,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                         ref.read(gameProvider.notifier).startGame(
                               setups,
                               cardRules: ref.read(cardRulesProvider),
+                              aiLevel: _aiLevel,
                             );
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(

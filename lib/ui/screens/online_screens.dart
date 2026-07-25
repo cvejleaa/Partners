@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../game/ai/ai_player.dart';
 import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
@@ -488,6 +489,9 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           final aiSeats = (d['aiSeats'] as List?) ??
               const <dynamic>[false, false, false, false];
           final bool isHost = d['hostUid'] == svc.uid;
+          final int aiLevel = (d['aiLevel'] as num?)?.toInt() ?? kAiLevelDefault;
+          // Spillet får AI-spillere hvis der er en åben plads (fyldes ved start).
+          final bool willHaveAi = uids.any((dynamic u) => u == null);
           final int seatOfMe = uids.indexOf(svc.uid);
           final int? mySeat = seatOfMe == -1 ? null : seatOfMe;
           final bool iAmReady =
@@ -525,6 +529,31 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                       isHost: isHost,
                       mySeat: mySeat),
                 const SizedBox(height: 12),
+                if (isHost && willHaveAi) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: <Widget>[
+                      const Icon(Icons.smart_toy, size: 18),
+                      const SizedBox(width: 8),
+                      const Text('AI-sværhed:'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SegmentedButton<int>(
+                          segments: <ButtonSegment<int>>[
+                            for (int i = 0; i < kAiLevelNames.length; i++)
+                              ButtonSegment<int>(
+                                  value: i, label: Text(kAiLevelNames[i])),
+                          ],
+                          selected: <int>{aiLevel.clamp(0, 2)},
+                          showSelectedIcon: false,
+                          onSelectionChanged: (Set<int> s) =>
+                              svc.setAiLevel(code, s.first),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 if (isHost)
                   OutlinedButton.icon(
                     icon: const Icon(Icons.person_add),
