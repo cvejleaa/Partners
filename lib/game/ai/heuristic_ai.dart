@@ -15,7 +15,8 @@ class HeuristicAi implements AiPlayer {
   final Random _rng;
 
   @override
-  PlayingCard chooseExchangeCard(GameState state, int playerIndex) {
+  PlayingCard chooseExchangeCard(GameState state, int playerIndex,
+      {int smartness = kAiSmartnessDefault}) {
     final Player me = state.players[playerIndex];
     final Player partner = state.players[me.partnerIndex];
 
@@ -23,38 +24,65 @@ class HeuristicAi implements AiPlayer {
         partner.pieces.any((Piece p) => p.position is StartPosition);
 
     final List<PlayingCard> hand = List<PlayingCard>.from(me.hand);
-    if (partnerNeedsStart) {
-      // Giv højest rangerede start-egnede kort (Es eller Konge) hvis muligt.
-      final Iterable<PlayingCard> starters =
-          hand.where((PlayingCard c) => c.canExitStart);
-      if (starters.isNotEmpty) {
-        return starters.first;
-      }
+
+    // Hvor mange ud-af-start-kort har jeg selv, og har jeg selv brug for at
+    // komme ud? Jeg må ALDRIG forære mit eneste exit-kort væk hvis jeg selv har
+    // brikker i start — så ender jeg med at sidde over i mange runder. (På
+    // laveste smarthed springer vi dette hensyn over, så begynder-AI'en
+    // netop kan lave den fejl.)
+    final bool iNeedStart =
+        me.pieces.any((Piece p) => p.position is StartPosition);
+    final List<PlayingCard> exitCards =
+        hand.where((PlayingCard c) => c.canExitStart).toList();
+    final int keepExit = iNeedStart ? 1 : 0; // behold mindst så mange selv
+    final bool hasSurplusExit = exitCards.length > keepExit;
+
+    if (partnerNeedsStart &&
+        (smartness <= 0 ? exitCards.isNotEmpty : hasSurplusExit)) {
+      // Hjælp partneren ud — men (medmindre begynder) kun hvis jeg har et
+      // exit-kort i overskud, så jeg selv stadig kan komme ud.
+      exitCards.sort((PlayingCard a, PlayingCard b) =>
+          _cardScore(a).compareTo(_cardScore(b)));
+      return exitCards.first; // giv det laveste exit-kort væk
     }
-    // Ellers giv det laveste-værdi kort vi har.
+
+    // Ellers giv det laveste-værdi kort — men behold mit exit-kort hvis jeg
+    // selv skal bruge det og ikke har overskud.
     hand.sort((PlayingCard a, PlayingCard b) =>
         _cardScore(a).compareTo(_cardScore(b)));
+    if (smartness >= 1 && iNeedStart && !hasSurplusExit) {
+      final Iterable<PlayingCard> nonExit =
+          hand.where((PlayingCard c) => !c.canExitStart);
+      if (nonExit.isNotEmpty) return nonExit.first;
+    }
     return hand.first;
   }
 
   @override
-  Move? chooseMove(GameState state, int playerIndex) {
+  Move? chooseMove(GameState state, int playerIndex,
+      {int smartness = kAiSmartnessDefault}) {
     final Rules rules = Rules(state.geometry);
     final Player me = state.players[playerIndex];
     final List<({Move move, double score})> scored =
         <({Move move, double score})>[];
     for (final PlayingCard card in me.hand) {
       for (final Move move in rules.legalMoves(state, me, card)) {
-        scored.add((move: move, score: _scoreMove(state, me, move)));
+        scored.add((move: move, score: _scoreMove(state, me, move, smartness)));
       }
     }
     if (scored.isEmpty) return null;
     scored.sort((a, b) => b.score.compareTo(a.score));
+    // Begynder-AI'en vælger indimellem et tilfældigt lovligt træk i stedet for
+    // det bedste, så den spiller mærkbart svagere.
+    if (smartness <= 0 && scored.length > 1 && _rng.nextDouble() < 0.35) {
+      return scored[_rng.nextInt(scored.length)].move;
+    }
     return scored.first.move;
   }
 
   @override
-  PlayingCard chooseDiscard(GameState state, int playerIndex) {
+  PlayingCard chooseDiscard(GameState state, int playerIndex,
+      {int smartness = kAiSmartnessDefault}) {
     final Player me = state.players[playerIndex];
     final List<PlayingCard> hand = List<PlayingCard>.from(me.hand);
     // Hvis vi har brikker i start, behold Es/Konge.
@@ -104,7 +132,7 @@ class HeuristicAi implements AiPlayer {
     }
   }
 
-  double _scoreMove(GameState state, Player me, Move move) {
+  double _scoreMove(GameState state, Player me, Move move, int smartness) {
     double score = 0;
     for (final MoveStep step in move.steps) {
       final Piece movedPiece = state.pieceById(step.pieceId);
@@ -153,7 +181,14 @@ class HeuristicAi implements AiPlayer {
             : progress;
       }
     }
-    score += _rng.nextDouble() * 5 - 2.5;
+    // Støj i vurderingen: meget på begynder (kluntede valg), lidt på normal,
+    // næsten intet på skarp (spiller konsekvent bedst).
+    final double noiseAmp = smartness <= 0
+        ? 18.0
+        : smartness >= 2
+            ? 1.0
+            : 5.0;
+    score += _rng.nextDouble() * noiseAmp - noiseAmp / 2;
     return score;
   }
 }

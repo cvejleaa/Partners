@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
+import '../../game/ai/ai_player.dart';
 import '../../game/ai/heuristic_ai.dart';
 import '../../game/progress.dart';
 import '../../models/game_state.dart';
@@ -13,6 +14,7 @@ import '../../models/move.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../services/feedback_service.dart';
+import '../../state/display_config.dart';
 import '../widgets/card_counter_panel.dart';
 import '../widgets/game_play_view.dart';
 import 'setup_screen.dart';
@@ -63,12 +65,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _scheduleAi() {
     final state = ref.read(gameProvider);
+    final int smartness =
+        ref.read(aiSmartnessProvider).valueOrNull ?? kAiSmartnessDefault;
     if (state.phase == GamePhase.exchange) {
       _lastPlayedCard.clear();
       final game = ref.read(gameProvider.notifier);
       for (final Player p in state.players) {
         if (!p.isHuman && !state.exchangeBuffer.containsKey(p.index)) {
-          game.submitExchange(p.index, _ai.chooseExchangeCard(state, p.index));
+          game.submitExchange(p.index,
+              _ai.chooseExchangeCard(state, p.index, smartness: smartness));
         }
       }
       setState(() {});
@@ -80,7 +85,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         final s = ref.read(gameProvider);
         if (s.phase != GamePhase.play || s.currentPlayer.isHuman) return;
         final int idx = s.currentPlayerIndex;
-        final Move? move = _ai.chooseMove(s, idx);
+        final Move? move = _ai.chooseMove(s, idx, smartness: smartness);
         if (move != null) {
           _applyMove(idx, move);
         } else {

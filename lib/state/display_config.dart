@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../game/ai/ai_player.dart';
 import '../online/online_service.dart';
 
 /// Standard minimums-brætstørrelse (px) hvis intet er sat i config.
@@ -40,6 +41,31 @@ Future<void> setBoardMinPx(double px) async {
   await firestore.collection('config').doc('ui').set(
     <String, dynamic>{
       'boardMinPx': v,
+      'updatedAt': FieldValue.serverTimestamp(),
+    },
+    SetOptions(merge: true),
+  );
+}
+
+/// Live AI-smarthed fra `config/ui.aiSmartness` (0=Begynder, 1=Normal,
+/// 2=Skarp). Admin-justerbar; gælder både online- og lokale AI-spillere.
+final aiSmartnessProvider = StreamProvider<int>((ref) {
+  try {
+    return firestore.collection('config').doc('ui').snapshots().map((snap) {
+      final v = snap.data()?['aiSmartness'];
+      if (v is num) return v.toInt().clamp(0, 2);
+      return kAiSmartnessDefault;
+    });
+  } catch (_) {
+    return Stream<int>.value(kAiSmartnessDefault);
+  }
+});
+
+/// Skriv ny AI-smarthed (0..2). Kun admin må ifølge Firestore-reglerne.
+Future<void> setAiSmartness(int level) async {
+  await firestore.collection('config').doc('ui').set(
+    <String, dynamic>{
+      'aiSmartness': level.clamp(0, 2),
       'updatedAt': FieldValue.serverTimestamp(),
     },
     SetOptions(merge: true),

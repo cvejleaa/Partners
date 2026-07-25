@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../game/ai/ai_player.dart';
 import '../game/ai/heuristic_ai.dart';
 import '../game/card_rules.dart';
 import '../game/deck.dart';
@@ -720,8 +721,10 @@ class OnlineService {
   ///  - sikker mod at to klienter skriver samme træk (transaktionen aborterer
   ///    for taberen ved samtidig skrivning).
   /// Returnerer true hvis et træk faktisk blev udført.
-  Future<bool> aiTakeoverMove(String code, int seat) async {
-    return _aiSeatMoveInternal(code, seat, asTakeover: true);
+  Future<bool> aiTakeoverMove(String code, int seat,
+      {int smartness = kAiSmartnessDefault}) async {
+    return _aiSeatMoveInternal(code, seat,
+        asTakeover: true, smartness: smartness);
   }
 
   /// Lad en AI tage trækket for en almindelig AI-plads. Lige som
@@ -729,12 +732,14 @@ class OnlineService {
   /// frisk state — så vi undgår den klassiske "stale move"-fejl hvor AI'en
   /// vælger et træk på baggrund af en gammel snapshot, og applyMoves
   /// runtime-guard afviser det fordi friske state har bevæget sig videre.
-  Future<bool> aiSeatMove(String code, int seat) async {
-    return _aiSeatMoveInternal(code, seat, asTakeover: false);
+  Future<bool> aiSeatMove(String code, int seat,
+      {int smartness = kAiSmartnessDefault}) async {
+    return _aiSeatMoveInternal(code, seat,
+        asTakeover: false, smartness: smartness);
   }
 
   Future<bool> _aiSeatMoveInternal(String code, int seat,
-      {required bool asTakeover}) async {
+      {required bool asTakeover, int smartness = kAiSmartnessDefault}) async {
     bool acted = false;
     await _db.runTransaction((tx) async {
       acted = false;
@@ -755,7 +760,7 @@ class OnlineService {
 
       final wasOver = state.winningTeamIndex != null;
       final engine = GameEngine(state: state);
-      final Move? m = onlineAi.chooseMove(state, seat);
+      final Move? m = onlineAi.chooseMove(state, seat, smartness: smartness);
       final int discardedCount = state.players[seat].hand.length;
       final Map<String, dynamic> logEntry;
       if (m != null) {

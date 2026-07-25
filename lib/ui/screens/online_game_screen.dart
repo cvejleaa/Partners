@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../game/ai/ai_player.dart';
 import '../../game/progress.dart';
 import '../../models/board.dart';
 import '../../models/game_state.dart';
@@ -15,6 +16,7 @@ import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../online/online_service.dart';
 import '../../online/serialize.dart';
+import '../../state/display_config.dart';
 import '../../stats/stats_repository.dart';
 import '../widgets/card_view.dart';
 import '../widgets/game_play_view.dart';
@@ -447,6 +449,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   void _maybeHostAct(GameState state, bool isHost, Map<String, dynamic> d) {
     if (!isHost || _busy) return;
     if (state.winningTeamIndex != null) return;
+    final int smartness =
+        ref.read(aiSmartnessProvider).valueOrNull ?? kAiSmartnessDefault;
     final sig =
         '${state.handNumber}:${state.phase.name}:${state.currentPlayerIndex}:${state.exchangeBuffer.length}';
 
@@ -461,7 +465,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       _lastProcessed = sig;
       _run(() => _svc.mutate(widget.code, (engine, s) {
             for (final i in missingAi) {
-              engine.submitExchangeCard(i, onlineAi.chooseExchangeCard(s, i));
+              engine.submitExchangeCard(
+                  i, onlineAi.chooseExchangeCard(s, i, smartness: smartness));
             }
           }));
     } else if (state.phase == GamePhase.play) {
@@ -493,7 +498,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         _aiActionPending = true;
         Future<void>.delayed(const Duration(milliseconds: 600), () {
           _run(() async {
-            final acted = await _svc.aiSeatMove(widget.code, idx);
+            final acted = await _svc.aiSeatMove(widget.code, idx,
+                smartness: smartness);
             if (!acted && mounted) _lastProcessed = '';
           }).whenComplete(() => _aiActionPending = false);
         });
@@ -501,7 +507,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         if (sig == _lastTakeoverSig) return;
         _lastTakeoverSig = sig;
         _run(() async {
-          final acted = await _svc.aiTakeoverMove(widget.code, idx);
+          final acted = await _svc.aiTakeoverMove(widget.code, idx,
+              smartness: smartness);
           if (!acted && mounted) _lastTakeoverSig = '';
         });
       }

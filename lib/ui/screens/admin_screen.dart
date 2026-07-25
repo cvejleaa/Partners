@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/card_rules.dart';
 import '../../models/playing_card.dart';
+import '../../game/ai/ai_player.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
 import '../../state/display_config.dart';
@@ -176,6 +177,7 @@ class AdminScreen extends ConsumerWidget {
             ),
           ),
           const _BoardMinTile(),
+          const _AiSmartnessTile(),
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
             child: Text(
@@ -193,6 +195,75 @@ class AdminScreen extends ConsumerWidget {
               config: rules.forRank(r),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Admin-vælger til AI-smarthed (config/ui.aiSmartness).
+class _AiSmartnessTile extends ConsumerWidget {
+  const _AiSmartnessTile();
+
+  static const List<String> _labels = <String>['Begynder', 'Normal', 'Skarp'];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final int level =
+        ref.watch(aiSmartnessProvider).valueOrNull ?? kAiSmartnessDefault;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.smart_toy, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('AI-smarthed',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Text(_labels[level],
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<int>(
+                segments: <ButtonSegment<int>>[
+                  for (int i = 0; i < _labels.length; i++)
+                    ButtonSegment<int>(value: i, label: Text(_labels[i])),
+                ],
+                selected: <int>{level},
+                showSelectedIcon: false,
+                onSelectionChanged: (Set<int> sel) async {
+                  final int v = sel.first;
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await setAiSmartness(v);
+                    messenger.showSnackBar(SnackBar(
+                        content: Text('AI-smarthed sat til ${_labels[v]}')));
+                  } catch (e) {
+                    messenger.showSnackBar(
+                        SnackBar(content: Text('Kunne ikke gemme: $e')));
+                  }
+                },
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Begynder spiller kluntet og kan forære sit eneste '
+                'ud-af-start-kort væk. Skarp spiller mest konsekvent. Gælder '
+                'alle AI-spillere med det samme.',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
