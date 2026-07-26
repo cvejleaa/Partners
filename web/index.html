@@ -145,6 +145,40 @@
     })();
   </script>
 
+  <script>
+    // Aggressiv selv-opdatering: tjek jævnligt efter en ny version og
+    // genindlæs automatisk når den nye service worker tager over — så en ny
+    // deploy slår igennem uden at man manuelt skal lukke alle faner/vinduer.
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      var reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (reloaded) return;
+        reloaded = true;
+        window.location.reload();
+      });
+      function checkUpdate() {
+        navigator.serviceWorker.getRegistration().then(function (reg) {
+          if (!reg) return;
+          reg.update().catch(function () {});
+          // Bed en ventende ny version om at overtage med det samme (hvis
+          // service-workeren understøtter det — ellers uskadeligt).
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        }).catch(function () {});
+      }
+      window.addEventListener('load', function () {
+        window.setTimeout(checkUpdate, 3000);
+      });
+      // Når man vender tilbage til appen: tjek for ny version.
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') checkUpdate();
+      });
+      window.setInterval(checkUpdate, 60000);
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

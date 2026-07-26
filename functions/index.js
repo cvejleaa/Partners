@@ -87,11 +87,9 @@ exports.onInboxCreate = onDocumentCreated(
 /// Notificér en spiller når det bliver DERES tur i et online-spil — men kun
 /// hvis de IKKE er aktive på spillepladen (deres presence-stempel er forældet).
 /// Trigges når spil-dokumentet opdateres; kun rigtige turn-skift (ændret
-/// currentPlayerIndex/hånd i play-fasen) fører til en push.
-// Presence ældre end dette = "ikke aktiv" → send tur-push. Skal være STØRRE
-// end klientens heartbeat-interval (kPresenceInterval = 7s), så en aktiv
-// spiller ikke fejlagtigt ser "væk" ud mellem to heartbeats.
-const AWAY_MS = 12000;
+/// currentPlayerIndex/hånd i play-fasen) fører til en push. Browseren/FCM
+/// afgør selv om beskeden vises i appen (synlig fane) eller som
+/// systemnotifikation (baggrund), så vi behøver ikke gætte på presence.
 
 exports.onGameTurn = onDocumentUpdated(
   {
@@ -118,13 +116,12 @@ exports.onGameTurn = onDocumentUpdated(
     const uid = uids[seat];
     if (!uid) return; // AI-plads
 
-    // Aktiv på brættet? presence-stempel friskt → ingen push.
-    const presence = after.presence || {};
-    const ts = presence[uid];
-    const ms = ts && typeof ts.toMillis === "function" ? ts.toMillis() : 0;
-    const nowMs = Date.now();
-    if (ms && nowMs - ms < AWAY_MS) return;
-
+    // Vi undertrykker IKKE længere ud fra vores eget presence-gæt (en
+    // baggrunds-PWA kunne blive ved med at melde "aktiv", så push'en udeblev
+    // eller kom for sent). I stedet sender vi altid ved tur-skift og lader
+    // browseren/FCM selv route: er fanen SYNLIG lander beskeden i appen
+    // (onMessage) uden systemnotifikation; er den i baggrunden/lukket viser
+    // service-workeren en systemnotifikation. Det er den pålidelige mekanisme.
     const code = event.params.code;
     // DATA-only: service-workeren viser notifikationen (én gang) og håndterer
     // klik → åbner selve spillet (/?game=<code>).

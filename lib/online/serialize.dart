@@ -168,3 +168,18 @@ bool _logDeepEq(dynamic a, dynamic b) {
   }
   return a == b;
 }
+
+/// True hvis [entry] matcher ét af de sidste [window] log-indlæg (samme træk).
+/// Bruges som skrive-værn: et utilsigtet gentaget træk logges ikke igen. Et
+/// vindue på nogle få indlæg = samme hånd, hvor et kort er unikt, så vi rammer
+/// aldrig et ægte (senere) identisk træk.
+bool isRecentDuplicateMove(List log, Map<String, dynamic> entry,
+    {int window = 8}) {
+  final int from = log.length > window ? log.length - window : 0;
+  for (int i = log.length - 1; i >= from; i--) {
+    if (sameLoggedMove(entry, Map<String, dynamic>.from(log[i] as Map))) {
+      return true;
+    }
+  }
+  return false;
+}

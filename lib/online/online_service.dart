@@ -717,9 +717,7 @@ class OnlineService {
         // element har et unikt timestamp, ville arrayUnion ellers ikke fange
         // dubletten — så det tjekker vi selv mod den friske log.
         final List log = (d['log'] as List?) ?? const <dynamic>[];
-        final bool dup = log.isNotEmpty &&
-            sameLoggedMove(entry, Map<String, dynamic>.from(log.last as Map));
-        if (!dup) {
+        if (!isRecentDuplicateMove(log, entry)) {
           entry['t'] = Timestamp.now();
           upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
         }
@@ -799,9 +797,7 @@ class OnlineService {
       // Samme dublet-værn som i mutate: skriv ikke et træk identisk med det
       // seneste i log'en.
       final List log = (d['log'] as List?) ?? const <dynamic>[];
-      final bool dup = log.isNotEmpty &&
-          sameLoggedMove(entry, Map<String, dynamic>.from(log.last as Map));
-      if (!dup) {
+      if (!isRecentDuplicateMove(log, entry)) {
         entry['t'] = Timestamp.now();
         upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
       }

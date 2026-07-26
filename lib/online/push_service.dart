@@ -30,12 +30,17 @@ class PushMessage {
     required this.body,
     required this.gameCode,
     required this.receivedAt,
+    this.type = '',
   });
 
   final String title;
   final String body;
   final String gameCode;
   final DateTime receivedAt;
+
+  /// 'turn' | 'invite' | '' — bruges til at afgøre om en foregrunds-besked skal
+  /// vises som SnackBar (tur-beskeder springes over når man er i appen).
+  final String type;
 }
 
 /// Service der håndterer browser-push-notifikationer (FCM).
@@ -110,6 +115,7 @@ class PushService {
       title: notif?.title ?? (data['title'] as String?) ?? 'Partners',
       body: notif?.body ?? (data['body'] as String?) ?? 'Du har en ny besked',
       gameCode: (data['gameCode'] as String?) ?? '',
+      type: (data['type'] as String?) ?? '',
       receivedAt: DateTime.now(),
     ));
   }

@@ -310,12 +310,16 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     }
     if (!_initialReplayChecked) {
       _initialReplayChecked = true;
-      // Byg listen af træk der skal vises, med utilsigtede dubletter fjernet
-      // (samme spiller/kort/felt i træk = samme handling logget flere gange).
+      // Byg listen af træk der skal vises, med ALLE utilsigtede dubletter
+      // fjernet (ikke kun sammenhængende): samme spiller+kort+brik-flyt =
+      // samme handling logget flere gange. Et ægte identisk træk kan ikke ske
+      // to gange i samme hånd (kortet er unikt), så global de-dup er sikker.
       final List<Map<String, dynamic>> items = <Map<String, dynamic>>[];
       for (int i = mySeen; i < log.length; i++) {
         final e = Map<String, dynamic>.from(log[i] as Map);
-        if (items.isNotEmpty && sameLoggedMove(e, items.last)) continue;
+        if (items.any((Map<String, dynamic> x) => sameLoggedMove(e, x))) {
+          continue;
+        }
         items.add(e);
       }
       if (items.isEmpty) {
