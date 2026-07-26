@@ -109,11 +109,18 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Tilbage i forgrunden: opdater presence STRAKS (så online-markør/AI-
-    // overtagelse ser at spilleren er tilbage, uden at vente på næste tick).
+    // Tilbage i forgrunden (fx åbnet fra en notifikation): opdater presence
+    // straks OG genabonnér på spil-streamen. Efter appen har været i baggrunden
+    // kan Firestore-lytteren være forældet, så skærmen ellers hænger på en gammel
+    // tilstand indtil man lukker appen helt. invalidate tvinger en frisk lytter
+    // (og dermed en frisk server-hentning).
     if (state == AppLifecycleState.resumed) {
       // ignore: discarded_futures
       _svc.heartbeat(widget.code);
+      // Nulstil AI-dedup så værten straks driver et evt. fastlåst AI-træk igen.
+      _lastProcessed = '';
+      _lastTakeoverSig = '';
+      ref.invalidate(gameStreamProvider(widget.code));
       if (mounted) setState(() {});
     }
   }
