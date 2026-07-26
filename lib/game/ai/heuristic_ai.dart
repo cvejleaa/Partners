@@ -41,9 +41,15 @@ class HeuristicAi implements AiPlayer {
         (!params.protectExitCard ? exitCards.isNotEmpty : hasSurplusExit)) {
       // Hjælp partneren ud — men (når protectExitCard) kun hvis jeg har et
       // exit-kort i overskud, så jeg selv stadig kan komme ud.
+      // Foretræk at give det ENKELT-anvendelige UD/hjerte-kort væk (det kan kun
+      // sætte ud) og selv beholde et alsidigt Es/Konge (kan også rykke). Ellers
+      // giv det laveste exit-kort.
+      final List<PlayingCard> ud =
+          exitCards.where((PlayingCard c) => c.isExit).toList();
+      if (ud.isNotEmpty) return ud.first;
       exitCards.sort((PlayingCard a, PlayingCard b) =>
           _cardScore(a).compareTo(_cardScore(b)));
-      return exitCards.first; // giv det laveste exit-kort væk
+      return exitCards.first;
     }
 
     // Ellers giv det laveste-værdi kort — men behold mit exit-kort hvis jeg
