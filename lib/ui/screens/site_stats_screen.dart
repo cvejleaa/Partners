@@ -179,12 +179,15 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
   /// har logget ind med både Google og email og dermed har to forskellige
   /// uids) tilføjes et kort uid-fragment så rækkerne kan kendes fra hinanden.
   String _disambiguatedName(UserStats s) {
+    final bool isMe = s.uid == FirebaseAuth.instance.currentUser?.uid;
     final int dupes =
         _allStats.values.where((o) => o.displayName == s.displayName).length;
-    if (dupes <= 1) return s.displayName;
+    if (dupes <= 1) return isMe ? '${s.displayName} (dig)' : s.displayName;
     final String tail =
         s.uid.length >= 4 ? s.uid.substring(s.uid.length - 4) : s.uid;
-    return '${s.displayName} (#$tail)';
+    // Markér den konto du er logget ind med LIGE NU, så to ens "Du"-rækker
+    // (typisk to logins) kan skelnes.
+    return '${s.displayName} (#$tail)${isMe ? ' — dig' : ''}';
   }
 
   Widget _ranking(String title, List<MapEntry<UserStats, String>> rows) {
