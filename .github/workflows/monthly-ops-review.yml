@@ -1,0 +1,56 @@
+name: Månedlig forbrugs- & performance-gennemgang
+
+# Opretter den 1. i hver måned en issue der minder om (og indeholder prompten
+# til) den månedlige gennemgang af forbrug og ydelse. Selve gennemgangen køres
+# af `performance-cost-manager`-agenten i en Claude Code-session — enten manuelt
+# fra issuen, eller automatisk hvis I opsætter en tilbagevendende trigger i
+# Claude Code på nettet (se issue-teksten).
+
+on:
+  schedule:
+    # 1. i måneden kl. 08:07 UTC (skæv-minut med vilje).
+    - cron: "7 8 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  open-review-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Opret gennemgangs-issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const now = new Date();
+            const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+            const title = `Månedlig forbrugs- & performance-gennemgang (${ym})`;
+            const body = [
+              '## Månedlig gennemgang',
+              '',
+              'Kør `performance-cost-manager`-agenten på repoet. Prompt at bruge:',
+              '',
+              '> Kør en månedlig forbrugs- og performance-gennemgang af Partners med',
+              '> `performance-cost-manager`-agenten. Fokus: Firestore-writes/reads pr.',
+              '> spil (presence-heartbeat, log-vækst mod 1 MB), onGameTurn-invocations,',
+              '> Cloud Functions, FCM-mængde, web-bundle og rebuilds. Lever en',
+              '> prioriteret rapport med anbefalinger og en "tjek i Firebase-konsollen"-liste.',
+              '',
+              '### Til fuld automatik',
+              'Opsæt en tilbagevendende (månedlig) trigger i Claude Code på nettet med',
+              'ovenstående prompt, så gennemgangen kører af sig selv. Denne issue er',
+              'blot en påmindelse/anker, da GitHub Actions ikke selv kan køre agentens',
+              'vurdering.',
+              '',
+              '### Tjekliste (mennesket)',
+              '- [ ] Kørt `performance-cost-manager` og læst rapporten',
+              '- [ ] Slået faktiske tal op i Firebase-konsollen (Firestore, Functions, Hosting, FCM)',
+              '- [ ] Oprettet opfølgende issues/opgaver for de vigtigste fund',
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+            });
