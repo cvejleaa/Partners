@@ -16,6 +16,8 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
+  # Kræves af anthropics/claude-code-action (henter et OIDC-token).
+  id-token: write
 
 jobs:
   review:
