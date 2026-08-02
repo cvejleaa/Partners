@@ -1,0 +1,201 @@
+name: Test & Deploy
+
+# Kør automatisk ved push til main (vores trunk), eller manuelt via
+# "Run workflow"-knappen i GitHub Actions UI (Actions → Test & Deploy → Run
+# workflow). Produktion deployes fra main.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy til Firebase Hosting efter test"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      # True når deploy-secret findes (sættes af repo-ejer)
+      HAS_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+      FIREBASE_PROJECT_ID: partners-8d4aa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter deps
+        run: flutter pub get
+
+      - name: Analyze
+        # --no-fatal-infos: info-niveau lints (fx 'withOpacity' deprecation)
+        # skal ikke fælde bygningen; warnings og errors gør stadig.
+        run: flutter analyze --no-fatal-infos
+
+      - name: Unit & engine tests (5 hele spil + regler)
+        run: flutter test --reporter expanded
+
+      - name: Generér PNG-ikoner fra SVG (favicon + PWA-ikoner)
+        # SVG-kilderne ligger i repoet; her rasteres de binære PNG'er som
+        # manifest.json og index.html refererer (se docs/branding.md).
+        run: |
+          # GitHub-runnernes forudinstallerede Microsoft/azure-cli apt-repos
+          # fejler ind imellem clearsign-tjekket, hvilket får hele
+          # `apt-get update` til at returnere fejl (exit 100) selvom Ubuntu-
+          # repoene (hvor librsvg2-bin ligger, i universe) hentes fint. Fjern
+          # de flaky tredjeparts-lister og lad ikke en update-fejl vælte bygget
+          # — install-trinnet fejler stadig hårdt, hvis pakken reelt mangler.
+          sudo rm -f /etc/apt/sources.list.d/*microsoft* \
+                     /etc/apt/sources.list.d/*azure* 2>/dev/null || true
+          sudo apt-get update || true
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 192 -h 192 web/icons/Icon.svg -o web/icons/Icon-192.png
+          rsvg-convert -w 512 -h 512 web/icons/Icon.svg -o web/icons/Icon-512.png
+          rsvg-convert -w 192 -h 192 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-192.png
+          rsvg-convert -w 512 -h 512 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-512.png
+          rsvg-convert -w 64  -h 64  web/favicon.svg -o web/favicon.png
+          # Monokromt notifikations-badge (hvid silhuet på gennemsigtig) til
+          # Androids lille status-ikon.
+          rsvg-convert -w 96  -h 96  web/icons/notification-badge.svg -o web/icons/notification-badge.png
+          echo "Genererede ikoner:" && ls -la web/icons/*.png web/favicon.png
+
+      - name: Byg web (release)
+        # BUILD_TAG eksponeres i appen via _BuildStamp (kortet "build XXXXXXX"
+        # nederst på home_screen). Giver os mulighed for at se i live-appen
+        # hvilken commit der faktisk kører — så vi kan udelukke 'gammel
+        # cache' når en bug rapporteres.
+        run: |
+          BUILD_TAG="${GITHUB_SHA:0:7}"
+          flutter build web --release --base-href "/" \
+            --dart-define=BUILD_TAG="$BUILD_TAG"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Playwright end-to-end
+        continue-on-error: true
+        run: npx playwright test
+        env:
+          CI: "true"
+
+      - name: Saml testrapport til hosting
+        if: always()
+        run: |
+          mkdir -p build/web/test-report
+          if [ -d playwright-report ]; then cp -r playwright-report/* build/web/test-report/ || true; fi
+
+      - name: Upload testartefakter
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Skriv resumé
+        if: always()
+        run: |
+          {
+            echo "## Partners — Test & Deploy"
+            echo ""
+            echo "- Flutter analyze + tests: se 'Flutter tests' check ovenfor"
+            echo "- Playwright: se artefakt **test-report**"
+            if [ "$HAS_SA" = "true" ]; then
+              echo "- Deploy: udført til https://partners.vejleaa.dk"
+              echo "- Testrapport (live): https://partners.vejleaa.dk/test-report/"
+            else
+              echo "- Deploy: **sprunget over** — secret FIREBASE_SERVICE_ACCOUNT mangler"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Skriv service account til fil
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        # Secret'en sendes via env (ikke interpoleret ind i script-teksten), så
+        # en JSON med et apostrof-tegn ikke kan knække/injicere scriptet.
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$SA_JSON" > "$HOME/firebase-sa.json"
+
+      - name: Deploy til Firebase Hosting
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        run: |
+          npm install -g firebase-tools
+          firebase deploy --only hosting --project "$FIREBASE_PROJECT_ID" --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
+
+      - name: Deploy Firestore-regler til navngivet database 'partners'
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        run: |
+          # Eksplicit target navngivet database — CLI'en deployer ellers til (default).
+          firebase deploy \
+            --only "firestore:partners:rules" \
+            --project "$FIREBASE_PROJECT_ID" \
+            --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
+
+      - name: Installér Cloud Functions deps
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        run: npm --prefix functions install
+
+      - name: Deploy Cloud Functions
+        id: functions_deploy
+        # continue-on-error bevares som sikkerhedsnet: et førstegangs-deploy af
+        # en 2nd-gen function kan ramme transiente service-agent-propagerings-
+        # fejl. Hosting og Firestore er allerede ude på dette tidspunkt — vi vil
+        # ikke have at en functions-fejl fælder hele CI'en og markerer det
+        # live-deployede spil som rødt. MEN: et efterfølgende trin gør fejlen
+        # SYNLIG (advarsel + job-summary) så en reel/permanent fejl ikke bare
+        # forsvinder i en grøn kørsel.
+        continue-on-error: true
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        run: |
+          # onInboxCreate lytter på users/{uid}/inbox/{x} og sender push via FCM.
+          # --force: sæt automatisk en oprydningspolitik for gamle container-
+          # images i Artifact Registry (ellers vokser lageret — og en lille
+          # regning — over tid). Uden flaget exit'er CLI'en med kode 1 selv om
+          # selve functionen blev deployet.
+          firebase deploy \
+            --only functions \
+            --project "$FIREBASE_PROJECT_ID" \
+            --force \
+            --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
+
+      - name: Advar hvis Cloud Functions-deploy fejlede
+        if: steps.functions_deploy.outcome == 'failure'
+        run: |
+          echo "::warning title=Cloud Functions-deploy fejlede::Push-funktionen (onInboxCreate) blev IKKE deployet. Ved et førstegangs-deploy kan det være en transient service-agent-fejl — kør workflow'et igen. Ellers tjek functions/index.js og IAM."
+          {
+            echo "## ⚠️ Cloud Functions-deploy FEJLEDE"
+            echo ""
+            echo "onInboxCreate blev ikke deployet. Hosting + Firestore er ude, men push-notifikationer kan være forældede/døde."
+            echo "- Førstegangs-deploy: prøv 'Re-run jobs' (transient propagering)."
+            echo "- Ellers: se logs for trinet 'Deploy Cloud Functions'."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fjern service account-fil
+        if: always()
+        run: rm -f "$HOME/firebase-sa.json"

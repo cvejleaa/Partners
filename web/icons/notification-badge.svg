@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Partners notifikations-badge">
+  <!-- Notifikations-badge (Androids lille status-ikon): KUN hvid silhuet på
+       gennemsigtig baggrund. Android farvelægger selv silhuetten; et fyldt/
+       farvet ikon ville blive vist som en sort firkant. Motiv: central ring +
+       fire brikker (som app-ikonet, forenklet). -->
+  <circle cx="256" cy="256" r="72" fill="none" stroke="#ffffff" stroke-width="40"/>
+  <circle cx="256" cy="92" r="58" fill="#ffffff"/>
+  <circle cx="420" cy="256" r="58" fill="#ffffff"/>
+  <circle cx="256" cy="420" r="58" fill="#ffffff"/>
+  <circle cx="92" cy="256" r="58" fill="#ffffff"/>
+</svg>

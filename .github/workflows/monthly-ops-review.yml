@@ -1,0 +1,73 @@
+name: Månedlig forbrugs- & performance-gennemgang
+
+# Kører den 1. i hver måned. Hvis repoet har et Claude-token i Actions-secrets
+# (CLAUDE_CODE_OAUTH_TOKEN — hentes med `claude setup-token`, eller brug
+# ANTHROPIC_API_KEY), kører den performance-cost-manager-gennemgangen
+# AUTOMATISK og opretter en issue med rapporten. Er token'et ikke sat, falder
+# den tilbage til blot at oprette en påmindelses-issue med prompten klar.
+
+on:
+  schedule:
+    # 1. i måneden kl. 08:07 UTC (skæv-minut med vilje).
+    - cron: "7 8 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    env:
+      HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    steps:
+      - name: Hent repo
+        uses: actions/checkout@v4
+
+      # Fuld, automatisk AI-gennemgang (når token er sat).
+      - name: Kør månedlig gennemgang (Claude)
+        if: env.HAS_TOKEN == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: >
+            Kør en månedlig forbrugs- og performance-gennemgang af Partners med
+            performance-cost-manager-agenten. Fokus: Firestore reads/writes pr.
+            spil (presence-heartbeat, log-vækst mod 1 MB), onGameTurn-invocations,
+            Cloud Functions, FCM-mængde, web-bundle og unødige rebuilds. Lever en
+            prioriteret rapport med anbefalinger og en "tjek i Firebase-konsollen"-
+            liste. Ret IKKE kode og push IKKE — opret i stedet én GitHub-issue med
+            titlen "Månedlig forbrugs- & performance-gennemgang" og rapporten i
+            beskrivelsen, og eventuelt opfølgende issues for de vigtigste fund.
+
+      # Fallback: ingen token → bare en påmindelses-issue med prompten.
+      - name: Fallback — opret påmindelses-issue
+        if: env.HAS_TOKEN != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const now = new Date();
+            const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+            const body = [
+              '## Månedlig gennemgang (manuel)',
+              '',
+              'Der er endnu ikke sat et Claude-token op i Actions-secrets, så',
+              'gennemgangen kunne ikke køre automatisk. Kør `performance-cost-manager`',
+              'i en Claude Code-session med denne prompt:',
+              '',
+              '> Kør en månedlig forbrugs- og performance-gennemgang af Partners med',
+              '> performance-cost-manager-agenten. Fokus: Firestore reads/writes pr.',
+              '> spil, onGameTurn-invocations, Cloud Functions, FCM-mængde, web-bundle',
+              '> og rebuilds. Lever en prioriteret rapport + en "tjek i konsollen"-liste.',
+              '',
+              'For fuld automatik: tilføj `CLAUDE_CODE_OAUTH_TOKEN` (eller',
+              '`ANTHROPIC_API_KEY`) under repoets Settings → Secrets → Actions.',
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Månedlig forbrugs- & performance-gennemgang (${ym})`,
+              body,
+            });

@@ -1,0 +1,17 @@
+{
+  "name": "partners-ui-tests",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Playwright UI tests for the Partners Flutter web app",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report",
+    "build:web": "flutter build web --release --base-href \"/\"",
+    "serve:web": "npx --yes http-server build/web -p 8080 -c-1 --cors",
+    "ci": "npm run build:web && (npm run serve:web &) && npx --yes wait-on http://localhost:8080 && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

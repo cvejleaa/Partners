@@ -1,34 +1,52 @@
-# Gradle files
-.gradle/
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
 build/
+pubspec.lock
 
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Log/OS Files
-*.log
-
-# Android Studio generated files and folders
-captures/
-.externalNativeBuild/
-.cxx/
-*.aab
-*.apk
-output-metadata.json
-
-# IntelliJ
-*.iml
+# IDE
 .idea/
-misc.xml
-deploymentTargetDropDown.xml
-render.experimental.xml
+.vscode/
+*.iml
+*.iws
+*.ipr
 
-# Keystore files
+# macOS / iOS
+.DS_Store
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GeneratedPluginRegistrant.*
+
+# Android
+android/.gradle/
+android/captures/
+android/local.properties
+android/key.properties
 *.jks
 *.keystore
+*.aab
+*.apk
 
-# Google Services (e.g. APIs or Firebase)
-google-services.json
+# Logs / OS
+*.log
 
-# Android Profiling
-*.hprof
+# Coverage
+coverage/
+
+# Playwright
+node_modules/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Claude Code agent worktrees / local settings
+.claude/*
+# …men DEL de faste projekt-agenter (manager-agenter) med repoet.
+!.claude/agents/
