@@ -19,7 +19,7 @@ kilde til de officielle varianter.
 | Partners (klassisk) | 1998 | 4 | 2 hold á 2 (diagonal makker) | 4 pr. spiller (16) | 56 |
 | Partners Travel | 2025 | 4 | 2 hold á 2 | 4 pr. spiller (16) | Som klassisk |
 | Partners+ | ~2017 | 6 | 2v2v2 eller 3v3 | 4 pr. spiller (24) | 78 |
-| Partners Duo | ~2021 | 2 | Ingen (alle mod alle) | 6 pr. spiller (12) | Eget sæt |
+| Partners Duo | 2022 | 2 | Ingen (1 mod 1) | 6 pr. spiller (12) | 30 |
 | Partners Trio | 2026 | 3 | Ingen (alle mod alle) | 4 pr. spiller (12) | 40 |
 | Partners 25 år | 2023 | 4 | 2 hold á 2 | 4 pr. spiller (16) | Mix + nye kort |
 
@@ -160,11 +160,91 @@ Kilder: gameinventors.dk/PARTNERS-TRAVEL · lad-os-spille.dk/spil/partners-trave
 
 ## Partners Duo (2 spillere)
 
-*(Uddybes — detaljeret spec følger nedenfor, når research er samlet.)*
+Udgivet 2022 (Årets Familiespil 2022, nomineret til Guldbrikken). Alder 8+,
+spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
+
+### Brikker og bræt
+
+- **6 brikker pr. spiller** (12 i alt, rød og gul), delt i **2 typer**: 3 med
+  hul i toppen og 3 med knop ("dut").
+- Pladen har **4 startcirkler** (2 pr. spiller — én pr. briktype, markeret med
+  hhv. hul og knop). **Brikkerne skal starte og slutte ved samme cirkel** —
+  hver spiller har altså 2 separate mål-destinationer, én pr. briktype.
+- Banen er kortere end klassisk Partners.
+- **[HUL]** Præcist antal banefelter og målcirkler pr. destination er ikke
+  offentligt dokumenteret.
+
+### Kort (30 kort, 10 forskellige kortværdier)
+
+| Kort | Funktion(er) |
+|---|---|
+| Hjerterkort | Startkort: flyt en brik fra hjem ud på start |
+| ♥/1 | Valg: startkort ELLER 1 felt frem |
+| ♥/6 | Valg: startkort ELLER 6 felter frem |
+| ♥/8 | Valg: startkort ELLER 8 felter frem |
+| Nummerkort | Flyt én brik kortets værdi frem |
+| 4×1 | 4 enkelttræk, der kan deles mellem flere brikker (fx 2+2). Alle 4 SKAL bruges |
+| +2− | Valg: flyt en brik 2 frem ELLER 2 tilbage |
+| 5 spring over | Flyt 5 — må passere brikker, der spærrer i deres startfelt (omgår blokade) |
+| Byttekort | Byt to vilkårlige brikker i spil — også to af ens egne (taktisk vigtigt pga. de to destinationer: byt en hul-brik med en knop-brik) |
+
+- **[HUL]** Fordelingen af de 30 kort på de 10 værdier er ikke offentligt
+  dokumenteret, og heller ikke hvilke rene talværdier der findes.
+
+### Uddeling, bytte og afvigende regler
+
+- 4 kort pr. spiller pr. runde; samme kortgiver deler 3 gange, derefter
+  skiftes der. **[HUL]** 3×8 = 24 af 30 kort — håndteringen af de sidste 6
+  kort er ikke dokumenteret (én kilde: kortgiver fortsætter "til denne ikke
+  har flere kort i sin bunke").
+- **Kortbytte med modstanderen**: efter hver uddeling SKAL de to spillere
+  bytte ét kort med hinanden (skjult, ingen snak). Ikke med sig selv.
+- Spilleren, der ikke gav kort, starter runden.
+- **Streng spillepligt**: kan man spille et kort, SKAL man — man kan blive
+  tvunget til at slå sin egen brik hjem.
+- Slag/fredning/blokade/mål fungerer som klassisk: enkelt modstanderbrik slås
+  hjem; landing på felt med 2 ens brikker slår ens egen brik hjem; 2 ens
+  brikker er fredede; brik i startfelt blokerer begge spillere (kun
+  5-spring-over-kortet kan passere); målfelter fyldes indefra, ingen
+  overspringning, overskydende træk rykkes retur (bounce-back).
+- Kan intet kort bruges: smid hele hånden og sid over til næste uddeling.
+
+### Vinderbetingelse
+
+- Første spiller med **alle 6 brikker i hus** (3 + 3 ved de rigtige cirkler)
+  vinder.
+
+Kilder: dansk7kabale.dk/partners-duo-regler/ ·
+legebyen.dk (Duo-spilanmeldelse 1+2) · gameinventors.dk/PARTNERS-DUO ·
+lad-os-spille.dk/spil/partners-duo/ · boardgamegeek.com/boardgame/356559 ·
+partnersboardgame.com/products/partners-duo-1
+
+---
 
 ## Partners Trio (3 spillere)
 
-*(Uddybes — detaljeret spec følger nedenfor, når research er samlet.)*
+Udgivet feb./marts 2026 — nyeste udgave, udviklet over 2 år. Præcis 3
+spillere, **alle mod alle** ("Ingen alliancer. Ingen nåde. Kun én vinder!").
+Alder 8+, spilletid ca. 20-30 min.
+
+- **Indhold**: spilleplade, **40 kort**, **12 brikker** (4 pr. farve).
+- **Kort-videregivelse i stedet for makkerbyt**: efter hver kortgivning
+  sender man ét kort videre til én modstander og modtager samtidig ét fra den
+  anden — cirkulær videregivelse, ikke parvist bytte.
+- Kortene er "helt nye kortvariationer, som ikke tidligere er set i
+  Partners-serien".
+- Der spilles reelt om placeringerne 1-2-3 ("kampen om pladserne fra 1 til 3
+  er intens hele vejen").
+- Vinder: først med alle 4 egne brikker i mål.
+- **[HUL]** Spillet er så nyt, at hverken de konkrete korttyper, antal kort
+  pr. hånd, banelayoutet eller slag-/frednings-/blokaderegler er offentligt
+  dokumenteret endnu (ingen regel-PDF, ingen BGG-side, ingen detaljeret
+  anmeldelse fundet). Denne variant kan p.t. kun implementeres ud fra et
+  fysisk eksemplar af spillet.
+
+Kilder: gameinventors.dk/PARTNERS-TRIO · lad-os-spille.dk/spil/partners-trio/ ·
+legebyen.dk (produktside) · bog-ide.dk (produktside) ·
+hyggeonkel.dk/overblik/partners-spil/
 
 ## Partners 25 år (jubilæumsudgave)
 
