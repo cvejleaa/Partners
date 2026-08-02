@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -174,21 +173,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
 
           final names = (d['names'] as List).map((e) => e as String).toList();
 
-          // Online-status pr. sæde: en spiller er "online" hvis deres presence-
-          // stempel er friskere end AI-overtagelses-vinduet. Presence kommer nu
-          // fra en SEPARAT stream (subcollection), så de hyppige heartbeats ikke
-          // rører spil-doc'et — se presenceStreamProvider / forbrugs-fund #4.
-          final int nowMs = DateTime.now().millisecondsSinceEpoch;
-          final Set<int> onlineSeats = <int>{};
-          for (int seat = 0; seat < uids.length; seat++) {
-            final u = uids[seat];
-            if (u == null) continue; // AI-plads
-            final ms = presenceMs[u];
-            if (ms != null &&
-                nowMs - ms < kAiTakeoverTimeout.inMilliseconds) {
-              onlineSeats.add(seat);
-            }
-          }
+          // Online-status pr. sæde: en spiller er "online" hvis de IKKE ser
+          // "væk" ud (frisk presence-stempel). Genbruger samme kilde-sandhed som
+          // AI-overtagelsen (seatIsAway), så de to ikke kan divergere. Presence
+          // kommer fra en SEPARAT stream (subcollection), så de hyppige
+          // heartbeats ikke rører spil-doc'et — se forbrugs-fund #4.
+          final Set<int> onlineSeats = <int>{
+            for (int seat = 0; seat < uids.length; seat++)
+              if (!OnlineService.seatIsAway(uids, presenceMs, seat)) seat,
+          };
 
           if (state.winningTeamIndex != null && !_statsRecomputed) {
             _statsRecomputed = true;
