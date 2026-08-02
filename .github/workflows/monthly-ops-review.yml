@@ -37,6 +37,17 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # I agent-mode kører claude-code-action med en restriktiv
+          # tilladelses-liste. Uden dette blev alle forsøg på faktisk at
+          # OPRETTE issuen afvist (kørslen blev grøn, men ingen issue kom ud —
+          # se permission_denials_count i loggen). Vi tillader derfor:
+          #  - Read/Grep/Glob/Bash: læse koden + køre `gh issue create`.
+          #  - Task: så prompten kan uddelegere til performance-cost-manager-
+          #    agenten i .claude/agents/.
+          # Job-tokenet er contents:read + issues:write, så Bash kan oprette
+          # issues men IKKE pushe kode.
+          claude_args: >-
+            --allowedTools "Read,Grep,Glob,Bash,Task,TodoWrite"
           prompt: >
             Kør en månedlig forbrugs- og performance-gennemgang af Partners med
             performance-cost-manager-agenten. Fokus: Firestore reads/writes pr.
@@ -46,6 +57,9 @@ jobs:
             liste. Ret IKKE kode og push IKKE — opret i stedet én GitHub-issue med
             titlen "Månedlig forbrugs- & performance-gennemgang" og rapporten i
             beskrivelsen, og eventuelt opfølgende issues for de vigtigste fund.
+            Opret issues med `gh issue create` (gh er installeret og
+            GITHUB_TOKEN er sat i miljøet) — fx
+            `gh issue create --title "..." --body-file rapport.md`.
 
       # Fallback: ingen token → bare en påmindelses-issue med prompten.
       - name: Fallback — opret påmindelses-issue
