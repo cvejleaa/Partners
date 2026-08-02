@@ -60,6 +60,18 @@ final gameStreamProvider = StreamProvider.family<
   (ref, code) => ref.read(onlineServiceProvider).watch(code),
 );
 
+/// Live-stream af presence-stempler for et online-spil: uid → millisekunder
+/// (epoch) for seneste heartbeat.
+///
+/// Presence ligger i subcollection `games/{code}/presence/{uid}`, IKKE i selve
+/// spil-dokumentet. Derfor trigger de hyppige heartbeats (hver ~7s pr. spiller)
+/// hverken `onGameTurn` (Cloud Function på `games/{code}`) eller et snapshot på
+/// [gameStreamProvider] — kun denne lette, separate stream opdateres.
+final presenceStreamProvider =
+    StreamProvider.family<Map<String, int>, String>(
+  (ref, code) => ref.read(onlineServiceProvider).presenceStream(code),
+);
+
 /// Spil jeg er inviteret til eller deltager i (lobby/igangværende).
 ///
 /// Bygges oven på [authStateProvider], så forespørgslen FØRST abonneres når
@@ -344,8 +356,9 @@ class OnlineService {
       'members': <String>[uid],
       // Klar-markering pr. uid i lobbyen (vært tæller altid som klar).
       'ready': <String, dynamic>{uid: true},
-      // Tilstedeværelses-stempel pr. uid (heartbeat) til reconnect/AI-overtag.
-      'presence': <String, dynamic>{uid: Timestamp.now()},
+      // Presence (heartbeat) ligger nu i subcollection games/{code}/presence,
+      // ikke i selve doc'et — se heartbeat(). Værtens første stempel skrives af
+      // lobby-skærmens heartbeat ved åbning.
       'cardRules': effective.toJson(),
       // Spillerens valgte AI-sværhedsgrad (0=Begynder,1=Normal,2=Skarp).
       // Parametrene bag graderne sættes af admin (config/ai).
@@ -444,13 +457,28 @@ class OnlineService {
         'aiSeats': aiSeats,
         'members': FieldValue.arrayUnion(<String>[uid]),
         'ready.$uid': false,
-        'presence.$uid': Timestamp.now(),
       });
     });
+    // Skriv et presence-stempel med det samme (subcollection), så pladsen
+    // straks ser "online" ud hos de andre — uden at røre spil-doc'et.
+    await heartbeat(code);
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> watch(String code) =>
       _games.doc(code).snapshots();
+
+  /// Live-stream af presence for et spil (uid → ms). Læser subcollection
+  /// `games/{code}/presence`. Se [presenceStreamProvider].
+  Stream<Map<String, int>> presenceStream(String code) {
+    return _games.doc(code).collection('presence').snapshots().map((snap) {
+      final out = <String, int>{};
+      for (final doc in snap.docs) {
+        final ts = doc.data()['t'];
+        if (ts is Timestamp) out[doc.id] = ts.millisecondsSinceEpoch;
+      }
+      return out;
+    });
+  }
 
   /// Byg en [GameSummary] ud fra spil-dokumentet, inkl. hvis tur det er (for
   /// igangværende spil) set fra [uid]'s perspektiv.
@@ -564,8 +592,10 @@ class OnlineService {
     if (uid == null) return;
     await _games.doc(code).update(<String, dynamic>{
       'ready.$uid': ready,
-      'presence.$uid': Timestamp.now(),
     });
+    // Presence opdateres separat (subcollection), så klar-markering og
+    // heartbeat ikke er koblet sammen.
+    await heartbeat(code);
   }
 
   /// Sæt AI-sværhedsgraden for spillet (vælges i lobbyen). Gemmes i doc'et og
@@ -599,31 +629,38 @@ class OnlineService {
   }
 
   /// Opdater brugerens tilstedeværelses-stempel (heartbeat). Fejler stille.
+  ///
+  /// Skriver til subcollection `games/{code}/presence/{uid}` — IKKE til selve
+  /// spil-dokumentet. Så en heartbeat hver ~7s pr. spiller trigger hverken
+  /// `onGameTurn` (Cloud Function på `games/{code}`) eller et snapshot på
+  /// spil-state'en. Det var den største kilde til unødige Cloud Function-
+  /// invocations og rebuilds (forbrugs-fund #4).
   Future<void> heartbeat(String code) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
     try {
-      await _games.doc(code).update(<String, dynamic>{
-        'presence.$uid': Timestamp.now(),
-      });
+      await _games
+          .doc(code)
+          .collection('presence')
+          .doc(uid)
+          .set(<String, dynamic>{'t': Timestamp.now()});
     } catch (_) {}
   }
 
   /// Afgør om en menneskelig spiller på [seat] regnes som "væk" ud fra
-  /// dokumentets felter. En spiller er væk hvis:
-  ///  - der ikke er noget presence-stempel (aldrig set / gammelt skema), ELLER
+  /// [presenceMs] (uid → ms, fra [presenceStream]). En spiller er væk hvis:
+  ///  - der ikke er noget presence-stempel (aldrig set / lige koblet af), ELLER
   ///  - seneste presence er ældre end [kAiTakeoverTimeout].
   /// Bruges sammen med tids-siden-sidste-handling i UI-laget.
-  static bool seatLooksAway(Map<String, dynamic> d, int seat) {
-    final uids = d['uids'] as List?;
-    if (uids == null || seat >= uids.length) return false;
+  static bool seatIsAway(List<dynamic> uids, Map<String, int> presenceMs,
+      int seat) {
+    if (seat >= uids.length) return false;
     final uid = uids[seat];
     if (uid == null) return true; // tom plads = AI
-    final presence = d['presence'];
-    if (presence is! Map) return true;
-    final ts = presence[uid];
-    if (ts is! Timestamp) return true;
-    return DateTime.now().difference(ts.toDate()) > kAiTakeoverTimeout;
+    final ms = presenceMs[uid];
+    if (ms == null) return true;
+    return DateTime.now().millisecondsSinceEpoch - ms >
+        kAiTakeoverTimeout.inMilliseconds;
   }
 
   /// Hjælper til UI: tid siden sidste handling i spillet (eller null).

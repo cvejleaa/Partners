@@ -135,6 +135,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   @override
   Widget build(BuildContext context) {
     final snap = ref.watch(gameStreamProvider(widget.code));
+    // Presence i en SEPARAT, let stream (subcollection) — så heartbeats ikke
+    // rebuild'er via spil-doc'et. Bruges til online-markører + AI-overtagelse.
+    final Map<String, int> presenceMs =
+        ref.watch(presenceStreamProvider(widget.code)).valueOrNull ??
+            const <String, int>{};
     return Scaffold(
       backgroundColor: const Color(0xFF0E2A1A),
       appBar: AppBar(
@@ -165,24 +170,22 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           final int mySeen = (seenMap[myUid] as num?)?.toInt() ?? 0;
           _maybeStartReplay(state, log, mySeen);
 
-          if (!_replayActive) _maybeHostAct(state, isHost, d);
+          if (!_replayActive) _maybeHostAct(state, isHost, d, presenceMs);
 
           final names = (d['names'] as List).map((e) => e as String).toList();
 
           // Online-status pr. sæde: en spiller er "online" hvis deres presence-
-          // stempel er friskere end AI-overtagelses-vinduet (heartbeat hvert
-          // kPresenceInterval). Doc'et opdateres løbende af de aktive klienters
-          // heartbeat, så markørerne holder sig ajour.
-          final presence = (d['presence'] as Map?) ?? const <String, dynamic>{};
+          // stempel er friskere end AI-overtagelses-vinduet. Presence kommer nu
+          // fra en SEPARAT stream (subcollection), så de hyppige heartbeats ikke
+          // rører spil-doc'et — se presenceStreamProvider / forbrugs-fund #4.
           final int nowMs = DateTime.now().millisecondsSinceEpoch;
           final Set<int> onlineSeats = <int>{};
           for (int seat = 0; seat < uids.length; seat++) {
             final u = uids[seat];
             if (u == null) continue; // AI-plads
-            final ts = presence[u];
-            if (ts is Timestamp &&
-                nowMs - ts.millisecondsSinceEpoch <
-                    kAiTakeoverTimeout.inMilliseconds) {
+            final ms = presenceMs[u];
+            if (ms != null &&
+                nowMs - ms < kAiTakeoverTimeout.inMilliseconds) {
               onlineSeats.add(seat);
             }
           }
@@ -457,7 +460,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // ikke kan afvises af applyMoves runtime-guard.
   // ---------------------------------------------------------------------------
 
-  void _maybeHostAct(GameState state, bool isHost, Map<String, dynamic> d) {
+  void _maybeHostAct(GameState state, bool isHost, Map<String, dynamic> d,
+      Map<String, int> presenceMs) {
     if (!isHost || _busy) return;
     if (state.winningTeamIndex != null) return;
     // Spillets valgte AI-grad (fra doc'et) → parametre (admin-styret).
@@ -496,7 +500,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       bool takeover = false;
       if (!isAiSeat && !allHuman) {
         final since = OnlineService.timeSinceLastAction(d);
-        final away = OnlineService.seatLooksAway(d, idx);
+        final away =
+            OnlineService.seatIsAway(d['uids'] as List, presenceMs, idx);
         if (away && since != null && since > kAiTakeoverTimeout) {
           takeover = true;
         }

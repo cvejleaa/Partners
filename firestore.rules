@@ -73,6 +73,15 @@ service cloud.firestore {
       );
       allow delete: if isSignedIn() &&
         (resource.data.hostUid == request.auth.uid || isAdmin());
+
+      // Presence (heartbeat) pr. spiller i en subcollection, så de hyppige
+      // tilstedeværelses-skrivninger IKKE rører selve spil-doc'et (og dermed
+      // hverken trigger onGameTurn eller snapshots på spil-state'en). Alle
+      // indloggede må læse markørerne; man må kun skrive sit EGET stempel.
+      match /presence/{uid} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == uid;
+      }
     }
 
     // Stats-cache pr. bruger: alle indloggede må læse (ranglisterne viser
