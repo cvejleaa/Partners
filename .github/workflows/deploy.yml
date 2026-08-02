@@ -1,12 +1,12 @@
 name: Test & Deploy
 
-# Kør automatisk ved push til main, eller manuelt via "Run workflow"-knappen
-# i GitHub Actions UI (Actions → Test & Deploy → Run workflow).
+# Kør automatisk ved push til main (vores trunk), eller manuelt via
+# "Run workflow"-knappen i GitHub Actions UI (Actions → Test & Deploy → Run
+# workflow). Produktion deployes fra main.
 on:
   push:
     branches:
       - main
-      - claude/partners-game-app-Z6NJW
   workflow_dispatch:
     inputs:
       deploy:
