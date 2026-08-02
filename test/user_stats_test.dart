@@ -219,4 +219,44 @@ void main() {
     expect(round.displayName, original.displayName);
     expect(round.shortestWin, original.shortestWin);
   });
+
+  test(
+      'en brugers stats er uafhængige af spil brugeren ikke selv deltog i '
+      '(dækker forbrugs-fixet: kun egne spil læses, se stats_repository.dart)',
+      () {
+    // Spil hvor u0 selv deltager.
+    final ownGames = <Map<String, dynamic>>[
+      game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+          winningTeam: 0, hands: 5, createdMs: 100),
+      game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+          winningTeam: 1, hands: 4, createdMs: 300),
+    ];
+    // Fremmede spil, hvor u0 IKKE er med — skal ikke påvirke u0's tal, uanset
+    // hvornår de er spillet (før, imellem eller efter u0's egne spil).
+    final foreignGames = <Map<String, dynamic>>[
+      game(uids: ['u5', 'u6', 'u7', 'u8'], names: ['E', 'F', 'G', 'H'],
+          winningTeam: 0, hands: 9, createdMs: 50),
+      game(uids: ['u5', 'u6', 'u7', 'u8'], names: ['E', 'F', 'G', 'H'],
+          winningTeam: 1, hands: 2, createdMs: 200),
+      game(uids: ['u5', 'u6', 'u7', 'u8'], names: ['E', 'F', 'G', 'H'],
+          winningTeam: 0, hands: 3, createdMs: 400),
+    ];
+
+    final statsOwnOnly = computeAllStats(ownGames);
+    final statsWithForeign =
+        computeAllStats(<Map<String, dynamic>>[...ownGames, ...foreignGames]);
+
+    final u0Only = statsOwnOnly['u0']!;
+    final u0WithForeign = statsWithForeign['u0']!;
+
+    // Sammenlign hele det serialiserede billede (minus server-timestampet)
+    // for at fange enhver afvigelse, ikke kun et par udvalgte felter.
+    final jsonOnly = u0Only.toJson()..remove('updatedAt');
+    final jsonWithForeign = u0WithForeign.toJson()..remove('updatedAt');
+    expect(jsonWithForeign, jsonOnly);
+
+    // Sanity: de fremmede uids optræder slet ikke i resultatet fra det
+    // fulde sæt af spil, når kun u0's egne spil filtreres frem.
+    expect(statsOwnOnly.containsKey('u5'), isFalse);
+  });
 }
