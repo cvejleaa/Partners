@@ -23,7 +23,9 @@ jobs:
   review:
     runs-on: ubuntu-latest
     env:
-      HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+      # Accepterer BEGGE auth-metoder: OAuth-token (claude setup-token) ELLER
+      # en Anthropic API-nøgle.
+      HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' || secrets.ANTHROPIC_API_KEY != '' }}
     steps:
       - name: Hent repo
         uses: actions/checkout@v4
@@ -34,8 +36,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Midlertidigt: vis fuld output så vi kan se en evt. auth-fejl.
-          show_full_output: true
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: >
             Kør en månedlig forbrugs- og performance-gennemgang af Partners med
             performance-cost-manager-agenten. Fokus: Firestore reads/writes pr.
