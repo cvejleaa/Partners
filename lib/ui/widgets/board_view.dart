@@ -191,9 +191,11 @@ class _BoardPainter extends CustomPainter {
   /// gen-oprettes ved hvert snapshot. Så et rebuild med UÆNDRET bræt (fx udløst
   /// af en presence-heartbeat, forbrugs-fund #4/#5) genmaler ikke canvas'et.
   /// rotation/colorOffset/highlight/animation sammenlignes separat nedenfor.
-  late final String _visualSig = _computeVisualSig(state, colorOffset);
+  late final String _visualSig = _computeVisualSig(state);
 
-  static String _computeVisualSig(GameState state, int colorOffset) {
+  // colorOffset indgår IKKE her — den sammenlignes separat i shouldRepaint, og
+  // signaturen bruger farve pr. sæde i state.players-rækkefølge.
+  static String _computeVisualSig(GameState state) {
     final StringBuffer sb = StringBuffer()
       ..write(state.geometry.trackLength)
       ..write('/')
@@ -519,13 +521,17 @@ class _BoardPainter extends CustomPainter {
     return out;
   }
 
+  /// Indholds-lighed for to Set<String> (undgår afhængighed af setEquals'
+  /// import-sti). highlighted er et NYT Set pr. build (_highlightSet), så vi må
+  /// sammenligne indhold — ellers ville brættet genmale ved hvert rebuild
+  /// uanset signaturen.
+  static bool _sameSet(Set<String> a, Set<String> b) =>
+      identical(a, b) || (a.length == b.length && a.containsAll(b));
+
   @override
   bool shouldRepaint(covariant _BoardPainter old) =>
       old._visualSig != _visualSig ||
-      // highlighted er et NYT Set pr. build (_highlightSet), så vi må
-      // sammenligne indhold — ellers ville brættet genmale ved hvert rebuild
-      // uanset signaturen.
-      !setEquals(old.highlighted, highlighted) ||
+      !_sameSet(old.highlighted, highlighted) ||
       old.animation != animation ||
       old.rotation != rotation ||
       old.colorOffset != colorOffset ||
