@@ -32,8 +32,13 @@ class StatsRepository {
 
   /// AI-solospil markeres med `mode: 'ai'` (se app.dart). De skal KUN tælle i
   /// brugerens egen profil, ikke i den offentlige rangliste — så online-cachen
-  /// beregnes af spil UDEN den markør. Online-spil (også dem med AI-pladser)
-  /// har ingen `mode`, så `!= 'ai'` beholder dem.
+  /// beregnes af spil UDEN den markør.
+  ///
+  /// BEVIDST afgrænsning: dette udelukker kun det lokale solo-praksis-flow
+  /// (den nemme "spil mod computeren"-genvej). Online-lobbyspil med en eller
+  /// flere AI-pladser har ingen `mode` og tæller derfor stadig med — de er
+  /// rigtige spil sat op mellem mennesker. Vil man også holde dem ude, skal
+  /// filteret skifte til "kun 4 menneskelige uids" (isFullyOnline).
   static List<Map<String, dynamic>> _onlineOnly(
           List<Map<String, dynamic>> games) =>
       games.where((g) => g['mode'] != 'ai').toList();

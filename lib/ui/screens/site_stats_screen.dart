@@ -233,6 +233,10 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
   List<MapEntry<UserStats, String>> _topBy(
       double Function(UserStats) score, String Function(UserStats) display) {
     final entries = _allStats.values
+        // Spillere uden online-spil har en 0-stats online-cache (skrives så
+        // gamle tal ryddes) — de skal ikke optræde som "spøgelses-rækker" med 0
+        // i de ranglister der ikke selv har en minimums-tærskel.
+        .where((s) => s.gamesPlayed > 0)
         .map((s) => MapEntry(s, score(s)))
         .where((e) => e.value >= 0)
         .toList()
