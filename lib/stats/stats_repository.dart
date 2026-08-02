@@ -14,23 +14,29 @@ class StatsRepository {
 
   FirebaseFirestore get _db => firestore;
 
-  /// Beregn stats for ALLE brugere ud fra alle afsluttede spil.
+  /// FULD scan af alle afsluttede spil.
   ///
-  /// ADVARSEL: dette er en FULD collection-scan (alle `games` i hele appen) og
-  /// koster ét read pr. afsluttet spil. Må KUN bruges af admin-batch-
-  /// genberegningen (`recomputeAndSave` fra admin-skærmen), aldrig i normale
-  /// brugerflows — brug [recomputeAndSaveOwn]/[lastGameStatsFor], der kun læser
-  /// den enkelte brugers egne spil.
-  Future<Map<String, UserStats>> computeAllUsers() async {
+  /// ADVARSEL: koster ét read pr. afsluttet spil i HELE appen. Må KUN bruges af
+  /// admin-batch-genberegningen ([recomputeAndSave] fra admin-skærmen), aldrig i
+  /// normale brugerflows — de bruger [recomputeAndSaveOwn]/[lastGameStatsFor],
+  /// der kun læser den enkelte brugers egne spil.
+  Future<List<Map<String, dynamic>>> _allFinishedGames() async {
     final snap = await _db
         .collection('games')
         .where('status', isEqualTo: 'over')
         .get();
-    final games = snap.docs
+    return snap.docs
         .map((d) => Map<String, dynamic>.from(d.data()))
         .toList();
-    return computeAllStats(games);
   }
+
+  /// AI-solospil markeres med `mode: 'ai'` (se app.dart). De skal KUN tælle i
+  /// brugerens egen profil, ikke i den offentlige rangliste — så online-cachen
+  /// beregnes af spil UDEN den markør. Online-spil (også dem med AI-pladser)
+  /// har ingen `mode`, så `!= 'ai'` beholder dem.
+  static List<Map<String, dynamic>> _onlineOnly(
+          List<Map<String, dynamic>> games) =>
+      games.where((g) => g['mode'] != 'ai').toList();
 
   /// Hent KUN de afsluttede spil hvor [uid] selv var med.
   ///
@@ -54,22 +60,31 @@ class StatsRepository {
         .toList();
   }
 
-  /// Skriv beregnede stats til userStats/{uid}.
-  Future<void> save(Map<String, UserStats> all) async {
+  /// Skriv beregnede stats til [collection] (userStats = samlet til profilen,
+  /// userStatsOnline = kun online til ranglisten).
+  Future<void> _saveAllTo(
+      String collection, Map<String, UserStats> all) async {
     final batch = _db.batch();
     for (final s in all.values) {
-      batch.set(_db.collection('userStats').doc(s.uid), s.toJson());
+      batch.set(_db.collection(collection).doc(s.uid), s.toJson());
     }
     await batch.commit();
   }
 
-  /// Beregn + cache ALLE brugere i én operation. Kræver admin-rettigheder mod
-  /// Firestore-reglerne (kun admin må skrive andres `userStats`). Bruges af
-  /// admin-skærmen.
+  /// Skriv beregnede (samlede) stats til userStats/{uid}.
+  Future<void> save(Map<String, UserStats> all) =>
+      _saveAllTo('userStats', all);
+
+  /// Beregn + cache ALLE brugere i én operation — BÅDE samlet (userStats, til
+  /// profilerne) og online-kun (userStatsOnline, til ranglisten). Admin-only
+  /// (kun admin må skrive andres stats-docs). Bruges af admin-skærmen.
   Future<Map<String, UserStats>> recomputeAndSave() async {
-    final stats = await computeAllUsers();
-    await save(stats);
-    return stats;
+    final games = await _allFinishedGames();
+    final combined = computeAllStats(games);
+    final online = computeAllStats(_onlineOnly(games));
+    await _saveAllTo('userStats', combined);
+    await _saveAllTo('userStatsOnline', online);
+    return combined;
   }
 
   /// Skriv KUN [uid]'s egen stats-doc. Bruges af almindelige klienter (fx ved
@@ -89,8 +104,16 @@ class StatsRepository {
   /// eller drift — kun langt færre reads.
   Future<void> recomputeAndSaveOwn(String uid) async {
     final games = await _ownFinishedGames(uid);
-    final stats = computeAllStats(games);
-    await saveOwn(uid, stats);
+    final combined = computeAllStats(games);
+    await saveOwn(uid, combined);
+    // Online-kun cache til ranglisten. Hvis brugeren ingen online-spil har,
+    // skrives 0-stats (med rigtigt navn), så evt. gamle online-tal ryddes og
+    // brugeren ikke fejlagtigt bliver hængende på ranglisten.
+    final online = computeAllStats(_onlineOnly(games));
+    final UserStats onlineOwn = online[uid] ??
+        UserStats(
+            uid: uid, displayName: combined[uid]?.displayName ?? 'Spiller');
+    await _db.collection('userStatsOnline').doc(uid).set(onlineOwn.toJson());
   }
 
   /// Hent én brugers stats fra cachen.

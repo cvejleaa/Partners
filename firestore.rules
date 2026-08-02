@@ -99,5 +99,14 @@ service cloud.firestore {
       allow write: if isSignedIn() &&
         (request.auth.uid == uid || isAdmin());
     }
+
+    // Online-kun stats-cache: samme som userStats, men beregnet UDEN
+    // AI-solospil. Driver den offentlige rangliste, så man ikke kan klatre ved
+    // at slå let AI. Egen profil bruger fortsat userStats (samlet, inkl. AI).
+    match /userStatsOnline/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        (request.auth.uid == uid || isAdmin());
+    }
   }
 }

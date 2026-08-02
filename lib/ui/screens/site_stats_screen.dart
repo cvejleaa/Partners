@@ -19,6 +19,7 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
   Map<String, UserStats> _allStats = <String, UserStats>{};
   int _liveGames = 0;
   int _totalGames = 0;
+  int _registeredPlayers = 0;
   double? _avgHands;
   bool _loading = true;
   String? _error;
@@ -46,36 +47,68 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
           .get();
       _liveGames = liveAgg.count ?? 0;
 
-      // Færdige: antal + gennemsnitligt antal hænder (state.hn) i én
-      // aggregation-query. average() på et indlejret felt kan i sjældne
-      // tilfælde fejle (fx manglende indeks) — det må ikke vælte hele
-      // ranglisten, så gennemsnittet hentes defensivt.
+      // Afsluttede spil — site-tallet skal KUN tælle rigtige spil, ikke
+      // AI-solospil. Alle mode:'ai'-spil er også status:'over', så online-
+      // antallet = (alle over) − (mode:'ai'). To ENKELT-felt-counts, så der ikke
+      // kræves et sammensat indeks.
       final overCountAgg = await firestore
           .collection('games')
           .where('status', isEqualTo: 'over')
           .count()
           .get();
-      _totalGames = overCountAgg.count ?? 0;
+      final int overCount = overCountAgg.count ?? 0;
+      final aiCountAgg = await firestore
+          .collection('games')
+          .where('mode', isEqualTo: 'ai')
+          .count()
+          .get();
+      final int aiCount = aiCountAgg.count ?? 0;
+      _totalGames = (overCount - aiCount).clamp(0, overCount);
+
+      // Gns. hænder (online-kun) via aggregat-subtraktion: sum(alle) − sum(AI),
+      // hvor sum = gns × antal. average() på indlejret felt kan i sjældne
+      // tilfælde fejle — det må ikke vælte skærmen, så det hentes defensivt.
       _avgHands = null;
       if (_totalGames > 0) {
         try {
-          final avgAgg = await firestore
+          final avgAllAgg = await firestore
               .collection('games')
               .where('status', isEqualTo: 'over')
               .aggregate(average('state.hn'))
               .get();
-          _avgHands = avgAgg.getAverage('state.hn');
+          final double? avgAll = avgAllAgg.getAverage('state.hn');
+          if (avgAll != null && aiCount == 0) {
+            _avgHands = avgAll;
+          } else if (avgAll != null) {
+            final avgAiAgg = await firestore
+                .collection('games')
+                .where('mode', isEqualTo: 'ai')
+                .aggregate(average('state.hn'))
+                .get();
+            final double? avgAi = avgAiAgg.getAverage('state.hn');
+            _avgHands = avgAi == null
+                ? avgAll // fallback: kan ikke trække AI fra → vis samlet gns.
+                : (avgAll * overCount - avgAi * aiCount) / _totalGames;
+          }
         } catch (_) {
           _avgHands = null; // gennemsnit udelades hvis aggregeringen fejler
         }
       }
 
-      // Per-spiller-stats (læser cachen direkte; brugere uden cache springes)
-      final statsSnap = await firestore.collection('userStats').get();
+      // Rangliste: læs KUN online-cachen (userStatsOnline) — AI-solospil er
+      // ekskluderet der, så man ikke kan klatre ved at slå let AI.
+      final onlineSnap =
+          await firestore.collection('userStatsOnline').get();
       _allStats = <String, UserStats>{
-        for (final d in statsSnap.docs)
+        for (final d in onlineSnap.docs)
           d.id: UserStats.fromJson(Map<String, dynamic>.from(d.data()))
       };
+
+      // Registrerede spillere = alle med en profil-cache (inkl. dem der kun har
+      // spillet mod AI og derfor ikke er på ranglisten).
+      final playersAgg =
+          await firestore.collection('userStats').count().get();
+      _registeredPlayers = playersAgg.count ?? _allStats.length;
 
       setState(() => _loading = false);
     } catch (e) {
@@ -104,7 +137,7 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
               icon: const Icon(Icons.delete_forever),
               onPressed: _loading ? null : _confirmReset,
             ),
-          // Kun admin: "Genberegn" kører computeAllUsers() — en FULD scan af
+          // Kun admin: "Genberegn" kører recomputeAndSave() — en FULD scan af
           // hele games-collectionen. Ikke-admins ville alligevel fejle på
           // Firestore-skrivereglen, men først EFTER det dyre read; skjul derfor
           // knappen helt for dem (som nulstil-knappen ovenfor).
@@ -124,7 +157,17 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
                   padding: const EdgeInsets.all(12),
                   children: <Widget>[
                     _siteCard(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                      child: Text(
+                        'Ranglisterne tæller kun spil mod andre spillere — '
+                        'solospil mod computeren tælles med i din egen profil, '
+                        'men ikke her.',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     _ranking('🏆 Win-rate (mindst 3 spil)',
                         _topBy((s) => s.gamesPlayed >= 3 ? s.winRate : -1,
                             (s) => '${(s.winRate * 100).toStringAsFixed(0)}%')),
@@ -177,8 +220,8 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             _row('Spil i gang nu', '$_liveGames'),
-            _row('Afsluttede spil', '$_totalGames'),
-            _row('Registrerede spillere', '${_allStats.length}'),
+            _row('Afsluttede spil (online)', '$_totalGames'),
+            _row('Registrerede spillere', '$_registeredPlayers'),
             if (_avgHands != null)
               _row('Gns. hænder pr. spil', _avgHands!.toStringAsFixed(1)),
           ],
