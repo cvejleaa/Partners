@@ -18,7 +18,7 @@ kilde til de officielle varianter.
 |---|---|---|---|---|---|
 | Partners (klassisk) | 1998 | 4 | 2 hold á 2 (diagonal makker) | 4 pr. spiller (16) | 56 |
 | Partners Travel | 2025 | 4 | 2 hold á 2 | 4 pr. spiller (16) | Som klassisk |
-| Partners+ | ~2017 | 6 | 2v2v2 eller 3v3 | 4 pr. spiller (24) | 78 |
+| Partners+ | 2018 | 6 | 2v2v2 eller 3v3 | 4 pr. spiller (24) | 78 |
 | Partners Duo | 2022 | 2 | Ingen (1 mod 1) | 6 pr. spiller (12) | 30 |
 | Partners Trio | 2026 | 3 | Ingen (alle mod alle) | 4 pr. spiller (12) | 40 |
 | Partners 25 år | 2023 | 4 | 2 hold á 2 | 4 pr. spiller (16) | Mix + nye kort |
@@ -33,7 +33,9 @@ Gælder alle udgaver, medmindre variantafsnittet siger andet.
 
 - Cirkulær bane. Pr. spillerfarve: **14 nummererede felter**, en **startcirkel**
   (hjem/venteområde), et **startfelt** (unummereret indgangsfelt på banen) og et
-  **slutfelt med 4 målcirkler**. Klassisk plade = 4 × 14 = 56 banefelter.
+  **slutfelt med 4 målcirkler**. Klassisk plade = 56 nummererede felter + 4
+  unummererede startfelter (60 positioner på banen i alt). Partners+ afviger:
+  13 nummererede felter pr. segment (84 positioner).
 - **Startfeltet tæller aldrig med som felt**, når der flyttes — hverken på vej
   rundt eller på vej ind i slutfeltet (det har ikke noget nummer).
 - Der spilles **med uret**. Kort erstatter terninger.
@@ -136,6 +138,14 @@ Gælder alle udgaver, medmindre variantafsnittet siger andet.
   findes som rene nummerkort. Fordelingen kan kun fastslås ved at tælle et
   fysisk sæt. I appen bør fordelingen derfor være konfigurerbar (det er den
   allerede via admin-skærmen).
+- **[UAFKLARET]** ludo.dk beskriver et 5↷-kort ("5 frem, kan passere
+  blokeringer") som del af det nuværende klassiske spil. Det stemmer ikke med
+  DM-guiden og er sandsynligvis en sammenblanding med Partners+/Duo — men det
+  kan ikke udelukkes, at nyere oplag af klassisk har fået kortet med. Tjek et
+  fysisk sæt.
+- **[UAFKLARET]** spilregler.dk skriver "4 kort tilovers" efter 3 uddelinger,
+  men 56 − 3×16 = 8. Uoverensstemmelsen (56 kort vs. regelteksten) er ikke
+  forklaret nogen steder.
 
 Kilder: gameinventors.dk/filarkiv/filer/Partners_DM-guide.pdf ·
 hygli.dk/partners-spil/ · spilregler.dk/partners/ ·
@@ -146,17 +156,91 @@ ultraboardgames.com/partners/game-rules.php
 
 ## Partners Travel (4 spillere, rejseudgave)
 
-- Lanceret sommeren 2025. **Reglerne er identiske med klassisk Partners** —
-  eneste forskel er fysisk: kompakt plade og magnetiske brikker.
+- Udgivet 1. juli 2025. **Reglerne og kortsættet er identiske med klassisk
+  Partners** (æskens indholdsliste er ordret den samme: 56 kort, 16 brikker;
+  producenten: "præcis det samme sjove spil som originalen"). Eneste forskel
+  er fysisk: foldbart plastetui og magnetiske brikker.
+- Produktfotos bekræfter klassisk banelayout (felter 1-14 mellem
+  startfelterne) og klassiske kortdesigns.
 - Til appen: ingen selvstændig variant — evt. blot et tema/skin.
 
-Kilder: gameinventors.dk/PARTNERS-TRAVEL · lad-os-spille.dk/spil/partners-travel-4-personer/
+Kilder: gameinventors.dk/PARTNERS-TRAVEL ·
+lad-os-spille.dk/spil/partners-travel-4-personer/ ·
+bog-ide.dk/produkt/5441749/partners-travel · hyggeonkel.dk/produkt/partners-travel
 
 ---
 
 ## Partners+ (6 spillere)
 
-*(Uddybes — detaljeret spec følger nedenfor, når research er samlet.)*
+Udgivet 2018 (Årets Familiespil 2018). Præcis 6 spillere, alder 8+,
+spilletid 45-60 min. Indhold: spilleplade (58×58 cm), **78 kort**,
+**24 brikker** (4 pr. farve, 6 farver).
+
+### Holdopsætning og turrækkefølge
+
+- To spilformer: **3 par (2v2v2)** eller **2 hold á 3 (3v3)**.
+- 2v2v2-parrene er farverne diagonalt overfor hinanden:
+  **grøn+rød, blå+orange, lilla+gul**.
+- 3v3: **rød+gul+blå mod orange+grøn+lilla**.
+- Farvernes rækkefølge rundt om pladen (med uret): grøn → blå → lilla → rød →
+  orange → gul — i 3v3 skifter turen dermed mellem holdene hver gang.
+- Spilleren til venstre for kortgiveren starter; derefter med uret.
+
+### Bræt
+
+- **84 banefelter** i alt: 6 segmenter á (1 unummereret startfelt + **13
+  nummererede felter**) — bemærk 13 pr. segment mod klassisk udgaves 14.
+- Pr. farve desuden: startcirkel (hjem) og slutfelt med 4 målcirkler.
+- Målregler som klassisk: fyldes indefra, ingen overspringning, overskydende
+  træk rykkes baglæns.
+
+### Kortliste (78 kort, 13 korttyper, 17 trækmuligheder)
+
+| Kort | Funktion(er) |
+|---|---|
+| 2♥♥ (dobbelt-hjerter, værdi 2) | NYT. Valg: 2 frem med én brik / 2 egne brikker ud af start / 1 egen + 1 partnerbrik ud / 2 af partnerens ud / 1 fra hver af to partnere ud (kun 3v3). Kan spilles uden egne brikker i spil |
+| 3 | 3 frem |
+| ÷4 (minus 4) | 4 baglæns; ikke i målcirkler |
+| 5↷ ("Hopsakortet") | NYT. 5 frem — det ENESTE kort, der må springe over en anden spillers blokerede startfelt |
+| 6 | 6 frem |
+| 7×1 | 7 enkelttræk fordelt frit; alle 7 skal bruges; hver brik kun én gang; rest til partner ved sidste brik i mål |
+| 8♥ | Valg: ud af start ELLER 8 frem |
+| 9 | 9 frem |
+| 10 | 10 frem |
+| Byt plads | Byt to vilkårlige brikker (også samme farve); kan bruges uden egne brikker i spil; ikke på fredede brikker |
+| 12 | 12 frem |
+| 13♥ | Valg: ud af start ELLER 13 frem |
+| 1/14 | Valg: 1 ELLER 14 frem (intet startsymbol) |
+
+- Startkort = kort med hjertesymbol: **2♥♥, 8♥ og 13♥**.
+- **[HUL]** Antal pr. korttype er ikke offentliggjort (78/13 = 6 pr. type ved
+  ligelig fordeling — ren udledning, ubekræftet).
+
+### Uddeling og kortbytte
+
+- **4 kort pr. spiller** pr. runde (24 pr. uddeling); samme kortgiver deler
+  3 gange, derefter går rollen videre med uret.
+  **[HUL]** 3×24 = 72 < 78 — håndteringen af de 6 tiloversblevne kort er ikke
+  beskrevet i online-kilder (blandes formentlig ind ved næste kortgiver som i
+  klassisk).
+- Kortbytte før hver runde afhænger af spilform:
+  - **2v2v2**: byt samtidigt 1 kort med makkeren, skjult.
+  - **3v3**: send samtidigt 1 kort til holdkammeraten **nærmest i urets
+    retning** (giver 1, modtager 1), skjult.
+
+### Afvigelser fra klassisk og vinderbetingelse
+
+- Slag, fredning, blokade og spillepligt som klassisk — men blokade kan
+  passeres af 5↷-kortet.
+- Spiller i mål: i 2v2v2 bruges kortene på makkerens brikker; i 3v3 vælger
+  man pr. kort, hvilken holdkammerats brikker der flyttes. Har kun én
+  holdkammerat brikker i spil, hjælper begge de andre denne.
+- Vinder: parret/holdet med ALLE brikker i mål — **8 brikker (2v2v2)** eller
+  **12 brikker (3v3)**. Videre spil om placeringer er valgfrit.
+
+Kilder: spilregler.dk/partners-plus/ · legebyen.dk (Partners+-anmeldelser) ·
+gameinventors.dk/PARTNERS_plus · lad-os-spille.dk/spil/partners-6-personer/ ·
+hyggeonkel.dk
 
 ## Partners Duo (2 spillere)
 
@@ -248,7 +332,32 @@ hyggeonkel.dk/overblik/partners-spil/
 
 ## Partners 25 år (jubilæumsudgave)
 
-*(Uddybes — detaljeret spec følger nedenfor, når research er samlet.)*
+Udgivet september 2023 i begrænset oplag (kun udvalgte forhandlere). Præcis 4
+spillere i 2 hold á 2, alder 8+, spilletid 30-45 min. Indhold: spilleplade,
+**56 kort**, 16 brikker i klar akryl.
+
+- **Bræt**: klassisk 4-farvet bane i nyt "hjul"-design (felter 1-14 mellem
+  startfelterne som klassisk, 4 målcirkler pr. farve).
+- **Grundmekanik som klassisk**: 2v2, makkerbyt efter hver uddeling, spil for
+  makkeren når man er i mål, vinder ved 8 brikker i mål.
+- **Kortbunken** er en blanding af kort fra klassisk, Duo og Partners+ plus
+  helt nye kort. Bekræftede/aflæste kort ud over de klassiske:
+
+| Kort | Funktion(er) |
+|---|---|
+| 7 ELLER +2−5 | NYT: flyt én brik 7 frem ELLER 2 frem og derefter 5 tilbage (kan potentielt slå 2 brikker hjem i samme træk) |
+| Byt plads ELLER 9 | NYT dobbeltkort: byt to brikker ELLER 9 frem — præcis regeltekst ikke fundet |
+| 11 ELLER ×1-træk | NYT dobbeltkort (kortface "11" + "*1") — præcis regeltekst ikke fundet |
+| 4×1 | 4 enkelttræk fordelt på flere brikker (fra Duo) |
+| 5↷ | 5 frem, springer over blokeret startfelt (fra Partners+/Duo) |
+
+- **[HUL]** Den komplette kortliste med antal pr. type er ikke offentliggjort,
+  og der findes ingen officiel regel-PDF online. Om fx +2−-kortet og 2♥♥
+  indgår, er ubekræftet. Fuld implementering kræver et fysisk eksemplar.
+
+Kilder: gameinventors.dk/PARTNERS-25-AaR · hyggeonkel.dk/produkt/partners-25
+(inkl. æske- og kortfotos) · lad-os-spille.dk/spil/partners-25-aar/ ·
+gameinventors-shop.dk (ekstra kortsæt)
 
 ---
 
@@ -261,16 +370,18 @@ den fælles motor, fx:
 VariantConfig {
   id, navn,
   playerCount,            // 2, 3, 4, 6
-  teams,                  // [[0,2],[1,3]] / [] (alle mod alle) / 3v3 osv.
-  piecesPerPlayer,        // 4 eller 6
-  trackFieldsPerPlayer,   // 14 (klassisk) — Partners+ afviger, se afsnit
+  teams,                  // [[0,2],[1,3]] / [[0,2],[1,4],[3,5]] / 3v3 / [] (alle mod alle)
+  piecesPerPlayer,        // 4 eller 6 (Duo: 2 briktyper á 3 med hver sit mål)
+  trackFieldsPerSegment,  // 14 (klassisk/25 år/Travel), 13 (Partners+), Duo/Trio ukendt
   goalCircles: 4,
   deck: [ { cardType, count } ],     // konfigurerbar pga. [HUL] om antal
   handSize: 4,
   dealsPerDealer: 3,
-  exchangeRule,           // makkerByt | videregivMedUret | modstanderByt | ingen
-  captureOwnPieces,       // Duo: true (se afsnit)
-  winCondition,           // holdetsBrikkerIMaal | egneBrikkerIMaal
+  exchangeRule,           // makkerByt | sendTilHoldkammeratMedUret (3v3)
+                          //   | modstanderByt (Duo) | cirkulærVideregivelse (Trio)
+  forcedPlay,             // Duo: streng spillepligt (kan tvinges til selvslag)
+  blockadeJumpCard,       // 5↷ findes: Partners+/Duo/25 år (klassisk: uafklaret)
+  winCondition,           // holdetsBrikkerIMaal (8/12) | egneBrikkerIMaal (Duo: 6, Trio: 4)
 }
 ```
 
