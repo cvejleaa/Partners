@@ -31,25 +31,43 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
 
   Future<void> _load() async {
     try {
-      // Live + igangværende
-      final live = await firestore
+      // Forbrug: denne skærm er en OFFENTLIG rangliste (åbnes fra forsiden af
+      // alle brugere). Tidligere hentede vi HVERT eneste spil-dokument bare for
+      // at TÆLLE dem og udregne et gennemsnit — ét read pr. spil, ved hver
+      // åbning. Nu bruger vi Firestore aggregation-queries (count()/average()),
+      // der afregnes ~1 read pr. 1000 matchede dokumenter i stedet for ét pr.
+      // dokument.
+
+      // Live + igangværende (kun antal).
+      final liveAgg = await firestore
           .collection('games')
           .where('status', whereIn: ['lobby', 'playing'])
+          .count()
           .get();
-      _liveGames = live.docs.length;
+      _liveGames = liveAgg.count ?? 0;
 
-      // Færdige + gns-hænder
-      final over = await firestore
+      // Færdige: antal + gennemsnitligt antal hænder (state.hn) i én
+      // aggregation-query. average() på et indlejret felt kan i sjældne
+      // tilfælde fejle (fx manglende indeks) — det må ikke vælte hele
+      // ranglisten, så gennemsnittet hentes defensivt.
+      final overCountAgg = await firestore
           .collection('games')
           .where('status', isEqualTo: 'over')
+          .count()
           .get();
-      _totalGames = over.docs.length;
-      if (over.docs.isNotEmpty) {
-        final sumHands = over.docs.fold<int>(0, (acc, d) {
-          final hn = ((d.data()['state'] as Map?)?['hn'] as num?)?.toInt() ?? 0;
-          return acc + hn;
-        });
-        _avgHands = sumHands / over.docs.length;
+      _totalGames = overCountAgg.count ?? 0;
+      _avgHands = null;
+      if (_totalGames > 0) {
+        try {
+          final avgAgg = await firestore
+              .collection('games')
+              .where('status', isEqualTo: 'over')
+              .aggregate(average('state.hn'))
+              .get();
+          _avgHands = avgAgg.getAverage('state.hn');
+        } catch (_) {
+          _avgHands = null; // gennemsnit udelades hvis aggregeringen fejler
+        }
       }
 
       // Per-spiller-stats (læser cachen direkte; brugere uden cache springes)
@@ -86,11 +104,16 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
               icon: const Icon(Icons.delete_forever),
               onPressed: _loading ? null : _confirmReset,
             ),
-          IconButton(
-            tooltip: 'Genberegn',
-            icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _refresh,
-          ),
+          // Kun admin: "Genberegn" kører computeAllUsers() — en FULD scan af
+          // hele games-collectionen. Ikke-admins ville alligevel fejle på
+          // Firestore-skrivereglen, men først EFTER det dyre read; skjul derfor
+          // knappen helt for dem (som nulstil-knappen ovenfor).
+          if (isAdmin(FirebaseAuth.instance.currentUser))
+            IconButton(
+              tooltip: 'Genberegn (admin)',
+              icon: const Icon(Icons.refresh),
+              onPressed: _loading ? null : _refresh,
+            ),
         ],
       ),
       body: _loading
