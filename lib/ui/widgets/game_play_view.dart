@@ -384,16 +384,23 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     );
   }
 
-  /// "Starter N/3"-chip til det tomme midterfelt mellem top-panelerne. Farven
-  /// følger STARTEREN (samme farve som starterens panel/brik) og respekterer
-  /// den lokale farve-rotation. N nulstilles ved starter-rotation.
+  /// "Starter · Navn N/3"-chip til det tomme midterfelt mellem top-panelerne.
+  /// Farven følger STARTEREN (samme farve som starterens panel/brik) og
+  /// respekterer den lokale farve-rotation. N nulstilles ved starter-rotation.
   Widget _starterChip(GameState state) {
     final int n = (state.starterStreak % 3) + 1;
     final Color c = _displayColor(state, state.starterIndex);
     final Color fg =
         c.computeLuminance() < 0.5 ? Colors.white : const Color(0xFF1A1A1A);
+    // Navnet på starteren, hvis pladsen findes. Holdes kompakt (afkortes med
+    // ellipsis) så chippen ikke sprænger det smalle felt mellem top-panelerne.
+    final String? starterName =
+        (state.starterIndex >= 0 && state.starterIndex < state.players.length)
+            ? state.players[state.starterIndex].name
+            : null;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      constraints: const BoxConstraints(maxWidth: 220),
       decoration: BoxDecoration(
         color: c,
         borderRadius: BorderRadius.circular(20),
@@ -407,9 +414,28 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         children: <Widget>[
           Icon(Icons.outlined_flag, size: 12, color: fg),
           const SizedBox(width: 4),
-          Text('Starter $n/3',
+          Text('Starter',
               style: TextStyle(
                   color: fg, fontSize: 11, fontWeight: FontWeight.w800)),
+          if (starterName != null && starterName.isNotEmpty) ...<Widget>[
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                starterName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: fg, fontSize: 11, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+          const SizedBox(width: 6),
+          Text('$n/3',
+              style: TextStyle(
+                  // Tælleren en anelse dæmpet, så navnet er det primære.
+                  color: fg.withValues(alpha: 0.85),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
