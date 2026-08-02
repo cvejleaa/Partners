@@ -185,6 +185,55 @@ class _BoardPainter extends CustomPainter {
   final int colorOffset;
   final double scale;
 
+  /// Kompakt signatur af ALT det brættet faktisk tegner: brik-position pr. id,
+  /// farve pr. sæde og geometri. Bruges i [shouldRepaint] i stedet for at
+  /// sammenligne hele [GameState] — som ikke har værdi-lighed og desuden
+  /// gen-oprettes ved hvert snapshot. Så et rebuild med UÆNDRET bræt (fx udløst
+  /// af en presence-heartbeat, forbrugs-fund #4/#5) genmaler ikke canvas'et.
+  /// rotation/colorOffset/highlight/animation sammenlignes separat nedenfor.
+  late final String _visualSig = _computeVisualSig(state, colorOffset);
+
+  static String _computeVisualSig(GameState state, int colorOffset) {
+    final StringBuffer sb = StringBuffer()
+      ..write(state.geometry.trackLength)
+      ..write('/')
+      ..write(state.geometry.homeStretchLength);
+    for (final Player p in state.players) {
+      sb
+        ..write(';')
+        ..write(p.color.toARGB32());
+    }
+    final List<Piece> pieces = state.allPieces.toList()
+      ..sort((Piece a, Piece b) => a.id.compareTo(b.id));
+    for (final Piece pc in pieces) {
+      final PiecePosition pos = pc.position;
+      sb
+        ..write('|')
+        ..write(pc.id)
+        ..write('@');
+      if (pos is StartPosition) {
+        sb
+          ..write('S')
+          ..write(pos.ownerIndex)
+          ..write('.')
+          ..write(pos.slot);
+      } else if (pos is TrackPosition) {
+        sb
+          ..write('T')
+          ..write(pos.index);
+      } else if (pos is HomeStretchPosition) {
+        sb
+          ..write('H')
+          ..write(pos.ownerIndex)
+          ..write('.')
+          ..write(pos.slot);
+      } else {
+        sb.write('?');
+      }
+    }
+    return sb.toString();
+  }
+
   /// Vis-farve for en plads efter lokal rotation.
   Color _seatColor(int seat) {
     final int n = state.players.length;
@@ -472,8 +521,11 @@ class _BoardPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BoardPainter old) =>
-      old.state != state ||
-      old.highlighted != highlighted ||
+      old._visualSig != _visualSig ||
+      // highlighted er et NYT Set pr. build (_highlightSet), så vi må
+      // sammenligne indhold — ellers ville brættet genmale ved hvert rebuild
+      // uanset signaturen.
+      !setEquals(old.highlighted, highlighted) ||
       old.animation != animation ||
       old.rotation != rotation ||
       old.colorOffset != colorOffset ||
