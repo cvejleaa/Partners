@@ -80,6 +80,36 @@ jobs:
           flutter build web --release --base-href "/" \
             --dart-define=BUILD_TAG="$BUILD_TAG"
 
+      - name: Mål web-bundle-størrelse
+        # Sporing af bundle-vækst over tid (#7). Vi undgår `--analyze-size` (som
+        # er ustabil på web-target) og måler i stedet de FAKTISKE output-filer:
+        # rå + gzip (det browseren reelt henter) for de tunge dele, plus
+        # totalen. Tallene lander i job-resuméet, så de kan aflæses pr. commit
+        # (og på tværs af tidligere kørsler) og fange pludselig vækst. Ingen
+        # hård grænse — kun måling. continue-on-error: en måle-fejl må aldrig
+        # blokere et deploy.
+        continue-on-error: true
+        run: |
+          cd build/web
+          h() { numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "$1 B"; }
+          gz() { gzip -c "$1" | wc -c; }
+          wasm=$(find . -name '*.wasm' -printf '%s\n' 2>/dev/null \
+                 | awk '{s+=$1} END{print s+0}')
+          total=$(du -sb . | cut -f1)
+          {
+            echo "## 📦 Web-bundle-størrelse"
+            echo ""
+            echo "| Fil | Rå | Gzip (over tråden) |"
+            echo "|---|---|---|"
+            for f in main.dart.js flutter_bootstrap.js flutter.js; do
+              [ -f "$f" ] && \
+                echo "| \`$f\` | $(h "$(stat -c%s "$f")") | $(h "$(gz "$f")") |"
+            done
+            [ "$wasm" != "0" ] && \
+              echo "| CanvasKit/Skwasm (.wasm) | $(h "$wasm") | — |"
+            echo "| **build/web i alt** | **$(h "$total")** | — |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
