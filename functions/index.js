@@ -47,6 +47,12 @@ exports.onInboxCreate = onDocumentCreated(
     document: "users/{uid}/inbox/{inviteId}",
     database: "partners",
     region: "europe-west1",
+    // Letvægts (ét Firestore-get + ét FCM-kald) → lavt memory-tier + kort
+    // timeout er rigeligt. maxInstances er et billigt omkostnings-sikkerhedsnet
+    // mod en invocation-spike (#12).
+    memory: "128MiB",
+    timeoutSeconds: 30,
+    maxInstances: 20,
   },
   async (event) => {
     const snap = event.data;
@@ -96,6 +102,11 @@ exports.onGameTurn = onDocumentUpdated(
     document: "games/{code}",
     database: "partners",
     region: "europe-west1",
+    // Se onInboxCreate: letvægts function, så lavt memory + kort timeout, og et
+    // maxInstances-loft som omkostnings-sikkerhedsnet mod en skriveløkke (#12).
+    memory: "128MiB",
+    timeoutSeconds: 30,
+    maxInstances: 20,
   },
   async (event) => {
     const before = event.data.before.data() || {};

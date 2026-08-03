@@ -68,6 +68,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   String _lastTakeoverSig = '';
   bool _initialReplayChecked = false;
   int _liveSeenAck = 0;
+  // Skrive-amplifikation (#10): seen-positionen skrives IKKE pr. træk længere.
+  // Vi husker den seneste sete log-længde lokalt og flusher den kun ved
+  // pause/dispose/replay-slut. _seenFlushed = sidst skrevne værdi.
+  int _seenFlushed = 0;
+  // Om DENNE klient er vært. Kun værten driver AI, så kun værten har brug for
+  // det periodiske sikkerhedsnets-rebuild (#11).
+  bool _isHost = false;
+  // Fanget service-instans, så flush i dispose() virker selv når ref er væk.
+  OnlineService? _capturedSvc;
 
   OnlineService get _svc => ref.read(onlineServiceProvider);
 
@@ -75,6 +84,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _capturedSvc = _svc;
     // ignore: discarded_futures
     _svc.heartbeat(widget.code);
     _heartbeat = Timer.periodic(kPresenceInterval, (_) {
@@ -92,12 +102,30 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       // dedup-nøglerne her og rebuild så _maybeHostAct prøver igen.
       // aiSeatMove er idempotent: den exit'er hvis state.currentPlayerIndex
       // har bevæget sig, så vi kan ikke trække to gange ved en uskyld.
-      if (mounted && !_busy && !_aiActionPending) {
+      //
+      // KUN værten (#11): kun værten driver AI og bruger _lastProcessed/
+      // _lastTakeoverSig. Ikke-værter havde intet udbytte af dette rebuild —
+      // det var bare spildt CPU/batteri hvert 7. sekund pr. åben fane.
+      if (_isHost && mounted && !_busy && !_aiActionPending) {
         _lastProcessed = '';
         _lastTakeoverSig = '';
         setState(() {});
       }
     });
+  }
+
+  /// Skriv den seneste sete log-position til Firestore — men KUN hvis den er
+  /// rykket siden sidst. Kaldes ved pause/dispose/replay-slut, IKKE pr. træk,
+  /// så vi undgår skrive-amplifikation (#10): før skrev hver tilsluttet klient
+  /// `seen.$uid` til spil-doc'et ved hvert eneste træk (op til ~5× writes +
+  /// `onGameTurn`-invocations pr. træk i et 4-spillers spil).
+  void _flushSeen() {
+    if (_liveSeenAck <= _seenFlushed) return;
+    final int n = _liveSeenAck;
+    _seenFlushed = n;
+    // Fire-and-forget via den fangede service (ref kan være væk i dispose).
+    // ignore: discarded_futures
+    (_capturedSvc ?? _svc).markSeen(widget.code, n).catchError((_) {});
   }
 
   /// True når appen er synlig/i forgrunden (så vi bør opdatere presence).
@@ -121,12 +149,18 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       _lastTakeoverSig = '';
       ref.invalidate(gameStreamProvider(widget.code));
       if (mounted) setState(() {});
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // På vej i baggrunden: gem seen-positionen nu (#10), så en reconnect
+      // starter replay det rigtige sted uden at vi skrev pr. træk undervejs.
+      _flushSeen();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _flushSeen();
     _heartbeat?.cancel();
     super.dispose();
   }
@@ -162,6 +196,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           final myUid = _svc.uid;
           final int mySeat = uids.indexOf(myUid);
           final bool isHost = d['hostUid'] == myUid;
+          _isHost = isHost; // så heartbeat-timeren kun rebuild'er hos værten (#11)
           final log = (d['log'] as List? ?? <dynamic>[]);
           final lastByPlayer = _parseLog(log);
 
@@ -326,10 +361,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         items.add(e);
       }
       if (items.isEmpty) {
-        // Alt var dubletter (bør ikke ske) — marker set og lad være at vise.
+        // Alt var dubletter (bør ikke ske) — marker set (lokalt) og vis intet.
         _liveSeenAck = log.length;
-        // ignore: discarded_futures
-        _svc.markSeen(widget.code, log.length);
         return;
       }
       // _maybeStartReplay kaldes fra build() — setState må ikke kaldes midt i
@@ -345,18 +378,22 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       });
       return;
     }
+    // Følg den seneste sete log-længde LOKALT. Skrives ikke pr. træk (#10) —
+    // flushes ved pause/dispose/replay-slut via _flushSeen().
     if (log.length > _liveSeenAck) {
       _liveSeenAck = log.length;
-      // ignore: discarded_futures
-      _svc.markSeen(widget.code, log.length);
     }
   }
 
   Future<void> _finishReplay() async {
+    // Replay slut = brugeren har set alt op til _replayTarget. Skriv det nu
+    // (og opdatér flush-bogholderiet, så _flushSeen ikke skriver samme værdi
+    // igen).
     try {
       await _svc.markSeen(widget.code, _replayTarget);
+      if (_replayTarget > _seenFlushed) _seenFlushed = _replayTarget;
     } catch (_) {}
-    _liveSeenAck = _replayTarget;
+    if (_replayTarget > _liveSeenAck) _liveSeenAck = _replayTarget;
     if (!mounted) return;
     setState(() => _replayActive = false);
   }
