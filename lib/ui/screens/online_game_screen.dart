@@ -137,6 +137,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   /// Planlæg ét rebuild om lidt, hvis der ikke allerede er et planlagt — så en
   /// byge af presence-snapshots (op til ~hver 1,75s i et 4-spillers spil)
   /// koalesceres til højst ét rebuild pr. vindue i stedet for ét pr. snapshot.
+  ///
+  /// Friskheds-grænsen for online-markørerne afhænger af at presence-streamen
+  /// bliver ved med at emitte (i praksis garanteret af klientens EGEN heartbeat
+  /// hvert kPresenceInterval, der selv skriver til presence-collectionen) — det
+  /// er ikke et hårdt ur-garanteret loft. AI-overtagelsen er dækket separat af
+  /// værtens 7s-timer, så den påvirkes ikke.
   void _schedulePresenceRebuild() {
     if (_presenceThrottle != null) return;
     _presenceThrottle = Timer(const Duration(seconds: 4), () {
