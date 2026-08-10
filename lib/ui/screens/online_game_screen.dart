@@ -77,6 +77,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   bool _isHost = false;
   // Fanget service-instans, så flush i dispose() virker selv når ref er væk.
   OnlineService? _capturedSvc;
+  // Presence (uid → ms) opdateres løbende af en manuel lytter, men UI'et
+  // rebuild'es kun THROTTLET (#14) — ikke pr. heartbeat-snapshot.
+  Map<String, int> _presenceMs = const <String, int>{};
+  ProviderSubscription<AsyncValue<Map<String, int>>>? _presenceSub;
+  Timer? _presenceThrottle;
 
   OnlineService get _svc => ref.read(onlineServiceProvider);
 
@@ -111,6 +116,32 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         _lastTakeoverSig = '';
         setState(() {});
       }
+    });
+    // Presence-lytter (#14): opdatér feltet løbende, men rebuild THROTTLET.
+    // ref.listenManual abonnerer UDEN at rebuild'e widget'en pr. snapshot —
+    // så en heartbeat hvert ~1,75s ikke længere trigger et fuldt rebuild af
+    // hele skærmen hos alle klienter. onlineSeats/AI-tjek er stadig baseret på
+    // friske stempler (feltet), kun selve genrenderingen er throttlet.
+    _presenceSub = ref.listenManual<AsyncValue<Map<String, int>>>(
+      presenceStreamProvider(widget.code),
+      (prev, next) {
+        final Map<String, int>? m = next.valueOrNull;
+        if (m == null) return;
+        _presenceMs = m;
+        _schedulePresenceRebuild();
+      },
+      fireImmediately: true,
+    );
+  }
+
+  /// Planlæg ét rebuild om lidt, hvis der ikke allerede er et planlagt — så en
+  /// byge af presence-snapshots (op til ~hver 1,75s i et 4-spillers spil)
+  /// koalesceres til højst ét rebuild pr. vindue i stedet for ét pr. snapshot.
+  void _schedulePresenceRebuild() {
+    if (_presenceThrottle != null) return;
+    _presenceThrottle = Timer(const Duration(seconds: 4), () {
+      _presenceThrottle = null;
+      if (mounted) setState(() {});
     });
   }
 
@@ -162,17 +193,19 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     WidgetsBinding.instance.removeObserver(this);
     _flushSeen();
     _heartbeat?.cancel();
+    _presenceThrottle?.cancel();
+    _presenceSub?.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final snap = ref.watch(gameStreamProvider(widget.code));
-    // Presence i en SEPARAT, let stream (subcollection) — så heartbeats ikke
-    // rebuild'er via spil-doc'et. Bruges til online-markører + AI-overtagelse.
-    final Map<String, int> presenceMs =
-        ref.watch(presenceStreamProvider(widget.code)).valueOrNull ??
-            const <String, int>{};
+    // Presence læses fra et felt der opdateres af en THROTTLET lytter (#14) —
+    // IKKE ref.watch, som ville rebuild'e hele skærmen ved hver spillers
+    // heartbeat (~hver 1,75s i et 4-spillers spil, hos alle klienter). Feltet
+    // holdes friskt løbende; selve rebuild'et sker højst hvert par sekunder.
+    final Map<String, int> presenceMs = _presenceMs;
     return Scaffold(
       backgroundColor: const Color(0xFF0E2A1A),
       appBar: AppBar(

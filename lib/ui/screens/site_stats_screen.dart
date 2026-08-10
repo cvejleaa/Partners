@@ -97,8 +97,17 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
 
       // Rangliste: læs KUN online-cachen (userStatsOnline) — AI-solospil er
       // ekskluderet der, så man ikke kan klatre ved at slå let AI.
-      final onlineSnap =
-          await firestore.collection('userStatsOnline').get();
+      // #16: bind læsningen — hent ikke hele collectionen ubegrænset ved hver
+      // visning. Sortér efter aktivitet (gamesPlayed, auto-indekseret enkelt-
+      // felt — intet sammensat indeks nødvendigt) og tag de mest aktive. Ved
+      // nuværende skala rummer 500 alle spillere; ved stor vækst bliver
+      // læsningen bundet i stedet for at vokse lineært med brugerantallet. De
+      // mest aktive er også netop dem der kan rangere (mindst-3-spil-tærskler).
+      final onlineSnap = await firestore
+          .collection('userStatsOnline')
+          .orderBy('gamesPlayed', descending: true)
+          .limit(500)
+          .get();
       _allStats = <String, UserStats>{
         for (final d in onlineSnap.docs)
           d.id: UserStats.fromJson(Map<String, dynamic>.from(d.data()))
