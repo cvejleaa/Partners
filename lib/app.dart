@@ -395,16 +395,53 @@ class PartnersApp extends ConsumerStatefulWidget {
   ConsumerState<PartnersApp> createState() => _PartnersAppState();
 }
 
-class _PartnersAppState extends ConsumerState<PartnersApp> {
+class _PartnersAppState extends ConsumerState<PartnersApp>
+    with WidgetsBindingObserver {
   // Ventende deeplink fra opstarts-URL'en (?game=<code> / ?invite=<code>).
   String? _pendingCode;
   bool _pendingIsGame = false;
   bool _linkHandled = false;
+  // Hvornår appen sidst gik i baggrunden — så vi kun tvinger en Firestore-
+  // genforbindelse efter et reelt ophold (ikke ved et hurtigt fane-skift).
+  DateTime? _hiddenAt;
+  // Baggrunds-ophold længere end dette regnes som "rigtig væk".
+  static const Duration _kLongBackground = Duration(seconds: 5);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _readInitialDeepLink();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// App-niveau håndtering af resume fra baggrund. Efter et reelt ophold kan
+  /// Firestores web-WebChannel være død; en genforbindelse (disable+enable)
+  /// får ALLE aktive lyttere (spil-liste, lobby, spil-bræt …) til at synkronisere
+  /// frisk state igen med det samme, i stedet for at "fryse" i op mod et minut
+  /// mens SDK'en selv opdager den døde forbindelse. Dækker de skærme der ikke
+  /// selv har en resume-handler; spil-skærmen har desuden sin egen (reconnect()
+  /// har et reentrancy-værn, så et dobbelt-kald er harmløst).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final DateTime? hidden = _hiddenAt;
+      _hiddenAt = null;
+      final bool longBackground = hidden != null &&
+          DateTime.now().difference(hidden) > _kLongBackground;
+      if (longBackground) {
+        // ignore: discarded_futures
+        ref.read(onlineServiceProvider).reconnect();
+      }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _hiddenAt = DateTime.now();
+    }
   }
 
   /// Læs ?game=/?invite= fra URL'en appen blev åbnet med (fx fra et
