@@ -47,10 +47,11 @@ exports.onInboxCreate = onDocumentCreated(
     document: "users/{uid}/inbox/{inviteId}",
     database: "partners",
     region: "europe-west1",
-    // Letvægts (ét Firestore-get + ét FCM-kald) → lavt memory-tier + kort
-    // timeout er rigeligt. maxInstances er et billigt omkostnings-sikkerhedsnet
-    // mod en invocation-spike (#12).
-    memory: "128MiB",
+    // memory: 256MiB (v2-standard). 128MiB var for lidt til firebase-admin +
+    // FCM og fik funktionen til at OOM'e/crashe ved kørsel → push-notifikationer
+    // udeblev (selvom deployet lykkedes). timeout + maxInstances beholdes som
+    // omkostnings-sikkerhedsnet (#12), men memory må ikke skæres under 256MiB.
+    memory: "256MiB",
     timeoutSeconds: 30,
     maxInstances: 20,
   },
@@ -102,9 +103,9 @@ exports.onGameTurn = onDocumentUpdated(
     document: "games/{code}",
     database: "partners",
     region: "europe-west1",
-    // Se onInboxCreate: letvægts function, så lavt memory + kort timeout, og et
-    // maxInstances-loft som omkostnings-sikkerhedsnet mod en skriveløkke (#12).
-    memory: "128MiB",
+    // memory: 256MiB — se onInboxCreate: 128MiB fik firebase-admin til at OOM'e
+    // og slog push-notifikationer ihjel. timeout + maxInstances beholdes (#12).
+    memory: "256MiB",
     timeoutSeconds: 30,
     maxInstances: 20,
   },
