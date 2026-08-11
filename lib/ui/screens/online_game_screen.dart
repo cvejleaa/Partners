@@ -77,6 +77,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   bool _isHost = false;
   // Fanget service-instans, så flush i dispose() virker selv når ref er væk.
   OnlineService? _capturedSvc;
+  // Hvornår skærmen sidst gik i baggrunden — bruges til kun at tvinge en
+  // Firestore-genforbindelse efter et reelt ophold (ikke et hurtigt fane-skift).
+  DateTime? _hiddenAt;
   // Presence (uid → ms) opdateres løbende af en manuel lytter, men UI'et
   // rebuild'es kun THROTTLET (#14) — ikke pr. heartbeat-snapshot.
   Map<String, int> _presenceMs = const <String, int>{};
@@ -173,25 +176,42 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Tilbage i forgrunden (fx åbnet fra en notifikation): opdater presence
-    // straks OG genabonnér på spil-streamen. Efter appen har været i baggrunden
-    // kan Firestore-lytteren være forældet, så skærmen ellers hænger på en gammel
-    // tilstand indtil man lukker appen helt. invalidate tvinger en frisk lytter
-    // (og dermed en frisk server-hentning).
     if (state == AppLifecycleState.resumed) {
-      // ignore: discarded_futures
-      _svc.heartbeat(widget.code);
       // Nulstil AI-dedup så værten straks driver et evt. fastlåst AI-træk igen.
       _lastProcessed = '';
       _lastTakeoverSig = '';
-      ref.invalidate(gameStreamProvider(widget.code));
-      if (mounted) setState(() {});
+      // Tving KUN en genforbindelse efter et reelt baggrunds-ophold (vi HAR
+      // været skjult, i >5s) — ikke ved cold start (hidden == null → frisk
+      // forbindelse i forvejen) og ikke ved et hurtigt fane-skift, hvor
+      // forbindelsen stadig er sund.
+      final DateTime? hidden = _hiddenAt;
+      _hiddenAt = null;
+      final bool longBackground = hidden != null &&
+          DateTime.now().difference(hidden) > const Duration(seconds: 5);
+      // ignore: discarded_futures
+      _refreshFromBackground(reconnect: longBackground);
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
+      _hiddenAt = DateTime.now();
       // På vej i baggrunden: gem seen-positionen nu (#10), så en reconnect
       // starter replay det rigtige sted uden at vi skrev pr. træk undervejs.
       _flushSeen();
     }
+  }
+
+  /// Tilbage i forgrunden (fx åbnet fra en notifikation). Tidligere fik det
+  /// spillet til at "fryse" i 30-60s: appen havde været i baggrunden, Firestores
+  /// WebChannel var død, og en `invalidate` alene gav kun den cachede (frosne)
+  /// state, mens SDK'en selv brugte op til et minut på at opdage den døde
+  /// forbindelse. Nu tvinger vi en genforbindelse FØRST (disable+enable), så en
+  /// frisk lytter straks får server-state.
+  Future<void> _refreshFromBackground({required bool reconnect}) async {
+    if (reconnect) await _svc.reconnect();
+    if (!mounted) return;
+    // ignore: discarded_futures
+    _svc.heartbeat(widget.code);
+    ref.invalidate(gameStreamProvider(widget.code));
+    if (mounted) setState(() {});
   }
 
   @override

@@ -467,6 +467,19 @@ class OnlineService {
   Stream<DocumentSnapshot<Map<String, dynamic>>> watch(String code) =>
       _games.doc(code).snapshots();
 
+  /// Tving web-SDK'en til at droppe en (evt. død) forbindelse og genoprette den
+  /// STRAKS. Efter appen har været i baggrunden (fx åbnet fra en notifikation)
+  /// kan Firestores WebChannel være død, og SDK'en bruger ellers 30-60s på selv
+  /// at opdage det — imens leverer lytterne kun den cachede (frosne) state. Et
+  /// disable+enable-toggle river den døde forbindelse ned og henter frisk
+  /// server-state igen med det samme. Fejler stille (offline er ikke kritisk).
+  Future<void> reconnect() async {
+    try {
+      await _db.disableNetwork();
+      await _db.enableNetwork();
+    } catch (_) {}
+  }
+
   /// Live-stream af presence for et spil (uid → ms). Læser subcollection
   /// `games/{code}/presence`. Se [presenceStreamProvider].
   Stream<Map<String, int>> presenceStream(String code) {
