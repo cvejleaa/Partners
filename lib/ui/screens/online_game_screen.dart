@@ -80,6 +80,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // Hvornår skærmen sidst gik i baggrunden — bruges til kun at tvinge en
   // Firestore-genforbindelse efter et reelt ophold (ikke et hurtigt fane-skift).
   DateTime? _hiddenAt;
+  // Baggrunds-ophold længere end dette regnes som "rigtig væk" og udløser en
+  // Firestore-genforbindelse ved resume; kortere (fane-flimmer) gør ikke.
+  static const Duration _kLongBackground = Duration(seconds: 5);
   // Presence (uid → ms) opdateres løbende af en manuel lytter, men UI'et
   // rebuild'es kun THROTTLET (#14) — ikke pr. heartbeat-snapshot.
   Map<String, int> _presenceMs = const <String, int>{};
@@ -187,7 +190,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       final DateTime? hidden = _hiddenAt;
       _hiddenAt = null;
       final bool longBackground = hidden != null &&
-          DateTime.now().difference(hidden) > const Duration(seconds: 5);
+          DateTime.now().difference(hidden) > _kLongBackground;
       // ignore: discarded_futures
       _refreshFromBackground(reconnect: longBackground);
     } else if (state == AppLifecycleState.paused ||

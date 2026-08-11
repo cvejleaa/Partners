@@ -473,11 +473,20 @@ class OnlineService {
   /// at opdage det — imens leverer lytterne kun den cachede (frosne) state. Et
   /// disable+enable-toggle river den døde forbindelse ned og henter frisk
   /// server-state igen med det samme. Fejler stille (offline er ikke kritisk).
+  bool _reconnecting = false;
   Future<void> reconnect() async {
+    // Reentrancy-værn: to overlappende disable/enable-par kunne i uheldig
+    // rækkefølge efterlade instansen disabled. onlineServiceProvider er en
+    // cachet single-instans, så dette flag er en effektiv lås.
+    if (_reconnecting) return;
+    _reconnecting = true;
     try {
       await _db.disableNetwork();
       await _db.enableNetwork();
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _reconnecting = false;
+    }
   }
 
   /// Live-stream af presence for et spil (uid → ms). Læser subcollection
