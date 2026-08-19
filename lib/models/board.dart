@@ -8,13 +8,23 @@
 /// Hjemstrækket har 4 felter og drejes der ind i når brikken er gået en
 /// hel omgang og vender tilbage til sit eget UD-felt.
 class BoardGeometry {
-  const BoardGeometry({this.trackLength = 60, this.homeStretchLength = 4});
+  const BoardGeometry({
+    this.trackLength = 60,
+    this.homeStretchLength = 4,
+    this.segments = 4,
+  });
 
   final int trackLength;
   final int homeStretchLength;
 
+  /// Antal lige store ringsegmenter = antal UD-felter/indgange på banen. 4 for
+  /// klassisk (60/4 = 15 felter pr. segment inkl. UD-feltet), 6 for Partners+.
+  /// Default 4 gør `trackLength ~/ segments == trackLength ~/ 4` — dvs. helt
+  /// identisk med den tidligere hardcodede firdeling.
+  final int segments;
+
   int startTrackIndexFor(int playerIndex) =>
-      (playerIndex * (trackLength ~/ 4)) % trackLength;
+      (playerIndex * (trackLength ~/ segments)) % trackLength;
 
   /// Antal felter brik med playerIndex skal "have rejst" fra sit eget
   /// UD-felt for at være klar til at gå ind i hjemstrækket.
