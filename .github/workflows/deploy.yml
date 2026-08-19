@@ -48,27 +48,55 @@ jobs:
 
       - name: Generér PNG-ikoner fra SVG (favicon + PWA-ikoner)
         # SVG-kilderne ligger i repoet; her rasteres de binære PNG'er som
-        # manifest.json og index.html refererer (se docs/branding.md).
+        # manifest.json og index.html refererer (se docs/branding.md). De
+        # genererede PNG'er er også committet i repoet, så et build har gyldige
+        # ikoner selv hvis regenereringen ikke kan køre — se fald-tilbage nedenfor.
+        # Hårdt loft: apt-mirror-hang må ALDRIG kunne hænge hele udrulningen.
+        timeout-minutes: 5
         run: |
+          set -uo pipefail
           # GitHub-runnernes forudinstallerede Microsoft/azure-cli apt-repos
           # fejler ind imellem clearsign-tjekket, hvilket får hele
           # `apt-get update` til at returnere fejl (exit 100) selvom Ubuntu-
           # repoene (hvor librsvg2-bin ligger, i universe) hentes fint. Fjern
-          # de flaky tredjeparts-lister og lad ikke en update-fejl vælte bygget
-          # — install-trinnet fejler stadig hårdt, hvis pakken reelt mangler.
+          # de flaky tredjeparts-lister.
           sudo rm -f /etc/apt/sources.list.d/*microsoft* \
                      /etc/apt/sources.list.d/*azure* 2>/dev/null || true
-          sudo apt-get update || true
-          sudo apt-get install -y librsvg2-bin
-          rsvg-convert -w 192 -h 192 web/icons/Icon.svg -o web/icons/Icon-192.png
-          rsvg-convert -w 512 -h 512 web/icons/Icon.svg -o web/icons/Icon-512.png
-          rsvg-convert -w 192 -h 192 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-192.png
-          rsvg-convert -w 512 -h 512 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-512.png
-          rsvg-convert -w 64  -h 64  web/favicon.svg -o web/favicon.png
-          # Monokromt notifikations-badge (hvid silhuet på gennemsigtig) til
-          # Androids lille status-ikon.
-          rsvg-convert -w 96  -h 96  web/icons/notification-badge.svg -o web/icons/notification-badge.png
-          echo "Genererede ikoner:" && ls -la web/icons/*.png web/favicon.png
+          # apt-mirrors hænger ind imellem UDEN fremdrift (ikke en fejl, bare
+          # ingen svar). Et `apt-get install` uden loft kan så hænge hele jobbet
+          # i timevis. Giv hvert kald et hårdt tids-loft (timeout) og prøv et par
+          # gange; lykkes install ikke, falder vi tilbage til de committede
+          # PNG'er (gyldige, ligger i repoet) i stedet for at hænge.
+          install_rsvg() {
+            for attempt in 1 2; do
+              sudo timeout 45 apt-get update || true
+              if sudo timeout 90 apt-get install -y librsvg2-bin; then
+                return 0
+              fi
+              echo "librsvg2-bin forsøg $attempt fejlede/timede ud — prøver igen"
+              sleep 5
+            done
+            return 1
+          }
+          if install_rsvg; then
+            set -e
+            rsvg-convert -w 192 -h 192 web/icons/Icon.svg -o web/icons/Icon-192.png
+            rsvg-convert -w 512 -h 512 web/icons/Icon.svg -o web/icons/Icon-512.png
+            rsvg-convert -w 192 -h 192 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-192.png
+            rsvg-convert -w 512 -h 512 web/icons/Icon-maskable.svg -o web/icons/Icon-maskable-512.png
+            rsvg-convert -w 64  -h 64  web/favicon.svg -o web/favicon.png
+            # Monokromt notifikations-badge (hvid silhuet på gennemsigtig) til
+            # Androids lille status-ikon.
+            rsvg-convert -w 96  -h 96  web/icons/notification-badge.svg -o web/icons/notification-badge.png
+            echo "Genererede ikoner:" && ls -la web/icons/*.png web/favicon.png
+          else
+            # LOUD, ikke tavst: udrulningen fortsætter med de committede PNG'er.
+            # Har nogen ændret en SVG uden at committe den regenererede PNG, vil
+            # ikonet være forældet — regenerér og commit da lokalt. Warning-
+            # annotationen står øverst i kørslens resumé, så det ikke drukner.
+            echo "::warning::librsvg2-bin kunne ikke installeres (apt-mirror-hang efter 2 forsøg). Bruger de COMMITTEDE PNG-ikoner uændret i stedet for at hænge udrulningen. Er en SVG rørt for nylig, så regenerér og commit PNG'erne lokalt."
+            echo "Committede ikoner (fald-tilbage):" && ls -la web/icons/*.png web/favicon.png
+          fi
 
       - name: Byg web (release)
         # BUILD_TAG eksponeres i appen via _BuildStamp (kortet "build XXXXXXX"
