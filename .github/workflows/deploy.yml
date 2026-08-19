@@ -114,11 +114,31 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - name: Install Playwright
-        run: |
-          npm install
-          npx playwright install --with-deps chromium
+      - name: Install Node deps
+        run: npm install
+
+      - name: Setup Java (til Firestore-emulatoren)
+        # Firestore-emulatoren kræver en JDK. Gør afhængigheden EKSPLICIT frem
+        # for at stole på at runner-imaget bundler en — så et manglende Java
+        # fejler synligt her, ikke tavst i regel-testen.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Firestore-regeltests (emulator — sikkerheds-gate)
+        # ANGRIBER de faktiske firestore.rules i Firestore-emulatoren
+        # (@firebase/rules-unit-testing). Deterministisk og sikkerhedskritisk →
+        # HÅRD gate: en for-løs regel (fx en bruger der kan skrive andres stats
+        # eller overtage et spil) fælder deployet. Kører FØR den dyre browser-
+        # installation og deploy-trinnene, så en rød regel-test fejler hurtigt og
+        # springer udrulningen over.
+        run: npm run test:rules
+
+      - name: Install Playwright-browser
+        run: npx playwright install --with-deps chromium
 
       - name: Playwright end-to-end
         continue-on-error: true

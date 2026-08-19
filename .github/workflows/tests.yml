@@ -1,0 +1,54 @@
+name: Tests
+
+# Kører den FULDE test-gate uden at deploye — på pull requests og manuelt
+# (Run workflow). To formål:
+#  1. En grøn/rød på en gren FØR den merges til main (main deployer ved push).
+#  2. Mutationstest UDEN at deploye: push en målrettet fejl til en gren, kør
+#     dette workflow, og bekræft at suiten bliver RØD (så er ændringen dækket).
+#     Rul mutationen tilbage bagefter. Se CLAUDE.md → Testprincipper.
+on:
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter deps
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Unit & engine tests
+        run: flutter test --reporter expanded
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Node deps
+        run: npm install
+
+      - name: Setup Java (til Firestore-emulatoren)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Firestore-regeltests (emulator)
+        # Angriber firestore.rules i emulatoren (@firebase/rules-unit-testing).
+        run: npm run test:rules

@@ -141,13 +141,14 @@ bevidst valg, der kan justeres i hver agents frontmatter (`model:`):
 Disse er navngivet, ikke skjult — modellen er ikke gjort svagere; infrastruktur
 mangler for at honorere den fuldt ud:
 
-1. **Emulator-baseret sikkerhedstest mangler.** Security Reviewer skal ANGRIBE
-   mod de faktiske Firestore-regler i en emulator, ikke ræsonnere. Vi har endnu
-   ingen `firebase emulators` + `@firebase/rules-unit-testing`-harness, så
-   sikkerheds-gennemgange er indtil videre ræsonnerede. **Påkrævet opfølgning:**
-   byg regel-emulator-harness (firebase.json `emulators`, et Node-testsæt der
-   kører angreb mod `firestore.rules`, npm-script, CI-trin), så en fjendtlig
-   skrivning faktisk kan afprøves og blive afvist.
+1. **Emulator-baseret sikkerhedstest — LUKKET.** Security Reviewer ANGRIBER nu
+   de faktiske `firestore.rules` i Firestore-emulatoren i stedet for at
+   ræsonnere. Harnessen: `firestore-tests/rules.test.mjs`
+   (`@firebase/rules-unit-testing`), køres med `npm run test:rules`, og er en
+   HÅRD gate i `deploy.yml` (samt fuld test-gate på PR/dispatch i `tests.yml`).
+   Hvert angreb er mutationstestet: en for-løs regel gør et angreb rødt. Rør en
+   ændring adgangskontrollen, skal et angreb tilføjes her — og et fund, der ikke
+   er efterprøvet mod emulatoren, regnes stadig som uafsluttet.
 2. **Mutationstest verificeres i CI, ikke lokalt.** `flutter` er ikke
    installeret i udviklingsmiljøet. Indtil det er, verificeres en mutation ved
    at Test Manager (a) designer den konkrete fejl + den assertion der fanger

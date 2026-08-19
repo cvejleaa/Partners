@@ -7,11 +7,16 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:report": "playwright show-report",
+    "test:rules:run": "node --test firestore-tests/rules.test.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-partners \"npm run test:rules:run\"",
     "build:web": "flutter build web --release --base-href \"/\"",
     "serve:web": "npx --yes http-server build/web -p 8080 -c-1 --cors",
     "ci": "npm run build:web && (npm run serve:web &) && npx --yes wait-on http://localhost:8080 && playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0"
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "@playwright/test": "^1.49.0",
+    "firebase": "^11.3.0",
+    "firebase-tools": "^13.29.1"
   }
 }

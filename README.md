@@ -219,11 +219,16 @@ spillet der først.
 Workflow'et `.github/workflows/deploy.yml` gør **alt automatisk**:
 1. `flutter analyze` + `flutter test` (med JUnit-rapport som vises i Actions-UI)
 2. `flutter build web --release`
-3. Playwright end-to-end (rapport som artefakt + på `/test-report/`)
-4. Deploy til Firebase Hosting (live → partners.vejleaa.dk)
+3. **Firestore-regeltests** (`npm run test:rules`) — angriber `firestore.rules`
+   i emulatoren; HÅRD sikkerheds-gate, en for-løs regel fælder udrulningen
+4. Playwright end-to-end (rapport som artefakt + på `/test-report/`)
+5. Deploy til Firebase Hosting (live → partners.vejleaa.dk)
 
-Det kører ved push til `main` (og udviklingsgrenen) samt via **"Run workflow"**-
-knappen i GitHub (Actions → Test & Deploy → Run workflow).
+Test-trinnene (1 + 3) ligger FØR deploy-trinnene, så en rød test/regel springer
+udrulningen over. Det kører ved push til `main` samt via **"Run workflow"**-
+knappen i GitHub (Actions → Test & Deploy → Run workflow). Regeltestene kører
+desuden på pull requests og manuelt via `.github/workflows/tests.yml` (uden
+deploy — også til mutationstest af en gren).
 
 **Det eneste der mangler for at deploy virker:** ét repository secret i GitHub
 (Settings → Secrets and variables → Actions → New repository secret):
