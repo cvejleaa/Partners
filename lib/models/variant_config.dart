@@ -136,3 +136,17 @@ const VariantConfig classicVariant = VariantConfig(
   id: 'classic',
   name: 'Partners',
 );
+
+/// Alle kendte varianter (indtil videre kun klassisk). Registret bruges til at
+/// resolve en gemt variant-id tilbage til dens config.
+const List<VariantConfig> kAllVariants = <VariantConfig>[classicVariant];
+
+/// Slå en variant op på dens [id]. En manglende eller ukendt id (fx et
+/// spil-dokument gemt FØR variant-feltet fandtes, eller en gammel log) resolver
+/// til [classicVariant] — det er den hårde bagud-kompat-regel for serialisering.
+VariantConfig variantFromId(String? id) {
+  for (final VariantConfig v in kAllVariants) {
+    if (v.id == id) return v;
+  }
+  return classicVariant;
+}

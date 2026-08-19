@@ -6,6 +6,7 @@ import '../models/game_state.dart';
 import '../models/piece.dart';
 import '../models/player.dart';
 import '../models/playing_card.dart';
+import '../models/variant_config.dart';
 
 /// (De)serialisering af hele [GameState] til/fra et Firestore-venligt map.
 
@@ -80,6 +81,9 @@ Player playerFromMap(Map<String, dynamic> m) => Player(
     );
 
 Map<String, dynamic> gameStateToMap(GameState s) => {
+      // Variant-id. Gamle docs/logs uden dette felt læses som klassisk (se
+      // variantFromId). Klassisk skriver 'classic'.
+      'vid': s.variant.id,
       'tl': s.geometry.trackLength,
       'hl': s.geometry.homeStretchLength,
       'pl': s.players.map(playerToMap).toList(),
@@ -137,6 +141,9 @@ GameState gameStateFromMap(Map<String, dynamic> m) {
     exchangeBuffer: exchange,
     sittingOut: (m['so'] as List?)?.map((e) => (e as num).toInt()).toSet() ??
         <int>{},
+    // Manglende 'vid' (spil gemt før variant-feltet, eller en gammel log) →
+    // klassisk.
+    variant: variantFromId(m['vid'] as String?),
   );
 }
 

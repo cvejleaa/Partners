@@ -3,6 +3,7 @@ import 'board.dart';
 import 'piece.dart';
 import 'player.dart';
 import 'playing_card.dart';
+import 'variant_config.dart';
 
 enum GamePhase { setup, exchange, play, handOver, gameOver }
 
@@ -23,10 +24,12 @@ class GameState {
     CardRules? cardRules,
     Map<int, PlayingCard?>? exchangeBuffer,
     Set<int>? sittingOut,
+    VariantConfig? variant,
   })  : cardRules = cardRules ?? CardRules.defaults(),
         starterCounts = starterCounts ?? List<int>.filled(4, 0),
         exchangeBuffer = exchangeBuffer ?? <int, PlayingCard?>{},
-        sittingOut = sittingOut ?? <int>{};
+        sittingOut = sittingOut ?? <int>{},
+        variant = variant ?? classicVariant;
 
   final List<Player> players;
   final BoardGeometry geometry;
@@ -58,6 +61,12 @@ class GameState {
   /// kort (tom hånd, men ikke smidt). Nulstilles ved ny hånd.
   final Set<int> sittingOut;
 
+  /// Hvilken Partners-udgave dette spil kører. Default [classicVariant], så et
+  /// spil uden eksplicit variant opfører sig præcis som den klassiske motor.
+  /// Motoren resolver hold/partner/brik-antal/vinder herfra i stedet for
+  /// hardkodede tal.
+  final VariantConfig variant;
+
   Iterable<Piece> get allPieces =>
       players.expand<Piece>((Player p) => p.pieces);
 
@@ -87,7 +96,7 @@ class GameState {
   /// brikker alle er i mål (slot 0..3 i hjemstrækket).
   bool teamHasWon(int teamIndex) {
     final List<Piece> teamPieces = players
-        .where((Player p) => p.teamIndex == teamIndex)
+        .where((Player p) => variant.teamOf(p.index) == teamIndex)
         .expand<Piece>((Player p) => p.pieces)
         .toList();
     return teamPieces.every((Piece p) => p.position is HomeStretchPosition);
