@@ -365,6 +365,10 @@ class GameController extends StateNotifier<GameState> {
       starterCounts: List<int>.from(e.starterCounts),
       cardRules: e.cardRules,
       exchangeBuffer: Map<int, PlayingCard?>.from(e.exchangeBuffer),
+      // Bær varianten med i UI-snapshot'et, ellers ville første refresh nulstille
+      // et ikke-klassisk spil til klassisk. (sittingOut mangler her fra før dette
+      // PR — separat, pre-eksisterende; rettes for sig.)
+      variant: e.variant,
     );
     // Når spillet lige er afsluttet, persistér det til Firestore for stats og
     // ryd den lokale autosave. Ellers gem løbende så spillet kan genoptages.

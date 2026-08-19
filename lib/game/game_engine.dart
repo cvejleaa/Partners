@@ -78,6 +78,10 @@ class GameEngine extends ChangeNotifier {
   }
 
   void _applyExchange() {
+    // BEMÆRK til fremtidige exchangeRules: her fjernes kortet fra giverens hånd
+    // FØR modtageren udregnes. Kun partnerSwap er implementeret (kan ikke fejle),
+    // så det er sikkert nu — men en ny regel der kan kaste, bør udregne ALLE
+    // modtagere før nogen hånd muteres, så en fejl ikke efterlader kort i limbo.
     final Map<int, PlayingCard> incoming = <int, PlayingCard>{};
     for (final MapEntry<int, PlayingCard?> e
         in state.exchangeBuffer.entries) {
@@ -223,7 +227,9 @@ class GameEngine extends ChangeNotifier {
   // et tvunget træk over, så den er fjernet.
 
   void _afterMove(int playerIndex) {
-    // Tjek vinder — ét tjek pr. hold (klassisk: 2).
+    // Tjek vinder — ét tjek pr. hold (klassisk: 2). BEMÆRK til fremtidige
+    // varianter: ved 'alle mod alle' (teams tom, winCondition.ownAllHome) kører
+    // denne loop aldrig — så skal vinderen afgøres pr. spiller, ikke pr. hold.
     for (int t = 0; t < state.variant.teams.length; t++) {
       if (state.teamHasWon(t)) {
         state.winningTeamIndex = t;

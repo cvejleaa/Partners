@@ -552,6 +552,9 @@ class Rules {
       handNumber: src.handNumber,
       winningTeamIndex: src.winningTeamIndex,
       cardRules: src.cardRules,
+      // Split-søgningen bruger sim.variant (teamOf) — bær varianten med, ellers
+      // ville klonen falde tilbage til klassisk uanset src.
+      variant: src.variant,
     );
   }
 }

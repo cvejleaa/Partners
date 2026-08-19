@@ -114,14 +114,17 @@ GameState gameStateFromMap(Map<String, dynamic> m) {
           v == null ? null : cardFromMap(Map<String, dynamic>.from(v as Map));
     });
   }
+  // Manglende 'vid' (spil gemt før variant-feltet, eller en gammel log) →
+  // klassisk.
+  final VariantConfig variant = variantFromId(m['vid'] as String?);
   return GameState(
     players: (m['pl'] as List)
         .map((e) => playerFromMap(Map<String, dynamic>.from(e as Map)))
         .toList(),
-    geometry: BoardGeometry(
-      trackLength: (m['tl'] as num).toInt(),
-      homeStretchLength: (m['hl'] as num).toInt(),
-    ),
+    // Geometrien udledes af varianten (enkelt kilde-sandhed) — for klassisk
+    // felt-for-felt lig de gemte tl/hl. Retter at 'segments' ikke serialiseres:
+    // det kommer nu korrekt fra varianten frem for at falde til class-default 4.
+    geometry: variant.geometry,
     deck: (m['dk'] as List)
         .map((e) => cardFromMap(Map<String, dynamic>.from(e as Map)))
         .toList(),
@@ -141,9 +144,7 @@ GameState gameStateFromMap(Map<String, dynamic> m) {
     exchangeBuffer: exchange,
     sittingOut: (m['so'] as List?)?.map((e) => (e as num).toInt()).toSet() ??
         <int>{},
-    // Manglende 'vid' (spil gemt før variant-feltet, eller en gammel log) →
-    // klassisk.
-    variant: variantFromId(m['vid'] as String?),
+    variant: variant,
   );
 }
 
