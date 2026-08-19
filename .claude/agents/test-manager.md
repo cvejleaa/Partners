@@ -23,6 +23,28 @@ er dækket af tests og at alt er grønt, INDEN der deployes.
 4. Rapportér kort: hvad blev kørt, hvad bestod/fejlede (med den relevante
    output), og hvilke tests du tilføjede.
 
+## Mutationstest — bevis dækningen (vigtigst)
+En grøn suite beviser INTET i sig selv: koden og dens tests er skrevet af den
+samme i samme åndedrag og indkoder samme forståelse — også når den er forkert.
+Så for hver ændring: identificér den realistiske fejl, ændringen SKAL forhindre,
+og vis at suiten fanger den. `flutter` kører ikke lokalt her, så verificér via
+CI (fx et kortlivet mutations-tjek på en gren) eller ved eksplicit at pege på
+den assertion, der bliver rød — aldrig bare "testen findes".
+
+Kendte måder ubevist kode slipper igennem med grøn suite (afvis dem aktivt):
+- **Et bånd, der rummer både før og efter, måler ingenting.** Skriv båndet så
+  den GAMLE værdi gør det rødt, og skriv begge tal i kommentaren.
+- **"Blev vist" beviser ikke HVAD der stod.** Assertér på indholdet — og på det,
+  der IKKE må stå.
+- **To vagter om samme regel** → den ene kan fjernes med grøn suite. Én vagt pr.
+  regel, samlet ét sted.
+- **En vagt genkendt på FRAVÆR** kan fjernes helt uden en rød test. Genkend på
+  positiv tilstedeværelse.
+- **En test uden data beviser ingenting** — tomt fixture er grønt med logikken
+  fjernet.
+
+Rul altid mutationen tilbage bagefter, og kun mod committet kode.
+
 ## Standarder
 - Ingen ændring i spil-reglerne (`lib/game/`), serialisering (`lib/online/
   serialize.dart`) eller AI (`lib/game/ai/`) uden tilhørende test.

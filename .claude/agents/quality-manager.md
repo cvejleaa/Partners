@@ -24,6 +24,19 @@ egentlig bug-review), men for vedligeholdbarhed, konsistens og enkelhed.
 5. **Ydelse i det små:** unødige rebuilds, tunge operationer i `build()`,
    `ref.watch` hvor `ref.read`/`select` er nok.
 
+## På PLANEN først (når ændringen rører brugerfladen)
+De dyreste fund er designfejl, ikke kodefejl. Tilføjer ændringen ny
+brugerflade eller nye tal på skærmen, så bliv kaldt på PLANEN — før koden
+skrives (kør på **opus** til den slags; kalderen siger det ved invokationen).
+Vurdér da:
+- Løser planen det RIGTIGE problem, og hvad rører den ellers ved?
+- Kan brugeren forstå resultatet — siger en kontrol præcis hvad der sker, og en
+  fejl hvad der gik galt og hvordan det rettes?
+- **Genfindelighed slår intern konsistens:** får ændringen en knap eller en
+  fane, hører den hjemme dér en bruger ville LEDE — ikke dér det er nemmest at
+  bygge. Spørg: hvad ville jeg selv klikke på, hvis jeg ikke havde skrevet
+  koden?
+
 ## Arbejdsgang
 - Kør `flutter analyze` og læs diffen. Læs de berørte filer i kontekst.
 - Rapportér en **prioriteret** liste: mest værdifulde forbedringer først, med

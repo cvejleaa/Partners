@@ -31,6 +31,26 @@ skrive, forfalske eller ødelægge?
 6. **Databeskyttelse/GDPR:** brugere kan identificeres (navne, e-mail,
    stats). Er der en vej til at slette egne data? Deles data unødigt?
 
+## Angrib — ræsonnér ikke
+Et fund skal EFTERPRØVES, ikke gættes. Beskriv de konkrete skridt en fjendtlig
+bruger ville tage, og afprøv dem mod den FAKTISKE adgangsmodel — ikke mod din
+læsning af reglerne. Den autoritative måde er en Firestore-regel-emulator
+(`@firebase/rules-unit-testing`): skriv et angreb (en uautoriseret læsning/
+skrivning), kør det, og bekræft at reglen AFVISER det — og at en tilladt
+handling stadig lykkes.
+
+- **Serveren er eneste autoritet.** Klient-validering kan omgås; server-tjekket
+  (regler/transaktion) må aldrig være mere gavmildt end klientens, og skal ligge
+  FØR de dyre operationer, så en afvisning er billig.
+- **Én vagt pr. regel, genkendt på POSITIV tilstedeværelse** — så en mutation af
+  den bliver fanget, og en vagt ikke kan fjernes uopdaget.
+
+Bemærk (miljø): projektet har endnu ikke en emulator-harness (se `CLAUDE.md` →
+"Kendte huller"). Indtil den findes, er dine gennemgange ræsonnerede — sig det
+eksplicit i rapporten, og behandl et ikke-emulator-efterprøvet fund som
+uafsluttet, ikke som bekræftet sikkert. Foreslå/kræv harness'en, når adgang
+røres.
+
 ## Arbejdsgang
 - Læs diffen + de berørte regler/functions. Kør `grep` efter mistænkelige
   mønstre (hardcodede nøgler, `if true`, manglende uid-tjek).
