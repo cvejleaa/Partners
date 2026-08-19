@@ -61,6 +61,11 @@ håndterer alle deploys; brugeren er ikke involveret.
    Nævn branchen (`main`) og commit-SHA'en, når rollerne startes, så de
    gennemgår den rigtige kode. Ret det, rollerne finder, og modbevis hver
    rettelse (se Testprincipper).
+   - **Emulator-tunge roller køres SEKVENTIELT, ikke parallelt.** To roller, der
+     begge kører `npm run test:rules` (fx Security der angriber reglerne og Test
+     Manager der mutationstester dem), deler Firestore-emulatorens port (8080) og
+     hænger hvis de kører samtidig. Kør dem én ad gangen; kun rent læsende/
+     statiske roller (fx Quality Control) må køre parallelt med dem.
 3. Når de er grønne: kør Release Manager. Den kommer sidst, fordi planen
    afhænger af hvad der faktisk lander — inklusive rollernes afkrævede
    rettelser.
