@@ -37,7 +37,7 @@ class Rules {
     final bool allOwnHome = player.pieces
         .every((Piece p) => p.position is HomeStretchPosition);
     final List<Player> activePool = allOwnHome
-        ? <Player>[player, state.players[player.partnerIndex]]
+        ? <Player>[player, state.players[state.variant.partnerFor(player.index)]]
         : <Player>[player];
 
     // Rene ud-kort kan kun rykke en brik ud — fra enten egen eller makkers
@@ -121,7 +121,7 @@ class Rules {
   /// et UD-felt (0, 15, 30, 45 på en 60-ring). UD-felter er "lommer" der kun
   /// tilhører deres ejer; alle andre springer dem over under bevægelse.
   int? _entryOwner(int trackIndex) {
-    final int q = geometry.trackLength ~/ 4;
+    final int q = geometry.trackLength ~/ geometry.segments;
     return trackIndex % q == 0 ? trackIndex ~/ q : null;
   }
 
@@ -372,7 +372,7 @@ class Rules {
     final List<Piece> ownMovable = player.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
-    final Player partner = state.players[player.partnerIndex];
+    final Player partner = state.players[state.variant.partnerFor(player.index)];
     final List<Piece> partnerMovable = partner.pieces
         .where((Piece p) => p.position is! StartPosition)
         .toList();
@@ -416,7 +416,7 @@ class Rules {
         _recordSplit(path, card, results);
         return;
       }
-      if (remaining < total && sim.teamHasWon(player.teamIndex)) {
+      if (remaining < total && sim.teamHasWon(sim.variant.teamOf(player.index))) {
         _recordSplit(path, card, results);
         return; // Spillet er vundet — ingen grund til at flytte mere.
       }
@@ -525,7 +525,7 @@ class Rules {
   }
 
   int _firstFreeStartSlot(GameState s, int ownerIndex) {
-    for (int slot = 0; slot < 4; slot++) {
+    for (int slot = 0; slot < s.variant.piecesPerPlayer; slot++) {
       if (s.pieceAt(StartPosition(ownerIndex, slot)) == null) return slot;
     }
     return 0;
@@ -552,6 +552,9 @@ class Rules {
       handNumber: src.handNumber,
       winningTeamIndex: src.winningTeamIndex,
       cardRules: src.cardRules,
+      // Split-søgningen bruger sim.variant (teamOf) — bær varianten med, ellers
+      // ville klonen falde tilbage til klassisk uanset src.
+      variant: src.variant,
     );
   }
 }

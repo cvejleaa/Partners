@@ -8,6 +8,7 @@ import '../models/move.dart';
 import '../models/piece.dart';
 import '../models/player.dart';
 import '../models/playing_card.dart';
+import '../models/variant_config.dart';
 import 'deck.dart';
 import 'rules.dart';
 
@@ -77,7 +78,10 @@ class GameEngine extends ChangeNotifier {
   }
 
   void _applyExchange() {
-    // Hvert kort bevæger sig fra spiller -> partner (index + 2).
+    // BEMÆRK til fremtidige exchangeRules: her fjernes kortet fra giverens hånd
+    // FØR modtageren udregnes. Kun partnerSwap er implementeret (kan ikke fejle),
+    // så det er sikkert nu — men en ny regel der kan kaste, bør udregne ALLE
+    // modtagere før nogen hånd muteres, så en fejl ikke efterlader kort i limbo.
     final Map<int, PlayingCard> incoming = <int, PlayingCard>{};
     for (final MapEntry<int, PlayingCard?> e
         in state.exchangeBuffer.entries) {
@@ -85,8 +89,21 @@ class GameEngine extends ChangeNotifier {
       if (card == null) continue;
       final Player giver = state.players[e.key];
       giver.hand.remove(card);
-      final int partnerIdx = giver.partnerIndex;
-      incoming[partnerIdx] = card;
+      // Modtageren afhænger af variantens bytte-regel. Klassisk: makkeren
+      // (diagonalt overfor). Øvrige regler (Duo/Trio/3v3) er sømme til senere.
+      final int receiver;
+      switch (state.variant.exchangeRule) {
+        case ExchangeRule.partnerSwap:
+          receiver = state.variant.partnerFor(giver.index);
+          break;
+        case ExchangeRule.opponentSwap:
+        case ExchangeRule.clockwiseTeammate:
+        case ExchangeRule.circularPass:
+        case ExchangeRule.none:
+          throw UnimplementedError(
+              'exchangeRule ${state.variant.exchangeRule} er ikke implementeret endnu');
+      }
+      incoming[receiver] = card;
     }
     incoming.forEach((int idx, PlayingCard card) {
       state.players[idx].hand.add(card);
@@ -210,8 +227,10 @@ class GameEngine extends ChangeNotifier {
   // et tvunget træk over, så den er fjernet.
 
   void _afterMove(int playerIndex) {
-    // Tjek vinder
-    for (int t = 0; t < 2; t++) {
+    // Tjek vinder — ét tjek pr. hold (klassisk: 2). BEMÆRK til fremtidige
+    // varianter: ved 'alle mod alle' (teams tom, winCondition.ownAllHome) kører
+    // denne loop aldrig — så skal vinderen afgøres pr. spiller, ikke pr. hold.
+    for (int t = 0; t < state.variant.teams.length; t++) {
       if (state.teamHasWon(t)) {
         state.winningTeamIndex = t;
         state.phase = GamePhase.gameOver;
@@ -241,7 +260,7 @@ class GameEngine extends ChangeNotifier {
   }
 
   int _firstFreeStartSlot(int ownerIndex) {
-    for (int slot = 0; slot < 4; slot++) {
+    for (int slot = 0; slot < state.variant.piecesPerPlayer; slot++) {
       final Piece? occ =
           state.pieceAt(StartPosition(ownerIndex, slot));
       if (occ == null) return slot;
