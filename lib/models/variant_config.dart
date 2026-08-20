@@ -59,7 +59,7 @@ class VariantConfig {
     this.forcedPlay = false,
     this.winCondition = WinCondition.teamAllHome,
     this.destinationsPerPlayer = 1,
-    this.cardRules,
+    this.cardRuleOverrides,
   });
 
   /// Stabil identitet (gemmes i spil-dokumentet, se serialisering).
@@ -99,12 +99,20 @@ class VariantConfig {
   /// Duo: 2 briktyper med hver sin start/destination. 1 for alle andre.
   final int destinationsPerPlayer;
 
-  /// Variantens EGET kort-regelsæt. `null` = brug den globale/admin-konfigurerede
-  /// [CardRules] (klassisk). Sat = varianten bærer sine egne kort, som ved
-  /// oprettelse resolves ind i [GameState.cardRules] (kim), hvorefter det spils
-  /// state er runtime-autoritet — en senere ændring af variant-definitionen
-  /// rører ikke et igangværende spil (kort serialiseres uafhængigt i 'cr').
-  final CardRules? cardRules;
+  /// Variantens kort-ændringer som OVERRIDES oven på de LIVE/admin-konfigurerede
+  /// regler. `null` = ingen ændringer (klassisk bruger admin-reglerne uændret).
+  /// Sat = kun de nævnte rangs ændres; resten arves fra de live regler — så fx
+  /// admin's byttekort på Knægten bevares i varianten. Resolves ved oprettelse
+  /// via [resolveCardRules] ind i [GameState.cardRules] (kim), hvorefter spillets
+  /// state er runtime-autoritet (kort serialiseres uafhængigt i 'cr', så en
+  /// senere ændring af variant-definitionen rører ikke et igangværende spil).
+  final Map<Rank, CardRuleConfig>? cardRuleOverrides;
+
+  /// De faktiske kortregler for et spil i denne variant: [base] (typisk de
+  /// live/admin-regler) med variantens [cardRuleOverrides] lagt ovenpå.
+  CardRules resolveCardRules(CardRules base) => cardRuleOverrides == null
+      ? base
+      : base.withOverrides(cardRuleOverrides!);
 
   /// Samlet antal felter på ringen: segmenter × (UD-felt + nummererede felter).
   /// Klassisk: 4 × (1 + 14) = 60. Partners+: 6 × (1 + 13) = 84.
@@ -161,24 +169,23 @@ const VariantConfig classicVariant = VariantConfig(
 /// jubilæumskort (fx det sammensatte 7/+2−5) kræver motor-mekanik, der ikke
 /// findes endnu, og er bevidst udeladt frem for at gætte.
 ///
-/// Bygget fra [CardRules.defaults] med kun den ændrede rang eksplicit, så den
-/// ikke kan divergere fra klassisk hvis defaults ændres. Ikke `const`, fordi
-/// [CardRules.defaults] er en factory.
-final VariantConfig partners25 = VariantConfig(
+/// Kun 5-kortet ændres (→ Hopsakort); alt andet arves fra de LIVE regler, så
+/// varianten fx beholder admin's byttekort på Knægten. Derfor et override-map
+/// frem for et helt kort-sæt — og dermed `const`.
+const VariantConfig partners25 = VariantConfig(
   id: 'p25',
   name: 'Partners 25 år (forsmag)',
   description: 'Tilnærmet jubilæumsudgave: som klassisk, men 5-kortet er '
       'Hopsakortet — det må som det eneste passere et blokeret startfelt. '
       'Den fulde jubilæumskortliste er ikke offentliggjort.',
-  cardRules: CardRules.defaults().withRank(
-    Rank.five,
-    const CardRuleConfig(forwardSteps: <int>[5], jumpsBlockade: true),
-  ),
+  cardRuleOverrides: <Rank, CardRuleConfig>{
+    Rank.five: CardRuleConfig(forwardSteps: <int>[5], jumpsBlockade: true),
+  },
 );
 
 /// Alle kendte varianter. Registret bruges til at resolve en gemt variant-id
 /// tilbage til dens config og til at fylde variant-vælgeren.
-final List<VariantConfig> kAllVariants = <VariantConfig>[
+const List<VariantConfig> kAllVariants = <VariantConfig>[
   classicVariant,
   partners25,
 ];

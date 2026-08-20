@@ -96,6 +96,17 @@ class CardRules {
     return CardRules(next);
   }
 
+  /// Anvend et sæt rang-overrides oven på DISSE regler. Bruges af varianter, der
+  /// kun ændrer nogle få kort (fx 25 år: 5-kortet → Hopsakort) og skal arve
+  /// resten fra de LIVE/admin-konfigurerede regler frem for at fryse et helt
+  /// sæt (så fx admin's byttekort på Knægten bevares i varianten).
+  CardRules withOverrides(Map<Rank, CardRuleConfig> overrides) {
+    if (overrides.isEmpty) return this;
+    final next = Map<Rank, CardRuleConfig>.from(byRank);
+    next.addAll(overrides);
+    return CardRules(next);
+  }
+
   /// Standard (klassiske) regler — matcher spillets oprindelige opførsel.
   factory CardRules.defaults() {
     return const CardRules(<Rank, CardRuleConfig>{

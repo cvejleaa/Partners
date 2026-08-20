@@ -17,6 +17,7 @@ import '../models/move.dart';
 import '../models/piece.dart';
 import '../models/player.dart';
 import '../models/playing_card.dart';
+import '../models/variant_config.dart';
 import 'friends_service.dart';
 import 'serialize.dart';
 
@@ -360,6 +361,9 @@ class OnlineService {
       // ikke i selve doc'et — se heartbeat(). Værtens første stempel skrives af
       // lobby-skærmens heartbeat ved åbning.
       'cardRules': effective.toJson(),
+      // Valgt variant (default klassisk). Værten kan ændre den i lobbyen via
+      // setVariant; startGameFromLobby resolver den defensivt (ukendt → klassisk).
+      'variantId': classicVariant.id,
       // Spillerens valgte AI-sværhedsgrad (0=Begynder,1=Normal,2=Skarp).
       // Parametrene bag graderne sættes af admin (config/ai).
       'aiLevel': aiLevel,
@@ -404,6 +408,17 @@ class OnlineService {
     final int oldAiLevel = (d['aiLevel'] as num?)?.toInt() ?? kAiLevelDefault;
     final code = await createGame(
         colorValue: myColor, rules: rules, aiLevel: oldAiLevel);
+
+    // Bevar variant fra det gamle spil (en revanche af et 25 år-spil er 25 år).
+    // Læses defensivt; ukendt id klampes til klassisk i setVariant.
+    if (d['variantId'] is String && d['variantId'] != classicVariant.id) {
+      try {
+        await setVariant(code, d['variantId'] as String);
+      } catch (_) {
+        // En fejlet variant-kopiering må ikke forhindre revanchen (falder til
+        // klassisk, som createGame allerede har sat).
+      }
+    }
 
     // Invitér de øvrige menneskelige spillere fra det gamle spil.
     final friends = FriendsService();
@@ -599,7 +614,12 @@ class OnlineService {
     final uids = d['uids'] as List;
     final rules =
         CardRules.fromJson(Map<String, dynamic>.from(d['cardRules'] as Map));
-    final state = _initialState(names, colors, uids, rules);
+    // Læs variant-id DEFENSIVT: et ikke-string (eller ukendt) felt — fx sat af
+    // en fjendtlig lobby-deltager — må ikke kunne vælte starten. variantFromId
+    // klamper ukendt/null til klassisk.
+    final VariantConfig variant =
+        variantFromId(d['variantId'] is String ? d['variantId'] as String : null);
+    final state = _initialState(names, colors, uids, rules, variant);
     await ref.update(<String, dynamic>{
       'status': 'playing',
       'state': gameStateToMap(state),
@@ -625,6 +645,15 @@ class OnlineService {
   Future<void> setAiLevel(String code, int level) async {
     await _games.doc(code).update(<String, dynamic>{
       'aiLevel': level.clamp(0, kDefaultAiLevels.length - 1),
+    });
+  }
+
+  /// Sæt spillets variant fra lobbyen (kun værten i UI'et). Kun kendte id'er
+  /// skrives — et ukendt id klampes til klassisk, så doc'et aldrig får en
+  /// variant der ikke kan resolves. startGameFromLobby læser feltet defensivt.
+  Future<void> setVariant(String code, String variantId) async {
+    await _games.doc(code).update(<String, dynamic>{
+      'variantId': variantFromId(variantId).id,
     });
   }
 
@@ -692,8 +721,8 @@ class OnlineService {
     return DateTime.now().difference(ts.toDate());
   }
 
-  GameState _initialState(
-      List<String> names, List<int> colors, List uids, CardRules rules) {
+  GameState _initialState(List<String> names, List<int> colors, List uids,
+      CardRules rules, VariantConfig variant) {
     final players = <Player>[
       for (int i = 0; i < 4; i++)
         Player(
@@ -702,16 +731,18 @@ class OnlineService {
           color: Color(colors[i]),
           isHuman: uids[i] != null,
           pieces: <Piece>[
-            for (int s = 0; s < 4; s++)
+            for (int s = 0; s < variant.piecesPerPlayer; s++)
               Piece(id: 'p$i.$s', ownerIndex: i, position: StartPosition(i, s)),
           ],
         ),
     ];
     // Tilfældig start-spiller — ikke altid værten (plads 0/den der inviterede).
     final int starter = Random().nextInt(4);
+    // Kortreglerne er de live regler (fra doc'et) med variantens overrides
+    // ovenpå — klassisk: uændret; 25 år: arver byttekort + får Hopsakort.
     final s = GameState(
       players: players,
-      geometry: const BoardGeometry(),
+      geometry: variant.geometry,
       deck: Deck.fresh(),
       discard: <PlayingCard>[],
       dealerIndex: starter,
@@ -719,7 +750,8 @@ class OnlineService {
       phase: GamePhase.setup,
       handNumber: 0,
       starterIndex: starter,
-      cardRules: rules,
+      cardRules: variant.resolveCardRules(rules),
+      variant: variant,
     );
     GameEngine(state: s).startNewHand();
     return s;

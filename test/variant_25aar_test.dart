@@ -47,19 +47,39 @@ void main() {
     });
   });
 
-  group('T3 — p25s kort adskiller sig KUN på 5-kortet', () {
-    test('5-kortet er Hopsakortet (frem 5 + jumpsBlockade), 3-kortet uændret', () {
-      final CardRules p25 = partners25.cardRules!;
-      final CardRules classic = CardRules.defaults();
-      final CardRuleConfig five = p25.forRank(Rank.five);
+  group('T3 — p25 overrider KUN 5-kortet; resten arves fra basen', () {
+    test('præcis ét override (5→Hopsakort); urørt rang = base', () {
+      // Kun 5-kortet står i override-mappet — resten kommer fra de live regler.
+      expect(partners25.cardRuleOverrides!.keys.toList(), <Rank>[Rank.five]);
+      final CardRuleConfig five = partners25.cardRuleOverrides![Rank.five]!;
       expect(five.jumpsBlockade, isTrue, reason: '5 skal kunne hoppe');
       expect(five.forwardSteps, <int>[5]);
+
+      final CardRules classic = CardRules.defaults();
+      final CardRules resolved = partners25.resolveCardRules(classic);
+      expect(resolved.forRank(Rank.five).jumpsBlockade, isTrue);
+      // En urørt rang er identisk med basen (ingen skjult drift).
+      expect(resolved.forRank(Rank.three).forwardSteps,
+          classic.forRank(Rank.three).forwardSteps);
       // Klassisk 5 kan IKKE hoppe — det er præcis forskellen.
       expect(classic.forRank(Rank.five).jumpsBlockade, isFalse);
-      // En urørt rang er identisk med klassisk (ingen skjult drift).
-      expect(p25.forRank(Rank.three).forwardSteps,
-          classic.forRank(Rank.three).forwardSteps);
-      expect(p25.forRank(Rank.three).jumpsBlockade, isFalse);
+    });
+  });
+
+  group('T6 — varianten ARVER basens overrides (fx admin-byttekort på Knægt)', () {
+    test('resolveCardRules bevarer basens Knægt-swap OG tilføjer Hopsakortet',
+        () {
+      // De LIVE regler: admin har gjort Knægten til byttekort (det kort der
+      // ellers ville være 11 frem). Varianten må ikke tabe det.
+      final CardRules live = CardRules.defaults()
+          .withRank(Rank.jack, const CardRuleConfig(swap: true));
+      final CardRules resolved = partners25.resolveCardRules(live);
+      // Byttekortet fra basen bevares...
+      expect(resolved.forRank(Rank.jack).swap, isTrue,
+          reason: '25 år må ikke tavst tabe basens byttekort');
+      // ...OG Hopsakortet lægges ovenpå. Muteres kompositionen til at bygge fra
+      // defaults() frem for basen, taber Knægt-swap → denne assertion rød.
+      expect(resolved.forRank(Rank.five).jumpsBlockade, isTrue);
     });
   });
 
@@ -104,7 +124,8 @@ void main() {
     });
 
     test('p25 5 (Hopsakort): passerer blokaden og lander på felt 17', () {
-      final GameState st = scenario(partners25.cardRules!);
+      final GameState st =
+          scenario(partners25.resolveCardRules(CardRules.defaults()));
       final List<Move> moves =
           Rules(st.geometry).legalMoves(st, st.players[0], five);
       expect(landsAt17(moves), isTrue,
@@ -123,7 +144,7 @@ void main() {
         currentPlayerIndex: 0,
         phase: GamePhase.play,
         handNumber: 1,
-        cardRules: partners25.cardRules,
+        cardRules: partners25.resolveCardRules(CardRules.defaults()),
         variant: partners25,
       );
       final GameState back =
@@ -145,8 +166,9 @@ void main() {
       expect(classicFive.containsKey('jumpsBlockade'), isFalse,
           reason: 'klassisk 5-kort må ikke skrive jumpsBlockade-nøglen');
 
-      final Map<String, dynamic> p25Five =
-          partners25.cardRules!.toJson()['five'] as Map<String, dynamic>;
+      final Map<String, dynamic> p25Five = partners25
+          .resolveCardRules(CardRules.defaults())
+          .toJson()['five'] as Map<String, dynamic>;
       expect(p25Five['jumpsBlockade'], isTrue,
           reason: 'p25s Hopsakort SKAL skrive nøglen som true');
 

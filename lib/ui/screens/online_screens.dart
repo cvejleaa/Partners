@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/ai/ai_player.dart';
+import '../../models/variant_config.dart';
 import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
@@ -490,6 +491,10 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
               const <dynamic>[false, false, false, false];
           final bool isHost = d['hostUid'] == svc.uid;
           final int aiLevel = (d['aiLevel'] as num?)?.toInt() ?? kAiLevelDefault;
+          // Valgt variant (defensiv læsning; ukendt → klassisk). Alle ser den,
+          // kun værten kan ændre den.
+          final VariantConfig variant = variantFromId(
+              d['variantId'] is String ? d['variantId'] as String : null);
           // Spillet får AI-spillere hvis der er en åben plads (fyldes ved start).
           final bool willHaveAi = uids.any((dynamic u) => u == null);
           final int seatOfMe = uids.indexOf(svc.uid);
@@ -518,6 +523,41 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
               children: <Widget>[
                 Text('Del koden $code, eller invitér spillere på email.'),
                 const SizedBox(height: 12),
+                // Variant — "hvad spiller vi". Alle deltagere ser den; kun
+                // værten kan ændre den (afgør bræt/kort for alle).
+                Row(
+                  children: <Widget>[
+                    const Icon(Icons.style, size: 18),
+                    const SizedBox(width: 8),
+                    const Text('Spil:'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: isHost
+                          ? DropdownButton<String>(
+                              isExpanded: true,
+                              value: variant.id,
+                              items: <DropdownMenuItem<String>>[
+                                for (final VariantConfig v in kAllVariants)
+                                  DropdownMenuItem<String>(
+                                      value: v.id, child: Text(v.name)),
+                              ],
+                              onChanged: (String? id) {
+                                if (id != null) svc.setVariant(code, id);
+                              },
+                            )
+                          : Text(variant.name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+                if (variant.description != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, bottom: 4),
+                    child: Text(variant.description!,
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ),
+                const SizedBox(height: 8),
                 for (int i = 0; i < 4; i++)
                   _seatCard(context, svc,
                       seat: i,
