@@ -410,10 +410,11 @@ class OnlineService {
         colorValue: myColor, rules: rules, aiLevel: oldAiLevel);
 
     // Bevar variant fra det gamle spil (en revanche af et 25 år-spil er 25 år).
-    // Læses defensivt; ukendt id klampes til klassisk i setVariant.
-    if (d['variantId'] is String && d['variantId'] != classicVariant.id) {
+    // Læses defensivt via variantFromDoc; ukendt/skævt felt → klassisk.
+    final VariantConfig oldVariant = variantFromDoc(d);
+    if (oldVariant.id != classicVariant.id) {
       try {
-        await setVariant(code, d['variantId'] as String);
+        await setVariant(code, oldVariant.id);
       } catch (_) {
         // En fejlet variant-kopiering må ikke forhindre revanchen (falder til
         // klassisk, som createGame allerede har sat).
@@ -614,11 +615,9 @@ class OnlineService {
     final uids = d['uids'] as List;
     final rules =
         CardRules.fromJson(Map<String, dynamic>.from(d['cardRules'] as Map));
-    // Læs variant-id DEFENSIVT: et ikke-string (eller ukendt) felt — fx sat af
-    // en fjendtlig lobby-deltager — må ikke kunne vælte starten. variantFromId
-    // klamper ukendt/null til klassisk.
-    final VariantConfig variant =
-        variantFromId(d['variantId'] is String ? d['variantId'] as String : null);
+    // Læs varianten DEFENSIVT (variantFromDoc klamper ikke-string/ukendt til
+    // klassisk) — et skævt felt fra en fjendtlig lobby-deltager må ikke vælte start.
+    final VariantConfig variant = variantFromDoc(d);
     final state = _initialState(names, colors, uids, rules, variant);
     await ref.update(<String, dynamic>{
       'status': 'playing',
@@ -723,6 +722,11 @@ class OnlineService {
 
   GameState _initialState(List<String> names, List<int> colors, List uids,
       CardRules rules, VariantConfig variant) {
+    // NB: online-lobbyen er 4-sædet (names/colors/uids/aiSeats er 4-lange), så
+    // spiller-loopet og start-spilleren er hardkodet til 4. Brik-antal og
+    // geometri tages fra varianten. Klassisk og p25 er begge 4-spiller; en
+    // variant med playerCount≠4 (fx Partners+ 6) kan derfor endnu ikke oprettes
+    // online — det kræver en N-sædet lobby (fase 4).
     final players = <Player>[
       for (int i = 0; i < 4; i++)
         Player(

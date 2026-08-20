@@ -199,3 +199,11 @@ VariantConfig variantFromId(String? id) {
   }
   return classicVariant;
 }
+
+/// Resolve varianten fra et spil-dokument. DEFENSIV: et 'variantId' der ikke er
+/// en string (fx sat til et tal/map af en fjendtlig lobby-deltager) eller er
+/// ukendt, klampes til klassisk — så et skævt felt aldrig kan vælte en start.
+/// Ét sted, så de flere læsere (lobby-start, revanche, lobby-UI) ikke driver fra
+/// hinanden.
+VariantConfig variantFromDoc(Map<String, dynamic> doc) =>
+    variantFromId(doc['variantId'] is String ? doc['variantId'] as String : null);

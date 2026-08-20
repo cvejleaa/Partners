@@ -189,6 +189,20 @@ describe('games/{game}', () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game()));
     await assertFails(deleteDoc(doc(as('mallory'), 'games/G1')));
   });
+  // variantId (variant-valg i lobbyen) ligger BEVIDST i samme skrive-flade som
+  // de øvrige lobby-felter (aiLevel/names). Disse to vagter fastholder den flade
+  // netop for variant-feltet, så en fremtidig stramning/mutation af games-
+  // update-reglen fanges på variant-stien og ikke kun på seq/aiLevel.
+  it('medlem må sætte variantId (variant vælges i lobbyen)', async () => {
+    await seed((db) => setDoc(doc(db, 'games/G1'), game({ status: 'lobby' })));
+    await assertSucceeds(
+      updateDoc(doc(as('alice'), 'games/G1'), { variantId: 'p25' }));
+  });
+  it('ANGREB: ikke-medlem må IKKE sætte variantId på et igangværende (playing) spil', async () => {
+    await seed((db) => setDoc(doc(db, 'games/G1'), game()));
+    await assertFails(
+      updateDoc(doc(as('mallory'), 'games/G1'), { variantId: 'p25' }));
+  });
 });
 
 describe('games/{game}/presence/{uid}', () => {

@@ -491,10 +491,9 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
               const <dynamic>[false, false, false, false];
           final bool isHost = d['hostUid'] == svc.uid;
           final int aiLevel = (d['aiLevel'] as num?)?.toInt() ?? kAiLevelDefault;
-          // Valgt variant (defensiv læsning; ukendt → klassisk). Alle ser den,
-          // kun værten kan ændre den.
-          final VariantConfig variant = variantFromId(
-              d['variantId'] is String ? d['variantId'] as String : null);
+          // Valgt variant (defensiv læsning via variantFromDoc; ukendt →
+          // klassisk). Alle ser den, kun værten kan ændre den.
+          final VariantConfig variant = variantFromDoc(d);
           // Spillet får AI-spillere hvis der er en åben plads (fyldes ved start).
           final bool willHaveAi = uids.any((dynamic u) => u == null);
           final int seatOfMe = uids.indexOf(svc.uid);
