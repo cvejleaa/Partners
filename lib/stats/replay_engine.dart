@@ -175,6 +175,11 @@ ReplayResult replayGame({
   return ReplayResult(events: events, finalState: state);
 }
 
+// NB: antager klassisk geometri (60/4) og 4 brikker pr. spiller. Det matcher
+// klassisk OG Partners 25 år (p25), som er strukturelt lig klassisk — kun
+// kortreglerne (der trådes ind via [cardRules]) adskiller. Bliver FORKERT hvis
+// en fremtidig variant med anden geometri/brik-antal skal replayes; generalisér
+// da via variant (se GameState.variant og docs/partners-varianter.md).
 GameState _freshState({
   required List<String> playerNames,
   required List<bool> isHuman,
