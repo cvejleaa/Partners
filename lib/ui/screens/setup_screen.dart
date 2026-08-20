@@ -6,6 +6,7 @@ import '../../app.dart';
 import '../../game/ai/ai_player.dart';
 import '../../models/variant_config.dart';
 import '../../state/card_rules_controller.dart';
+import '../../state/variant_card_rules_controller.dart';
 import 'admin_screen.dart';
 import 'game_screen.dart';
 import 'self_test_screen.dart';
@@ -36,6 +37,24 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   /// Valgt variant. Default klassisk. Afgør bræt/kort — vælges FØRST, fordi
   /// "hvad spiller vi" bestemmer resten af opsætningen.
   VariantConfig _variant = classicVariant;
+
+  /// Navn/beskrivelse med admins evt. egne tekster (fx når 25 år-sættet er
+  /// afskrevet fra det fysiske spil). Fallback: variantens kode-tekst.
+  String _displayName(VariantConfig v) {
+    if (v.id == 'p25') {
+      final String? n = ref.watch(variantCardRulesProvider).name;
+      if (n != null && n.trim().isNotEmpty) return n.trim();
+    }
+    return v.name;
+  }
+
+  String? _displayDescription(VariantConfig v) {
+    if (v.id == 'p25') {
+      final String? d = ref.watch(variantCardRulesProvider).description;
+      if (d != null && d.trim().isNotEmpty) return d.trim();
+    }
+    return v.description;
+  }
 
   @override
   void dispose() {
@@ -102,7 +121,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                     items: <DropdownMenuItem<VariantConfig>>[
                       for (final VariantConfig v in kAllVariants)
                         DropdownMenuItem<VariantConfig>(
-                            value: v, child: Text(v.name)),
+                            value: v, child: Text(_displayName(v))),
                     ],
                     onChanged: (VariantConfig? v) {
                       if (v != null) setState(() => _variant = v);
@@ -111,11 +130,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 ),
               ],
             ),
-            if (_variant.description != null)
+            if (_displayDescription(_variant) != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2, bottom: 6),
                 child: Text(
-                  _variant.description!,
+                  _displayDescription(_variant)!,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -182,9 +201,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 onPressed: unique
                     ? () async {
                         // Hent altid friske kortregler fra Firestore inden
-                        // spillet starter, så admin-ændringer slår igennem.
+                        // spillet starter, så admin-ændringer slår igennem —
+                        // BÅDE de klassiske og variantens egne.
+                        await ref.read(cardRulesProvider.notifier).refresh();
                         await ref
-                            .read(cardRulesProvider.notifier)
+                            .read(variantCardRulesProvider.notifier)
                             .refresh();
                         if (!context.mounted) return;
                         final List<PlayerSetup> setups = <PlayerSetup>[
@@ -197,9 +218,23 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                               isHuman: i == _humanSeat,
                             ),
                         ];
+                        // Opløs spillets faktiske kortregler ÉN gang her:
+                        // klassisk live + variantens overrides (admin-gemte
+                        // vinder over kode-seedet). startGame opløser ikke selv.
                         ref.read(gameProvider.notifier).startGame(
                               setups,
-                              cardRules: ref.read(cardRulesProvider),
+                              cardRules: effectiveCardRules(
+                                _variant,
+                                ref.read(cardRulesProvider),
+                                stored: _variant.id == 'p25' &&
+                                        ref
+                                            .read(variantCardRulesProvider)
+                                            .stored
+                                    ? ref
+                                        .read(variantCardRulesProvider)
+                                        .overrides
+                                    : null,
+                              ),
                               aiLevel: _aiLevel,
                               variant: _variant,
                             );

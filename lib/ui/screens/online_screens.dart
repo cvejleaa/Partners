@@ -492,8 +492,10 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           final bool isHost = d['hostUid'] == svc.uid;
           final int aiLevel = (d['aiLevel'] as num?)?.toInt() ?? kAiLevelDefault;
           // Valgt variant (defensiv læsning via variantFromDoc; ukendt →
-          // klassisk). Alle ser den, kun værten kan ændre den.
+          // klassisk). Alle ser den, kun værten kan ændre den. Navn/beskrivelse
+          // kan være admin-tilpassede (kopieret ind i doc'et ved oprettelse).
           final VariantConfig variant = variantFromDoc(d);
+          final dynamic variantsRaw = d['cardRulesVariants'];
           // Spillet får AI-spillere hvis der er en åben plads (fyldes ved start).
           final bool willHaveAi = uids.any((dynamic u) => u == null);
           final int seatOfMe = uids.indexOf(svc.uid);
@@ -538,22 +540,25 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                               items: <DropdownMenuItem<String>>[
                                 for (final VariantConfig v in kAllVariants)
                                   DropdownMenuItem<String>(
-                                      value: v.id, child: Text(v.name)),
+                                      value: v.id,
+                                      child: Text(
+                                          variantDisplayName(v, variantsRaw))),
                               ],
                               onChanged: (String? id) {
                                 if (id != null) svc.setVariant(code, id);
                               },
                             )
-                          : Text(variant.name,
+                          : Text(variantDisplayName(variant, variantsRaw),
                               style: const TextStyle(
                                   fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
-                if (variant.description != null)
+                if (variantDisplayDescription(variant, variantsRaw) != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 2, bottom: 4),
-                    child: Text(variant.description!,
+                    child: Text(
+                        variantDisplayDescription(variant, variantsRaw)!,
                         style: Theme.of(context).textTheme.bodySmall),
                   ),
                 const SizedBox(height: 8),

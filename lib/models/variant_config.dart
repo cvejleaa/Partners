@@ -99,20 +99,15 @@ class VariantConfig {
   /// Duo: 2 briktyper med hver sin start/destination. 1 for alle andre.
   final int destinationsPerPlayer;
 
-  /// Variantens kort-ændringer som OVERRIDES oven på de LIVE/admin-konfigurerede
-  /// regler. `null` = ingen ændringer (klassisk bruger admin-reglerne uændret).
-  /// Sat = kun de nævnte rangs ændres; resten arves fra de live regler — så fx
-  /// admin's byttekort på Knægten bevares i varianten. Resolves ved oprettelse
-  /// via [resolveCardRules] ind i [GameState.cardRules] (kim), hvorefter spillets
-  /// state er runtime-autoritet (kort serialiseres uafhængigt i 'cr', så en
-  /// senere ændring af variant-definitionen rører ikke et igangværende spil).
+  /// Variantens KODE-DEFINEREDE kort-ændringer som overrides oven på de LIVE/
+  /// admin-konfigurerede regler. `null` = ingen ændringer (klassisk bruger
+  /// admin-reglerne uændret). Dette er kun SEEDET: har admin gemt egne
+  /// overrides for varianten (config/cardRules → variants.{id}.rules), vinder
+  /// de over dette — se [effectiveCardRules], som er den ENESTE resolver.
+  /// Resolves ved oprettelse ind i [GameState.cardRules] (kim), hvorefter
+  /// spillets state er runtime-autoritet (kort serialiseres uafhængigt i 'cr',
+  /// så en senere ændring rører ikke et igangværende spil).
   final Map<Rank, CardRuleConfig>? cardRuleOverrides;
-
-  /// De faktiske kortregler for et spil i denne variant: [base] (typisk de
-  /// live/admin-regler) med variantens [cardRuleOverrides] lagt ovenpå.
-  CardRules resolveCardRules(CardRules base) => cardRuleOverrides == null
-      ? base
-      : base.withOverrides(cardRuleOverrides!);
 
   /// Samlet antal felter på ringen: segmenter × (UD-felt + nummererede felter).
   /// Klassisk: 4 × (1 + 14) = 60. Partners+: 6 × (1 + 13) = 84.
@@ -207,3 +202,59 @@ VariantConfig variantFromId(String? id) {
 /// hinanden.
 VariantConfig variantFromDoc(Map<String, dynamic> doc) =>
     variantFromId(doc['variantId'] is String ? doc['variantId'] as String : null);
+
+/// Den ENE resolver for et spils faktiske kortregler:
+/// [base] (de live/admin-regler for klassisk) + variantens overrides ovenpå.
+/// Precedens: admin-GEMTE overrides for varianten ([stored]) > variantens
+/// kode-seed ([VariantConfig.cardRuleOverrides]) > ingen (klassisk = base
+/// uændret). Kaldes ved spil-oprettelse (single-player og online) — motoren
+/// og alle andre læser derefter kun [GameState.cardRules].
+CardRules effectiveCardRules(
+  VariantConfig variant,
+  CardRules base, {
+  Map<Rank, CardRuleConfig>? stored,
+}) {
+  final Map<Rank, CardRuleConfig>? overrides =
+      stored ?? variant.cardRuleOverrides;
+  return overrides == null ? base : base.withOverrides(overrides);
+}
+
+/// Rå `variants`-map fra config/cardRules-doc'et (eller lobby-doc'ets kopi
+/// `cardRulesVariants`) → gemte overrides for [variantId]. DEFENSIV hele vejen:
+/// ikke-map på ethvert niveau → null (fald til kode-seedet). Ren funktion, så
+/// klampningen kan unit-testes.
+Map<Rank, CardRuleConfig>? storedOverridesFor(
+    dynamic variantsRaw, String variantId) {
+  if (variantsRaw is! Map) return null;
+  final dynamic entry = variantsRaw[variantId];
+  if (entry is! Map) return null;
+  final dynamic rules = entry['rules'];
+  if (rules is! Map) return null;
+  return cardRuleOverridesFromJson(Map<String, dynamic>.from(rules));
+}
+
+/// Admin kan gemme eget navn/beskrivelse for en variant (fx når 25 år-sættet
+/// er afskrevet fra det fysiske spil og "(forsmag)"-forbeholdet ikke længere
+/// er sandt). Disse to læser dem DEFENSIVT fra samme `variants`-map med
+/// fallback til variantens kode-definerede tekst.
+String variantDisplayName(VariantConfig v, dynamic variantsRaw) {
+  if (variantsRaw is Map) {
+    final dynamic entry = variantsRaw[v.id];
+    if (entry is Map && entry['name'] is String &&
+        (entry['name'] as String).trim().isNotEmpty) {
+      return (entry['name'] as String).trim();
+    }
+  }
+  return v.name;
+}
+
+String? variantDisplayDescription(VariantConfig v, dynamic variantsRaw) {
+  if (variantsRaw is Map) {
+    final dynamic entry = variantsRaw[v.id];
+    if (entry is Map && entry['description'] is String &&
+        (entry['description'] as String).trim().isNotEmpty) {
+      return (entry['description'] as String).trim();
+    }
+  }
+  return v.description;
+}

@@ -131,6 +131,27 @@ class CardRules {
           entry.key.name: entry.value.toJson(),
       };
 
+  /// True hvis de to regelsæt giver samme config for [rank] (bruges af admin-
+  /// UI'et til at vise om en variant-rang afviger fra klassisk).
+  static bool sameRank(CardRules a, CardRules b, Rank rank) =>
+      sameConfig(a.forRank(rank), b.forRank(rank));
+
+  /// Felt-for-felt-sammenligning af to kort-configs — INKL. jumpsBlockade, så
+  /// UI-sync aldrig overser et felt (et load der kun flipper hop skal opdatere
+  /// switchen).
+  static bool sameConfig(CardRuleConfig a, CardRuleConfig b) {
+    if (a.exitStart != b.exitStart) return false;
+    if (a.swap != b.swap) return false;
+    if (a.jumpsBlockade != b.jumpsBlockade) return false;
+    if (a.backwardSteps != b.backwardSteps) return false;
+    if (a.splitTotal != b.splitTotal) return false;
+    if (a.forwardSteps.length != b.forwardSteps.length) return false;
+    for (int i = 0; i < a.forwardSteps.length; i++) {
+      if (a.forwardSteps[i] != b.forwardSteps[i]) return false;
+    }
+    return true;
+  }
+
   factory CardRules.fromJson(Map<String, dynamic> json) {
     final map = <Rank, CardRuleConfig>{};
     for (final entry in json.entries) {
@@ -146,4 +167,56 @@ class CardRules {
     }
     return CardRules(map);
   }
+}
+
+/// Serialisér et PARTIELT override-map (kun de rangs varianten ændrer) til et
+/// Firestore-venligt map — samme pr-rang-format som [CardRules.toJson], men
+/// uden at udfylde manglende rangs. Modstykket er [cardRuleOverridesFromJson].
+Map<String, dynamic> cardRuleOverridesToJson(
+        Map<Rank, CardRuleConfig> overrides) =>
+    <String, dynamic>{
+      for (final e in overrides.entries) e.key.name: e.value.toJson(),
+    };
+
+/// Læs et partielt override-map DEFENSIVT: ukendte rang-navne og ikke-map-
+/// værdier springes over (et skævt felt må aldrig vælte indlæsning), og der
+/// udfyldes IKKE med defaults — et override-map er netop partielt.
+Map<Rank, CardRuleConfig> cardRuleOverridesFromJson(Map<String, dynamic> json) {
+  final map = <Rank, CardRuleConfig>{};
+  for (final entry in json.entries) {
+    if (entry.value is! Map) continue;
+    final rank = Rank.values.where((r) => r.name == entry.key);
+    if (rank.isEmpty) continue;
+    map[rank.first] = CardRuleConfig.fromJson(
+        Map<String, dynamic>.from(entry.value as Map));
+  }
+  return map;
+}
+
+/// Ikke-blokerende sanity-advarsler for et regelsæt — vises i admin-UI'et, så
+/// et reelt uspilleligt eller ødelagt bord opdages FØR nogen starter et spil.
+/// Admin er autoritet: advarsler, aldrig spærringer.
+List<String> deckSanityWarnings(CardRules rules) {
+  final List<String> warnings = <String>[];
+  int hopCount = 0;
+  bool anyExit = false;
+  bool anyForward = false;
+  for (final Rank r in Rank.values) {
+    final CardRuleConfig c = rules.forRank(r);
+    if (c.jumpsBlockade) hopCount++;
+    if (c.exitStart) anyExit = true;
+    if (c.forwardSteps.isNotEmpty || c.splitTotal != null) anyForward = true;
+  }
+  if (!anyExit) {
+    warnings.add('Ingen kort kan sætte en brik ud — spillet kan ikke komme i '
+        'gang.');
+  }
+  if (!anyForward) {
+    warnings.add('Ingen kort kan flytte frem — brikkerne kan aldrig nå i mål.');
+  }
+  if (hopCount >= 3) {
+    warnings.add('$hopCount af ${Rank.values.length} kort kan hoppe over '
+        'blokade — blokaden mister sin værdi som forsvar.');
+  }
+  return warnings;
 }

@@ -8,6 +8,7 @@ import '../../game/ai/ai_player.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
 import '../../state/display_config.dart';
+import '../../state/variant_card_rules_controller.dart';
 
 class AdminScreen extends ConsumerWidget {
   const AdminScreen({super.key});
@@ -62,25 +63,30 @@ class AdminScreen extends ConsumerWidget {
         ),
       );
     }
-    final CardRules rules = ref.watch(cardRulesProvider);
     final ctrl = ref.read(cardRulesProvider.notifier);
+    final variantCtrl = ref.read(variantCardRulesProvider.notifier);
     final String saveErr = ref.watch(cardRulesSaveErrorProvider);
+    final String variantSaveErr = ref.watch(variantCardRulesSaveErrorProvider);
     final CardRulesStatus status = ref.watch(cardRulesStatusProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin — Kortfunktioner'),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Hent fra database NU',
+            tooltip: 'Hent fra database NU (klassisk + 25 år)',
             icon: const Icon(Icons.cloud_download, color: Colors.white),
             onPressed: () async {
+              // BEGGE datasæt — ellers lyver knappen om det ene.
               await ctrl.refresh();
+              await variantCtrl.refresh();
               if (context.mounted) {
                 final s = ref.read(cardRulesStatusProvider);
+                final vs = ref.read(variantCardRulesLoadSourceProvider);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                       content: Text(s.lastLoadError.isEmpty
-                          ? 'Hentet fra ${s.lastLoadSource}'
+                          ? 'Hentet — klassisk: ${s.lastLoadSource} · '
+                              '25 år: $vs'
                           : 'Læsefejl: ${s.lastLoadError}')),
                 );
               }
@@ -88,24 +94,57 @@ class AdminScreen extends ConsumerWidget {
           ),
           TextButton.icon(
             onPressed: () async {
+              // BEGGE datasæt gemmes; fejl rapporteres pr. datasæt, så et
+              // fejlet 25 år-gem aldrig maskeres af et grønt klassisk-gem.
               await ctrl.retrySave();
+              await variantCtrl.retrySave();
               if (context.mounted) {
                 final err = ref.read(cardRulesSaveErrorProvider);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text(err.isEmpty ? 'Gemt' : 'Fejl: $err')),
-                );
+                final vErr = ref.read(variantCardRulesSaveErrorProvider);
+                final String msg = err.isEmpty && vErr.isEmpty
+                    ? 'Gemt (klassisk + 25 år)'
+                    : <String>[
+                        if (err.isNotEmpty) 'Klassisk: $err',
+                        if (vErr.isNotEmpty) '25 år: $vErr',
+                      ].join(' · ');
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(msg)));
               }
             },
             icon: const Icon(Icons.cloud_upload, color: Colors.white),
             label: const Text('Gem nu', style: TextStyle(color: Colors.white)),
           ),
           TextButton.icon(
-            onPressed: () {
-              ctrl.resetDefaults();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Nulstillet til standardregler')),
+            onPressed: () async {
+              // Nulstil rammer BEGGE datasæt — dialogen siger præcis hvad der
+              // sker, for 25 år-delen sletter admins eget arbejde.
+              final bool? ok = await showDialog<bool>(
+                context: context,
+                builder: (BuildContext ctx) => AlertDialog(
+                  title: const Text('Nulstil kortregler?'),
+                  content: const Text(
+                      'Klassisk sættes til standardreglerne. Partners 25 år '
+                      'mister dine tilpasninger og går tilbage til forsmagen '
+                      '(kun Hopsakortet på 5-kortet). Dette kan ikke '
+                      'fortrydes.'),
+                  actions: <Widget>[
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Annullér')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Nulstil begge')),
+                  ],
+                ),
               );
+              if (ok != true) return;
+              ctrl.resetDefaults();
+              await variantCtrl.resetToSeed();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content:
+                        Text('Nulstillet: klassisk = standard, 25 år = forsmag')));
+              }
             },
             icon: const Icon(Icons.restore, color: Colors.white),
             label: const Text('Nulstil', style: TextStyle(color: Colors.white)),
@@ -157,9 +196,15 @@ class AdminScreen extends ConsumerWidget {
               children: <Widget>[
                 Text(
                   status.loaded
-                      ? 'Hentet fra ${status.lastLoadSource} '
+                      ? 'Klassisk hentet fra ${status.lastLoadSource} '
                           '${status.loadedAt != null ? _hhmmss(status.loadedAt!) : ''}'
                       : 'Henter regler fra database…',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                Text(
+                  '25 år-regler: '
+                  '${ref.watch(variantCardRulesLoadSourceProvider).isEmpty ? 'henter…' : ref.watch(variantCardRulesLoadSourceProvider)}'
+                  ' (seed = forsmagen, firestore = dine gemte)',
                   style: const TextStyle(fontSize: 12),
                 ),
                 if (status.savedAt != null)
@@ -176,15 +221,30 @@ class AdminScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (variantSaveErr.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(10),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                border: Border.all(color: Colors.red),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text('25 år-regler: $variantSaveErr',
+                  style: const TextStyle(fontSize: 12, color: Colors.red)),
+            ),
           const _BoardMinTile(),
           const _AiLevelsTile(),
+          const _VariantAdminHeader(),
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
             child: Text(
-              'Marker hvilke funktioner hvert kort skal have. Ændringer gemmes '
-              'automatisk i Firebase. Hvis felterne ser ud som standarder selv '
-              'om du har gemt før: tryk på sky-pil-ned (øverst) for at hente '
-              'fra databasen nu.',
+              'Hvert kort har TO kolonner: venstre = klassisk, højre = '
+              'Partners 25 år. De redigeres uafhængigt — en 25 år-kolonne '
+              'uden egen regel FØLGER klassisk. Ændringer gemmes automatisk i '
+              'Firebase; ser felterne ud som standarder selv om du har gemt '
+              'før, så tryk på sky-pil-ned (øverst) for at hente fra databasen '
+              'nu.',
             ),
           ),
           for (final Rank r in _order)
@@ -192,7 +252,6 @@ class AdminScreen extends ConsumerWidget {
               key: ValueKey<Rank>(r),
               rank: r,
               label: _label(r),
-              config: rules.forRank(r),
             ),
         ],
       ),
@@ -444,28 +503,154 @@ class _BoardMinTileState extends ConsumerState<_BoardMinTile> {
   }
 }
 
-class _RankTile extends ConsumerStatefulWidget {
+/// Kort resumé af én kort-config — bruges i tile-subtitler for BEGGE
+/// kolonner, så admin og spiller læser samme ord ("hop" matcher kort-chippen).
+String _configSummary(CardRuleConfig c) {
+  final List<String> parts = <String>[];
+  if (c.exitStart) parts.add('ud');
+  if (c.forwardSteps.isNotEmpty) parts.add('frem ${c.forwardSteps.join('/')}');
+  if (c.backwardSteps != null) parts.add('tilbage ${c.backwardSteps}');
+  if (c.splitTotal != null) parts.add('split ${c.splitTotal}');
+  if (c.swap) parts.add('byt');
+  if (c.jumpsBlockade) parts.add('hop');
+  return parts.isEmpty ? 'ingen funktion' : parts.join(' · ');
+}
+
+/// Én rang, to uafhængige editorer SIDE OM SIDE: venstre = klassisk, højre =
+/// Partners 25 år. Afviger de to, markeres tilen ("≠ afviger" — ikon+tekst,
+/// ikke farve alene) og subtitlen viser begge resuméer, så listen kan scannes
+/// under afskrivning af det fysiske sæt.
+class _RankTile extends ConsumerWidget {
   const _RankTile({
     super.key,
     required this.rank,
     required this.label,
-    required this.config,
   });
 
   final Rank rank;
   final String label;
-  final CardRuleConfig config;
 
   @override
-  ConsumerState<_RankTile> createState() => _RankTileState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final CardRules classic = ref.watch(cardRulesProvider);
+    final VariantAdminConfig va = ref.watch(variantCardRulesProvider);
+    final CardRuleConfig classicCfg = classic.forRank(rank);
+    // De EFFEKTIVE 25 år-regler for denne rang (klassisk + overrides) — det er
+    // dét et spil faktisk får, så det er dét admin skal se.
+    final CardRuleConfig p25Cfg =
+        classic.withOverrides(va.overrides).forRank(rank);
+    final bool diverges = !CardRules.sameConfig(classicCfg, p25Cfg);
+    final bool hasOwn = va.overrides.containsKey(rank);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: ExpansionTile(
+        leading: CircleAvatar(child: Text(label)),
+        title: Row(
+          children: <Widget>[
+            Text('Kort $label'),
+            if (diverges)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  '≠ afviger',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.deepOrange.shade700,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        subtitle: Text(diverges
+            ? 'Klassisk: ${_configSummary(classicCfg)}  ·  '
+                '25 år: ${_configSummary(p25Cfg)}'
+            : _configSummary(classicCfg)),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        children: <Widget>[
+          LayoutBuilder(builder: (BuildContext context, BoxConstraints cons) {
+            final Widget classicCol = _ConfigEditor(
+              title: 'Klassisk',
+              config: classicCfg,
+              onChanged: (CardRuleConfig cfg) =>
+                  ref.read(cardRulesProvider.notifier).updateRank(rank, cfg),
+            );
+            final Widget p25Col = _ConfigEditor(
+              title: 'Partners 25 år',
+              config: p25Cfg,
+              onChanged: (CardRuleConfig cfg) => ref
+                  .read(variantCardRulesProvider.notifier)
+                  .updateRank(rank, cfg),
+              trailing: hasOwn
+                  ? Row(mainAxisSize: MainAxisSize.min, children: <Widget>[
+                      const Text('Egen regel',
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w700)),
+                      IconButton(
+                        tooltip: 'Følg klassisk igen (fjern egen regel)',
+                        icon: const Icon(Icons.link, size: 18),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => ref
+                            .read(variantCardRulesProvider.notifier)
+                            .clearRank(rank),
+                      ),
+                    ])
+                  : const Text('Følger klassisk',
+                      style:
+                          TextStyle(fontSize: 11, color: Colors.black54)),
+            );
+            // Smal skærm (afskrivning ved bordet = telefon/tablet): stak
+            // kolonnerne med hver sin overskrift i stedet for at klemme dem.
+            if (cons.maxWidth < 700) {
+              return Column(children: <Widget>[
+                classicCol,
+                const Divider(height: 20),
+                p25Col,
+              ]);
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(child: classicCol),
+                const SizedBox(width: 20),
+                Expanded(child: p25Col),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
 }
 
-class _RankTileState extends ConsumerState<_RankTile> {
+/// Editor for ÉN kort-config (én kolonne). Committer via
+/// [CardRuleConfig.copyWith] på den indkomne config, så et felt der ikke er
+/// repræsenteret i UI'et STRUKTURELT ikke kan gå tabt ved et gem.
+class _ConfigEditor extends StatefulWidget {
+  const _ConfigEditor({
+    required this.title,
+    required this.config,
+    required this.onChanged,
+    this.trailing,
+  });
+
+  final String title;
+  final CardRuleConfig config;
+  final ValueChanged<CardRuleConfig> onChanged;
+  final Widget? trailing;
+
+  @override
+  State<_ConfigEditor> createState() => _ConfigEditorState();
+}
+
+class _ConfigEditorState extends State<_ConfigEditor> {
   late bool _exitStart;
   late bool _forwardOn;
   late bool _backwardOn;
   late bool _splitOn;
   late bool _swap;
+  late bool _jump;
 
   late TextEditingController _forwardCtrl;
   late TextEditingController _backwardCtrl;
@@ -481,26 +666,14 @@ class _RankTileState extends ConsumerState<_RankTile> {
   }
 
   @override
-  void didUpdateWidget(_RankTile oldWidget) {
+  void didUpdateWidget(_ConfigEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Når konfigen ændres udefra (fx når Firestore-load fuldfører efter
-    // tile'en er bygget, eller efter "Hent fra database NU"-knappen) skal
-    // de lokale toggles og felter opdateres.
-    if (!_sameConfig(oldWidget.config, widget.config)) {
+    // Når configen ændres udefra (Firestore-load, "Hent nu", nulstil, følg-
+    // klassisk) skal toggles/felter opdateres. sameConfig dækker ALLE felter
+    // (inkl. jumpsBlockade), så et load der kun flipper hop også synker.
+    if (!CardRules.sameConfig(oldWidget.config, widget.config)) {
       _syncFromConfig(widget.config);
     }
-  }
-
-  bool _sameConfig(CardRuleConfig a, CardRuleConfig b) {
-    if (a.exitStart != b.exitStart) return false;
-    if (a.swap != b.swap) return false;
-    if (a.backwardSteps != b.backwardSteps) return false;
-    if (a.splitTotal != b.splitTotal) return false;
-    if (a.forwardSteps.length != b.forwardSteps.length) return false;
-    for (int i = 0; i < a.forwardSteps.length; i++) {
-      if (a.forwardSteps[i] != b.forwardSteps[i]) return false;
-    }
-    return true;
   }
 
   void _syncFromConfig(CardRuleConfig c) {
@@ -509,6 +682,7 @@ class _RankTileState extends ConsumerState<_RankTile> {
     _backwardOn = c.backwardSteps != null;
     _splitOn = c.splitTotal != null;
     _swap = c.swap;
+    _jump = c.jumpsBlockade;
     _forwardCtrl.text = c.forwardSteps.join(', ');
     _backwardCtrl.text = (c.backwardSteps ?? 4).toString();
     _splitCtrl.text = (c.splitTotal ?? 7).toString();
@@ -532,99 +706,104 @@ class _RankTileState extends ConsumerState<_RankTile> {
   }
 
   void _commit() {
-    final List<int> forward = _forwardOn ? _parseForward() : <int>[];
-    final int? backward =
-        _backwardOn ? (int.tryParse(_backwardCtrl.text.trim()) ?? 4) : null;
-    final int? split =
-        _splitOn ? (int.tryParse(_splitCtrl.text.trim()) ?? 7) : null;
-    final cfg = CardRuleConfig(
+    // copyWith på den INDKOMNE config: felter uden UI-repræsentation bevares.
+    final CardRuleConfig cfg = widget.config.copyWith(
       exitStart: _exitStart,
-      forwardSteps: forward,
-      backwardSteps: backward,
-      splitTotal: split,
+      forwardSteps: _forwardOn ? _parseForward() : <int>[],
+      backwardSteps:
+          _backwardOn ? (int.tryParse(_backwardCtrl.text.trim()) ?? 4) : null,
+      clearBackward: !_backwardOn,
+      splitTotal:
+          _splitOn ? (int.tryParse(_splitCtrl.text.trim()) ?? 7) : null,
+      clearSplit: !_splitOn,
       swap: _swap,
+      jumpsBlockade: _jump,
     );
-    ref.read(cardRulesProvider.notifier).updateRank(widget.rank, cfg);
+    widget.onChanged(cfg);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ExpansionTile(
-        leading: CircleAvatar(child: Text(widget.label)),
-        title: Text('Kort ${widget.label}'),
-        subtitle: Text(_summary()),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        children: <Widget>[
-          SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Rykke en brik ud'),
-            value: _exitStart,
-            onChanged: (bool v) {
-              setState(() => _exitStart = v);
-              _commit();
-            },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Text(widget.title,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            const Spacer(),
+            if (widget.trailing != null) widget.trailing!,
+          ],
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Rykke en brik ud'),
+          value: _exitStart,
+          onChanged: (bool v) {
+            setState(() => _exitStart = v);
+            _commit();
+          },
+        ),
+        _toggleWithField(
+          title: 'Rykke frem',
+          on: _forwardOn,
+          onChanged: (bool v) {
+            setState(() => _forwardOn = v);
+            _commit();
+          },
+          controller: _forwardCtrl,
+          hint: 'felter, fx 1, 11',
+          digitsOnly: false,
+        ),
+        _toggleWithField(
+          title: 'Rykke tilbage',
+          on: _backwardOn,
+          onChanged: (bool v) {
+            setState(() => _backwardOn = v);
+            _commit();
+          },
+          controller: _backwardCtrl,
+          hint: 'antal felter',
+          digitsOnly: true,
+        ),
+        _toggleWithField(
+          title: 'Kan deles (7-split)',
+          on: _splitOn,
+          onChanged: (bool v) {
+            setState(() => _splitOn = v);
+            _commit();
+          },
+          controller: _splitCtrl,
+          hint: 'total felter',
+          digitsOnly: true,
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Byt to brikker'),
+          value: _swap,
+          onChanged: (bool v) {
+            setState(() => _swap = v);
+            _commit();
+          },
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Hoppe over blokade (5↷)'),
+          subtitle: const Text(
+            'Må passere et blokeret startfelt',
+            style: TextStyle(fontSize: 11),
           ),
-          _toggleWithField(
-            title: 'Rykke frem',
-            on: _forwardOn,
-            onChanged: (bool v) {
-              setState(() => _forwardOn = v);
-              _commit();
-            },
-            controller: _forwardCtrl,
-            hint: 'felter, fx 1, 11',
-            digitsOnly: false,
-          ),
-          _toggleWithField(
-            title: 'Rykke tilbage',
-            on: _backwardOn,
-            onChanged: (bool v) {
-              setState(() => _backwardOn = v);
-              _commit();
-            },
-            controller: _backwardCtrl,
-            hint: 'antal felter',
-            digitsOnly: true,
-          ),
-          _toggleWithField(
-            title: 'Kan deles (7-split)',
-            on: _splitOn,
-            onChanged: (bool v) {
-              setState(() => _splitOn = v);
-              _commit();
-            },
-            controller: _splitCtrl,
-            hint: 'total felter',
-            digitsOnly: true,
-          ),
-          SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Byt to brikker'),
-            value: _swap,
-            onChanged: (bool v) {
-              setState(() => _swap = v);
-              _commit();
-            },
-          ),
-        ],
-      ),
+          value: _jump,
+          onChanged: (bool v) {
+            setState(() => _jump = v);
+            _commit();
+          },
+        ),
+      ],
     );
-  }
-
-  String _summary() {
-    final List<String> parts = <String>[];
-    if (_exitStart) parts.add('ud');
-    if (_forwardOn && _parseForward().isNotEmpty) {
-      parts.add('frem ${_parseForward().join('/')}');
-    }
-    if (_backwardOn) parts.add('tilbage ${_backwardCtrl.text.trim()}');
-    if (_splitOn) parts.add('split ${_splitCtrl.text.trim()}');
-    if (_swap) parts.add('byt');
-    return parts.isEmpty ? 'ingen funktion' : parts.join(' · ');
   }
 
   Widget _toggleWithField({
@@ -668,6 +847,186 @@ class _RankTileState extends ConsumerState<_RankTile> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Header-sektion for 25 år-kolonnen: admins eget navn/beskrivelse (så
+/// "(forsmag)" kan afløses når det fysiske sæt er afskrevet), "kopiér
+/// klassisk"-grebet (fuldt uafhængigt snapshot i ét tryk), afvigelses-tælleren
+/// og sanity-advarsler for BEGGE regelsæt. Advarsler, aldrig spærringer —
+/// admin er autoritet.
+class _VariantAdminHeader extends ConsumerStatefulWidget {
+  const _VariantAdminHeader();
+
+  @override
+  ConsumerState<_VariantAdminHeader> createState() =>
+      _VariantAdminHeaderState();
+}
+
+class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _descCtrl;
+  String _syncedName = '';
+  String _syncedDesc = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController();
+    _descCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  void _syncMeta(VariantAdminConfig va) {
+    // Synk kun når den EKSTERNE værdi ændrer sig (load/nulstil), så vi ikke
+    // overskriver mens admin taster.
+    final String n = va.name ?? '';
+    final String d = va.description ?? '';
+    if (n != _syncedName) {
+      _syncedName = n;
+      _nameCtrl.text = n;
+    }
+    if (d != _syncedDesc) {
+      _syncedDesc = d;
+      _descCtrl.text = d;
+    }
+  }
+
+  void _commitMeta() {
+    _syncedName = _nameCtrl.text;
+    _syncedDesc = _descCtrl.text;
+    ref.read(variantCardRulesProvider.notifier).updateMeta(
+          name: _nameCtrl.text,
+          description: _descCtrl.text,
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final CardRules classic = ref.watch(cardRulesProvider);
+    final VariantAdminConfig va = ref.watch(variantCardRulesProvider);
+    _syncMeta(va);
+    final CardRules p25Effective = classic.withOverrides(va.overrides);
+    final int divergent = Rank.values
+        .where((Rank r) => !CardRules.sameRank(classic, p25Effective, r))
+        .length;
+    final List<String> classicWarnings = deckSanityWarnings(classic);
+    final List<String> p25Warnings = deckSanityWarnings(p25Effective);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.style, size: 18),
+                const SizedBox(width: 8),
+                const Text('Partners 25 år',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Text(
+                  '$divergent af ${Rank.values.length} kort afviger fra '
+                  'klassisk',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: divergent > 0
+                        ? Colors.deepOrange.shade700
+                        : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Navn/beskrivelse: vises i variant-vælgeren og online-lobbyen.
+            // Tomt felt = variantens indbyggede tekst ("(forsmag)"-forbeholdet).
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Navn i variant-vælgeren',
+                hintText: 'Partners 25 år (forsmag)',
+                helperText:
+                    'Tomt = indbygget navn. Har du afskrevet det fysiske sæt, '
+                    'så skriv fx "Partners 25 år".',
+                border: OutlineInputBorder(),
+              ),
+              onEditingComplete: _commitMeta,
+              onTapOutside: (_) => _commitMeta(),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _descCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Beskrivelse i variant-vælgeren',
+                hintText:
+                    'Tilnærmet jubilæumsudgave … (indbygget tekst når tom)',
+                border: OutlineInputBorder(),
+              ),
+              onEditingComplete: _commitMeta,
+              onTapOutside: (_) => _commitMeta(),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.copy_all, size: 18),
+              label: const Text('Kopiér klassisk til 25 år (alle 13 kort)'),
+              onPressed: () async {
+                final bool? ok = await showDialog<bool>(
+                  context: context,
+                  builder: (BuildContext ctx) => AlertDialog(
+                    title: const Text('Kopiér klassisk til 25 år?'),
+                    content: const Text(
+                        'Alle 13 kort får en EGEN regel (den nuværende '
+                        'effektive 25 år-regel). Derefter er 25 år et fuldt '
+                        'uafhængigt sæt: senere klassisk-ændringer følger '
+                        'IKKE med. Brug dette når du afskriver det fysiske '
+                        'sæt kort for kort.'),
+                    actions: <Widget>[
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Annullér')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Kopiér')),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  ref
+                      .read(variantCardRulesProvider.notifier)
+                      .materializeAll(p25Effective);
+                }
+              },
+            ),
+            for (final String w in classicWarnings)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('⚠ Klassisk: $w',
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.deepOrange.shade800)),
+              ),
+            for (final String w in p25Warnings)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('⚠ 25 år: $w',
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.deepOrange.shade800)),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../game/card_rules.dart';
 import '../models/playing_card.dart';
 import '../online/online_service.dart';
+import 'card_rules_payload.dart';
 
 /// Aktuelle (eventuelt brugerjusterede) kortregler.
 ///
@@ -169,10 +171,14 @@ class CardRulesController extends StateNotifier<CardRules> {
         _setError('Firestore ikke initialiseret');
         return;
       }
+      // mergeFields: klassisk-gemmet ejer KUN 'rules' + 'updatedAt'. Et rent
+      // set() ville SLETTE 'variants'-feltet (admins 25 år-regler) ved hvert
+      // klassisk-gem — semantikken er bevist i emulator-testen i
+      // firestore-tests/rules.test.mjs, og payload-formen i unit-tests.
       await doc.set(<String, dynamic>{
-        'rules': state.toJson(),
+        ...classicSavePayload(state.toJson()),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(mergeFields: <Object>['rules', 'updatedAt']));
       _setError('');
       _status.savedAt = DateTime.now();
       _emitStatus();
@@ -182,10 +188,20 @@ class CardRulesController extends StateNotifier<CardRules> {
     }
   }
 
+  /// Debounce: tekstfelterne committer pr. tastetryk — saml skrivningerne, så
+  /// der ikke ryger én Firestore-skrivning pr. anslag. State er allerede
+  /// opdateret lokalt; kun persistensen udskydes.
+  Timer? _saveTimer;
+
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 600), _save);
+  }
+
   void updateRank(Rank rank, CardRuleConfig config) {
     _userTouched = true;
     state = state.withRank(rank, config);
-    _save();
+    _scheduleSave();
   }
 
   void resetDefaults() {
@@ -196,7 +212,10 @@ class CardRulesController extends StateNotifier<CardRules> {
 
   /// Tvinger en synkron retry mod Firestore (når UI ved at brugeren netop er
   /// logget ind eller har rettet et rettighedsproblem).
-  Future<void> retrySave() async => _save();
+  Future<void> retrySave() async {
+    _saveTimer?.cancel();
+    await _save();
+  }
 
   /// Hent regler fra DB nu (bruges fx efter login).
   Future<void> refresh() async {

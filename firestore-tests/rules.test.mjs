@@ -68,6 +68,49 @@ describe('config/{document}', () => {
     await assertFails(
       setDoc(doc(as('imposter', notVerified), 'config/ui'), { boardMinPx: 1 }));
   });
+
+  // SEMANTIK-vagter (ikke adgang): config/cardRules bærer nu BÅDE de klassiske
+  // regler ('rules') og admins variant-regler ('variants.p25'). Klienten
+  // skriver med SetOptions(mergeFields: ...), netop så et klassisk-gem ikke
+  // sletter variant-reglerne (og omvendt). Disse tests beviser mergeFields/
+  // deleteField-semantikken mod emulatoren; payload-FORMEN (at klassisk-gemmet
+  // kun bærer 'rules') bevises i Dart-unit-tests (card_rules_payload).
+  it('mergeFields: klassisk-gem SLETTER IKKE variants (25 år-reglerne)', async () => {
+    const db = as('adm', admin);
+    await setDoc(doc(db, 'config/cardRules'), {
+      rules: { five: { forwardSteps: [5] } },
+      variants: { p25: { rules: { five: { forwardSteps: [5], jumpsBlockade: true } } } },
+    });
+    // Klassisk-gem: kun 'rules' i payload + mergeFields.
+    await setDoc(doc(db, 'config/cardRules'),
+      { rules: { five: { forwardSteps: [6] } } },
+      { mergeFields: ['rules'] });
+    const snap = await getDoc(doc(db, 'config/cardRules'));
+    const d = snap.data();
+    if (!d.variants?.p25?.rules?.five?.jumpsBlockade) {
+      throw new Error('variants.p25 blev slettet af klassisk-gemmet (merge-fælden!)');
+    }
+    if (d.rules.five.forwardSteps[0] !== 6) {
+      throw new Error('klassisk-gemmet slog ikke igennem');
+    }
+  });
+  it('mergeFields: variant-gem ERSTATTER variants.p25 (fjernet rang forsvinder) uden at røre rules', async () => {
+    const db = as('adm', admin);
+    await setDoc(doc(db, 'config/cardRules'), {
+      rules: { five: { forwardSteps: [5] } },
+      variants: { p25: { rules: { five: { jumpsBlockade: true }, jack: { swap: true } } } },
+    });
+    // Variant-gem uden 'jack' — mergeFields på variants.p25 skal ERSTATTE
+    // feltet, så jack-override reelt forsvinder (et dybt merge ville beholde den).
+    await setDoc(doc(db, 'config/cardRules'),
+      { variants: { p25: { rules: { five: { jumpsBlockade: true } } } } },
+      { mergeFields: ['variants.p25'] });
+    const d = (await getDoc(doc(db, 'config/cardRules'))).data();
+    if (d.variants.p25.rules.jack !== undefined) {
+      throw new Error('fjernet rang overlevede variant-gemmet (dyb-merge-fælden)');
+    }
+    if (!d.rules?.five) throw new Error('rules blev rørt af variant-gemmet');
+  });
 });
 
 describe('users/{uid}/friends/{friendUid}', () => {

@@ -21,7 +21,7 @@ class CardFace {
     this.unit,
     this.sub,
     this.startChip = false,
-    this.extraChip,
+    this.extraChips = const <String>[],
     this.canForward = false,
     this.canBackward = false,
   });
@@ -33,7 +33,11 @@ class CardFace {
   final String? unit; // fx "frem"
   final String? sub; // fx "frem eller tilbage"
   final bool startChip; // vis "♥ Ud af start"
-  final String? extraChip; // fx "Byt to brikker"
+
+  /// Ekstra evne-chips (fx "Byt to brikker", "↷ Hopper over blokade") — liste,
+  /// så et kort med FLERE ekstra evner viser dem alle (ikke farve alene:
+  /// ikon+tekst, så det også kan aflæses farveblindt og i tooltippen).
+  final List<String> extraChips;
 
   /// Retning — styrer tallets farve: kun tilbage = rødt, kun frem = sort,
   /// begge = delt sort/rødt.
@@ -51,6 +55,13 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
     );
   }
   final CardRuleConfig c = rules.forRank(card.rank!);
+  // Ekstra evner vises som chips — HOP skal kunne ses på kortet, ellers ligner
+  // et Hopsakort et almindeligt talkort, og modstanderen forstår ikke hvorfor
+  // blokaden blev passeret. Samme ordlyd som i admin ("hop").
+  final List<String> extraChips = <String>[
+    if (c.swap) 'Byt to brikker',
+    if (c.jumpsBlockade) '↷ Hopper over blokade',
+  ];
   final bool hasForward = c.forwardSteps.isNotEmpty;
   final bool hasBackward = c.backwardSteps != null;
   final String forwardText = c.forwardSteps.join(' / ');
@@ -67,7 +78,7 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
       bigNumber: '${c.splitTotal}',
       sub: 'del over dine brikker',
       startChip: c.exitStart,
-      extraChip: c.swap ? 'Byt to brikker' : null,
+      extraChips: extraChips,
     );
   }
 
@@ -99,7 +110,7 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
       unit: unit,
       sub: sub,
       startChip: c.exitStart,
-      extraChip: c.swap ? 'Byt to brikker' : null,
+      extraChips: extraChips,
       canForward: hasForward,
       canBackward: hasBackward,
     );
@@ -112,7 +123,7 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
       accent: _cStart,
       icon: '♥',
       sub: 'Ud af start',
-      extraChip: c.swap ? 'Byt to brikker' : null,
+      extraChips: extraChips,
     );
   }
 
@@ -156,7 +167,9 @@ class CardView extends StatelessWidget {
     if (f.unit != null) b.write(' ${f.unit}');
     if (f.sub != null) b.write(' — ${f.sub}');
     if (f.startChip) b.write(' · ♥ Ud af start');
-    if (f.extraChip != null) b.write(' · ${f.extraChip}');
+    for (final String chip in f.extraChips) {
+      b.write(' · $chip');
+    }
     return b.toString();
   }
 
@@ -291,9 +304,9 @@ class CardView extends StatelessWidget {
                   ),
                   Expanded(child: _center(f)),
                   if (f.startChip) _startChip(),
-                  if (f.extraChip != null) ...<Widget>[
-                    if (f.startChip) SizedBox(height: width * 0.04),
-                    _chip(f.extraChip!, _cSpecial),
+                  for (int i = 0; i < f.extraChips.length; i++) ...<Widget>[
+                    if (f.startChip || i > 0) SizedBox(height: width * 0.04),
+                    _chip(f.extraChips[i], _cSpecial),
                   ],
                 ],
               ),

@@ -111,11 +111,13 @@ class GameController extends StateNotifier<GameState> {
       VariantConfig variant = classicVariant}) {
     this.aiLevel = aiLevel;
     // Varianten bestemmer geometri og brik-antal (klassisk/25 år: samme værdier
-    // som før). Kortreglerne er de LIVE (admin-)regler med variantens overrides
-    // ovenpå — så fx 25 år arver admin's byttekort og kun ændrer 5-kortet.
+    // som før). [cardRules] er de FÆRDIGT opløste regler for spillet — kalderen
+    // (setup_screen) har allerede kørt effectiveCardRules(variant, live,
+    // stored). Der opløses BEVIDST ikke igen her: én resolver, ét sted —
+    // ellers ville kode-seedet (fx Hopsakortet) tavst blive genanvendt oven på
+    // admins gemte valg.
     final BoardGeometry geom = variant.geometry;
-    final CardRules resolvedRules =
-        variant.resolveCardRules(cardRules ?? CardRules.defaults());
+    final CardRules resolvedRules = cardRules ?? CardRules.defaults();
     final List<Player> players = <Player>[
       for (int i = 0; i < setups.length; i++)
         Player(

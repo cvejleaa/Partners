@@ -336,7 +336,16 @@ void _accumulateGame(
   final log = ((game['log'] as List?) ?? const <dynamic>[])
       .map((e) => Map<String, dynamic>.from(e as Map))
       .toList();
-  final cardRulesMap = game['cardRules'] as Map?;
+  // Replay skal køre med de OPLØSTE regler spillet faktisk blev spillet med —
+  // dvs. state'ns 'cr' (som bærer variantens kort, fx Hopsakortet), IKKE
+  // doc'ets rå 'cardRules' (det uopløste klassiske snapshot). Ellers replayes
+  // et 25 år-spil med klassiske kort. Fallback: doc'ets cardRules → defaults.
+  Map? cardRulesMap;
+  final dynamic stateRaw = game['state'];
+  if (stateRaw is Map && stateRaw['cr'] is Map) {
+    cardRulesMap = stateRaw['cr'] as Map;
+  }
+  cardRulesMap ??= game['cardRules'] as Map?;
   final cardRules = cardRulesMap == null
       ? CardRules.defaults()
       : CardRules.fromJson(Map<String, dynamic>.from(cardRulesMap));

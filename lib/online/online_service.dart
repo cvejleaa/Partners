@@ -331,12 +331,22 @@ class OnlineService {
     // cardRules er kilden til sandheden; vi falder tilbage til [rules] hvis
     // doc'et ikke findes eller fejler.
     CardRules effective = rules;
+    // Admins variant-regler (variants-mappet) kopieres MED over i lobby-doc'et,
+    // så startGameFromLobby kan opløse variantens kort af doc'et alene — også
+    // hvis værten skifter variant i lobbyen efter oprettelsen. Fejler read'et,
+    // skrives feltet ikke, og starten falder til variantens kode-seed (fx
+    // Hopsakortet) — acceptabelt og navngivet.
+    Map<String, dynamic>? variantsRaw;
     try {
       final snap = await firestore.collection('config').doc('cardRules').get();
       final data = snap.data();
       final remote = data?['rules'];
       if (remote is Map) {
         effective = CardRules.fromJson(Map<String, dynamic>.from(remote));
+      }
+      final vr = data?['variants'];
+      if (vr is Map) {
+        variantsRaw = Map<String, dynamic>.from(vr);
       }
     } catch (_) {
       // Tabt netværk / regel-fejl: behold værtens lokale rules som fallback.
@@ -361,6 +371,10 @@ class OnlineService {
       // ikke i selve doc'et — se heartbeat(). Værtens første stempel skrives af
       // lobby-skærmens heartbeat ved åbning.
       'cardRules': effective.toJson(),
+      // Admins variant-regler/tekster (kopi af config-doc'ets variants-map),
+      // så variantens kort kan opløses offline ved start. Udeladt hvis
+      // config-read'et fejlede — så gælder kode-seedet.
+      if (variantsRaw != null) 'cardRulesVariants': variantsRaw,
       // Valgt variant (default klassisk). Værten kan ændre den i lobbyen via
       // setVariant; startGameFromLobby resolver den defensivt (ukendt → klassisk).
       'variantId': classicVariant.id,
@@ -618,7 +632,16 @@ class OnlineService {
     // Læs varianten DEFENSIVT (variantFromDoc klamper ikke-string/ukendt til
     // klassisk) — et skævt felt fra en fjendtlig lobby-deltager må ikke vælte start.
     final VariantConfig variant = variantFromDoc(d);
-    final state = _initialState(names, colors, uids, rules, variant);
+    // Opløs spillets faktiske kortregler ÉN gang her: klassisk (doc'ets
+    // cardRules) + variantens overrides (admin-gemte fra cardRulesVariants
+    // vinder over kode-seedet; manglende/skævt felt → seed). _initialState
+    // opløser ikke selv.
+    final CardRules resolved = effectiveCardRules(
+      variant,
+      rules,
+      stored: storedOverridesFor(d['cardRulesVariants'], variant.id),
+    );
+    final state = _initialState(names, colors, uids, resolved, variant);
     await ref.update(<String, dynamic>{
       'status': 'playing',
       'state': gameStateToMap(state),
@@ -742,8 +765,9 @@ class OnlineService {
     ];
     // Tilfældig start-spiller — ikke altid værten (plads 0/den der inviterede).
     final int starter = Random().nextInt(4);
-    // Kortreglerne er de live regler (fra doc'et) med variantens overrides
-    // ovenpå — klassisk: uændret; 25 år: arver byttekort + får Hopsakort.
+    // [rules] er de FÆRDIGT opløste kortregler (startGameFromLobby har kørt
+    // effectiveCardRules). Der opløses BEVIDST ikke igen her — én resolver, ét
+    // sted, ellers genanvendes kode-seedet tavst oven på admins gemte valg.
     final s = GameState(
       players: players,
       geometry: variant.geometry,
@@ -754,7 +778,7 @@ class OnlineService {
       phase: GamePhase.setup,
       handNumber: 0,
       starterIndex: starter,
-      cardRules: variant.resolveCardRules(rules),
+      cardRules: rules,
       variant: variant,
     );
     GameEngine(state: s).startNewHand();

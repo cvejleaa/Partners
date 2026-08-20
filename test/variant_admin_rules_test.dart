@@ -1,0 +1,188 @@
+// Admin-redigering af kortregler pr. variant (klassisk | 25 år, side om side).
+//
+// Beviser de RENE dele af kæden (Firestore-IO dækkes af emulator-testen i
+// firestore-tests/rules.test.mjs — merge/deleteField-semantikken):
+//  A1 overrides-serialisering: round-trip inkl. jumpsBlockade; partielt map
+//     forbliver partielt; skæve værdier springes over (defensivt).
+//  A2 effectiveCardRules-precedens: GEMTE overrides vinder over kode-seedet —
+//     også når de SLÅR NOGET FRA (admin fjerner Hopsakortet: seedet må ikke
+//     tavst genindsætte det). Uden gemte → seed. Klassisk → basen uændret.
+//  A3 storedOverridesFor: defensiv klampning af doc-læsning på alle niveauer.
+//  A4 payload-former: klassisk-gemmet ejer KUN 'rules'; variant-gemmet KUN
+//     'variants' — kombineret med mergeFields kan de ikke slette hinanden.
+//  A5 deckSanityWarnings: uspillelige/ødelagte sæt advares; klassisk er ren.
+//  A6 CardRules.sameConfig dækker ALLE felter inkl. jumpsBlockade (UI-sync).
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:partners/game/card_rules.dart';
+import 'package:partners/models/playing_card.dart';
+import 'package:partners/models/variant_config.dart';
+import 'package:partners/state/card_rules_payload.dart';
+
+void main() {
+  group('A1 — overrides-serialisering', () {
+    test('round-trip bevarer jumpsBlockade og forbliver PARTIELT', () {
+      final Map<Rank, CardRuleConfig> src = <Rank, CardRuleConfig>{
+        Rank.five:
+            const CardRuleConfig(forwardSteps: <int>[5], jumpsBlockade: true),
+        Rank.jack: const CardRuleConfig(swap: true),
+      };
+      final Map<Rank, CardRuleConfig> back =
+          cardRuleOverridesFromJson(cardRuleOverridesToJson(src));
+      expect(back.keys.toSet(), <Rank>{Rank.five, Rank.jack},
+          reason: 'et partielt map må IKKE udfyldes med defaults');
+      expect(back[Rank.five]!.jumpsBlockade, isTrue);
+      expect(back[Rank.jack]!.swap, isTrue);
+    });
+
+    test('skæve værdier (ukendt rang / ikke-map) springes over', () {
+      final Map<Rank, CardRuleConfig> back =
+          cardRuleOverridesFromJson(<String, dynamic>{
+        'five': <String, dynamic>{'forwardSteps': <int>[5]},
+        'findesIkke': <String, dynamic>{'swap': true},
+        'jack': 42, // ikke et map
+      });
+      expect(back.keys.toList(), <Rank>[Rank.five]);
+    });
+  });
+
+  group('A2 — effectiveCardRules-precedens (kernen)', () {
+    test('GEMTE overrides vinder — også når de SLÅR hoppet FRA', () {
+      // Admin har afskrevet sit fysiske sæt og fjernet Hopsakortet fra 5'eren.
+      final Map<Rank, CardRuleConfig> stored = <Rank, CardRuleConfig>{
+        Rank.five: const CardRuleConfig(forwardSteps: <int>[5]),
+      };
+      final CardRules r = effectiveCardRules(
+          partners25, CardRules.defaults(),
+          stored: stored);
+      // Muteres resolveren til stadig at anvende kode-seedet (fx
+      // `stored ?? seed` byttet om, eller seed lagt ovenpå til sidst), bliver
+      // denne RØD: seedet ville genindsætte jumpsBlockade=true.
+      expect(r.forRank(Rank.five).jumpsBlockade, isFalse,
+          reason: 'admins fravalg må ikke overtrumfes af kode-seedet');
+      expect(r.forRank(Rank.five).forwardSteps, <int>[5]);
+    });
+
+    test('uden gemte → kode-seedet (Hopsakortet) gælder', () {
+      final CardRules r =
+          effectiveCardRules(partners25, CardRules.defaults());
+      expect(r.forRank(Rank.five).jumpsBlockade, isTrue);
+    });
+
+    test('gemte overrides rører kun de nævnte rangs; resten = basen', () {
+      final CardRules live = CardRules.defaults()
+          .withRank(Rank.jack, const CardRuleConfig(swap: true));
+      final CardRules r = effectiveCardRules(partners25, live,
+          stored: <Rank, CardRuleConfig>{
+            Rank.queen: const CardRuleConfig(forwardSteps: <int>[12], swap: true),
+          });
+      expect(r.forRank(Rank.queen).swap, isTrue); // den gemte
+      expect(r.forRank(Rank.jack).swap, isTrue); // arvet fra basen
+      // 5'eren er IKKE i de gemte → den arver BASEN (ikke seedet): gemte
+      // overrides ERSTATTER seedet som helhed, de blandes ikke.
+      expect(r.forRank(Rank.five).jumpsBlockade, isFalse);
+    });
+
+    test('klassisk: basen uændret uanset stored=null', () {
+      final CardRules live = CardRules.defaults()
+          .withRank(Rank.queen, const CardRuleConfig(swap: true));
+      final CardRules r = effectiveCardRules(classicVariant, live);
+      expect(identical(r, live), isTrue,
+          reason: 'ingen overrides → PRÆCIS basen, ikke en kopi/defaults');
+    });
+  });
+
+  group('A3 — storedOverridesFor: defensiv doc-læsning', () {
+    test('gyldigt variants-map parses', () {
+      final Map<Rank, CardRuleConfig>? s = storedOverridesFor(<String, dynamic>{
+        'p25': <String, dynamic>{
+          'rules': <String, dynamic>{
+            'five': <String, dynamic>{'forwardSteps': <int>[5]},
+          },
+        },
+      }, 'p25');
+      expect(s, isNotNull);
+      expect(s!.keys.toList(), <Rank>[Rank.five]);
+    });
+
+    test('ikke-map på ETHVERT niveau → null (fald til seed)', () {
+      expect(storedOverridesFor(null, 'p25'), isNull);
+      expect(storedOverridesFor('hack', 'p25'), isNull);
+      expect(storedOverridesFor(<String, dynamic>{'p25': 42}, 'p25'), isNull);
+      expect(
+          storedOverridesFor(
+              <String, dynamic>{'p25': <String, dynamic>{'rules': 'x'}},
+              'p25'),
+          isNull);
+      // Andet variant-id → null.
+      expect(
+          storedOverridesFor(<String, dynamic>{
+            'p25': <String, dynamic>{'rules': <String, dynamic>{}}
+          }, 'andet'),
+          isNull);
+    });
+  });
+
+  group('A4 — payload-former (merge-kontrakten)', () {
+    test('klassisk-gemmet ejer KUN rules', () {
+      // Kombineret med SetOptions(mergeFields: [rules, updatedAt]) kan et
+      // klassisk-gem dermed ALDRIG slette variants-feltet. Muteres payloaden
+      // til også at bære variants (eller mergeFields droppes for et rent set),
+      // fanger emulator-testen i rules.test.mjs sletningen.
+      expect(classicSavePayload(<String, dynamic>{}).keys.toList(),
+          <String>['rules']);
+    });
+
+    test('variant-gemmet ejer KUN variants — navn/beskrivelse kun når udfyldt',
+        () {
+      final Map<String, dynamic> p = variantSavePayload('p25',
+          rulesJson: <String, dynamic>{}, name: ' Partners 25 år ');
+      expect(p.keys.toList(), <String>['variants']);
+      final Map<String, dynamic> entry =
+          (p['variants'] as Map<String, dynamic>)['p25']
+              as Map<String, dynamic>;
+      expect(entry['name'], 'Partners 25 år'); // trimmet
+      expect(entry.containsKey('description'), isFalse,
+          reason: 'tom beskrivelse skrives ikke');
+    });
+  });
+
+  group('A5 — deckSanityWarnings', () {
+    test('klassisk default er ren (ingen advarsler)', () {
+      expect(deckSanityWarnings(CardRules.defaults()), isEmpty);
+    });
+
+    test('intet ud-kort / intet frem-kort / 3+ hop advares', () {
+      // Alt fjernet: både "ingen ud" og "ingen frem".
+      final CardRules dead = CardRules(<Rank, CardRuleConfig>{
+        for (final Rank r in Rank.values) r: const CardRuleConfig(),
+      });
+      final List<String> w1 = deckSanityWarnings(dead);
+      expect(w1.length, 2);
+
+      // 3 hop-kort → blokade-advarsel.
+      CardRules hoppy = CardRules.defaults();
+      for (final Rank r in <Rank>[Rank.two, Rank.three, Rank.five]) {
+        hoppy = hoppy.withRank(
+            r,
+            hoppy.forRank(r).copyWith(jumpsBlockade: true));
+      }
+      final List<String> w2 = deckSanityWarnings(hoppy);
+      expect(w2, hasLength(1));
+      expect(w2.single, contains('blokade'));
+    });
+  });
+
+  group('A6 — sameConfig dækker alle felter (UI-sync)', () {
+    test('to configs der KUN afviger på jumpsBlockade er IKKE ens', () {
+      // Muteres sameConfig til at glemme jumpsBlockade (som den gamle
+      // _sameConfig i admin-skærmen), bliver denne rød — og admin-UI'et ville
+      // vise en løgn efter et load der kun flipper hop.
+      const CardRuleConfig a = CardRuleConfig(forwardSteps: <int>[5]);
+      const CardRuleConfig b =
+          CardRuleConfig(forwardSteps: <int>[5], jumpsBlockade: true);
+      expect(CardRules.sameConfig(a, b), isFalse);
+      expect(CardRules.sameConfig(a, a), isTrue);
+    });
+  });
+}

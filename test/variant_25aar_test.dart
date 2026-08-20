@@ -9,7 +9,7 @@
 //  T4 (kernen) motoren lader FAKTISK 5-kortet passere et blokeret startfelt
 //     med p25's regler, men IKKE med klassiske regler — ende-til-ende.
 //  T5 serialisering bevarer variant-id OG jumpsBlockade-flaget (round-trip).
-//  T6 resolveCardRules komponerer BASEN (ikke defaults()) med p25's overrides.
+//  T6 effectiveCardRules komponerer BASEN (ikke defaults()) med p25's overrides.
 //
 // Hver test er mutations-følsom: fjernes p25-override, ~/segments-delegationen
 // eller jumpsBlockade-honoreringen i _advanceFrom, bliver en test rød.
@@ -80,7 +80,7 @@ void main() {
       expect(five.forwardSteps, <int>[5]);
 
       final CardRules classic = CardRules.defaults();
-      final CardRules resolved = partners25.resolveCardRules(classic);
+      final CardRules resolved = effectiveCardRules(partners25, classic);
       expect(resolved.forRank(Rank.five).jumpsBlockade, isTrue);
       // En urørt rang er identisk med basen (ingen skjult drift).
       expect(resolved.forRank(Rank.three).forwardSteps,
@@ -91,7 +91,7 @@ void main() {
   });
 
   group(
-      'T3b — klassisk (cardRuleOverrides == null): resolveCardRules returnerer '
+      'T3b — klassisk (cardRuleOverrides == null): effectiveCardRules returnerer '
       'BASEN uændret, ikke defaults()', () {
     test(
         'admin-tilpassede LIVE regler overlever klassisk resolve (falder '
@@ -100,8 +100,8 @@ void main() {
       // byttekort i stedet for 12 frem) — så testen ikke er en tautologi.
       final CardRules live = CardRules.defaults().withRank(
           Rank.queen, const CardRuleConfig(swap: true, forwardSteps: <int>[]));
-      final CardRules resolved = classicVariant.resolveCardRules(live);
-      // Muteres resolveCardRules til at returnere CardRules.defaults() (eller
+      final CardRules resolved = effectiveCardRules(classicVariant, live);
+      // Muteres effectiveCardRules til at returnere CardRules.defaults() (eller
       // bygge et nyt regelsæt) i null-grenen frem for selve basen, taber
       // klassisk admins live-regler tavst — denne assertion bliver rød.
       expect(resolved.forRank(Rank.queen).swap, isTrue,
@@ -113,13 +113,13 @@ void main() {
   });
 
   group('T6 — varianten ARVER basens overrides (fx admin-byttekort på Knægt)', () {
-    test('resolveCardRules bevarer basens Knægt-swap OG tilføjer Hopsakortet',
+    test('effectiveCardRules bevarer basens Knægt-swap OG tilføjer Hopsakortet',
         () {
       // De LIVE regler: admin har gjort Knægten til byttekort (det kort der
       // ellers ville være 11 frem). Varianten må ikke tabe det.
       final CardRules live = CardRules.defaults()
           .withRank(Rank.jack, const CardRuleConfig(swap: true));
-      final CardRules resolved = partners25.resolveCardRules(live);
+      final CardRules resolved = effectiveCardRules(partners25, live);
       // Byttekortet fra basen bevares...
       expect(resolved.forRank(Rank.jack).swap, isTrue,
           reason: '25 år må ikke tavst tabe basens byttekort');
@@ -171,7 +171,7 @@ void main() {
 
     test('p25 5 (Hopsakort): passerer blokaden og lander på felt 17', () {
       final GameState st =
-          scenario(partners25.resolveCardRules(CardRules.defaults()));
+          scenario(effectiveCardRules(partners25, CardRules.defaults()));
       final List<Move> moves =
           Rules(st.geometry).legalMoves(st, st.players[0], five);
       expect(landsAt17(moves), isTrue,
@@ -190,7 +190,7 @@ void main() {
         currentPlayerIndex: 0,
         phase: GamePhase.play,
         handNumber: 1,
-        cardRules: partners25.resolveCardRules(CardRules.defaults()),
+        cardRules: effectiveCardRules(partners25, CardRules.defaults()),
         variant: partners25,
       );
       final GameState back =
@@ -212,9 +212,9 @@ void main() {
       expect(classicFive.containsKey('jumpsBlockade'), isFalse,
           reason: 'klassisk 5-kort må ikke skrive jumpsBlockade-nøglen');
 
-      final Map<String, dynamic> p25Five = partners25
-          .resolveCardRules(CardRules.defaults())
-          .toJson()['five'] as Map<String, dynamic>;
+      final Map<String, dynamic> p25Five =
+          effectiveCardRules(partners25, CardRules.defaults())
+              .toJson()['five'] as Map<String, dynamic>;
       expect(p25Five['jumpsBlockade'], isTrue,
           reason: 'p25s Hopsakort SKAL skrive nøglen som true');
 
