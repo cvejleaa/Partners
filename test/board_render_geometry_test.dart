@@ -62,6 +62,23 @@ Piece _piece(String id, int owner, PiecePosition pos) => Piece(
       hasLeftStart: pos is! StartPosition,
     );
 
+// Syntetisk variant: 6 sæder, 6 segmenter (90-ring), 6 brikker pr. spiller.
+// piecesPerPlayer=6 gør start-bås-centreringen (P-1)/2=2.5 forskellig fra den
+// gamle hardkodede 1.5 — så en mutation dér bliver synlig. Delt mellem T3 og
+// T4 (rotation), som begge har brug for en ≠4-segment variant.
+const VariantConfig v6 = VariantConfig(
+  id: 't6',
+  name: 'T6',
+  playerCount: 6,
+  segments: 6,
+  piecesPerPlayer: 6,
+  teams: <List<int>>[
+    <int>[0, 3],
+    <int>[1, 4],
+    <int>[2, 5],
+  ],
+);
+
 void main() {
   group('T1 — indgange er segment-drevne (kilde-sandhed)', () {
     test('klassisk: 4 segmenter → UD ved 0, 15, 30, 45', () {
@@ -102,21 +119,6 @@ void main() {
   });
 
   group('T3 — 6-spiller render er korrekt (delegation + start-centrering)', () {
-    // Syntetisk variant: 6 sæder, 6 segmenter (90-ring), 6 brikker pr. spiller.
-    // piecesPerPlayer=6 gør start-bås-centreringen (P-1)/2=2.5 forskellig fra
-    // den gamle hardkodede 1.5 — så en mutation dér bliver synlig.
-    const VariantConfig v6 = VariantConfig(
-      id: 't6',
-      name: 'T6',
-      playerCount: 6,
-      segments: 6,
-      piecesPerPlayer: 6,
-      teams: <List<int>>[
-        <int>[0, 3],
-        <int>[1, 4],
-        <int>[2, 5],
-      ],
-    );
     const double dim = 400.0;
     const double rot = 0.0;
     final Offset center = const Offset(dim / 2, dim / 2);
@@ -155,6 +157,94 @@ void main() {
       final Offset got = BoardView.debugPieceCenters(s, dim, rot)['s15']!;
       expect(got.dx, closeTo(expected.dx, 0.01));
       expect(got.dy, closeTo(expected.dy, 0.01));
+    });
+  });
+
+  group('T4 — BoardView._rotation er segment-drevet (ikke hardkodet π/2, π/4)',
+      () {
+    // T1-T3 kalder alle BoardView.debugPieceCenters med en EKSPLICIT rotation
+    // og rører derfor aldrig BoardView's egen private _rotation-getter — den
+    // instans-formel painteren og tap-detektionen faktisk bruger i produktion
+    // (pi - viewerIndex*(2π/segments) - (quarterTurn ? π/segments : 0), se
+    // board_view.dart). Da _rotation er privat, kan den kun nås ved at bygge
+    // den RIGTIGE widget og verificere via dens ægte tap-kodesti (_handleTap →
+    // onTapUp), som allerede er det produktionen bruger til at vælge en brik.
+    // Vi tapper PRÆCIS der hvor den NYE formel siger brikken er; brugte
+    // painteren stadig den gamle 4-delte formel, ville centeret ligge langt
+    // uden for tap-tolerancen (30px), og onPieceTap ville ALDRIG fyre.
+    const double dim = 400.0;
+
+    testWidgets(
+        'viewerIndex-leddet bruger 2π/segments (ikke hardkodet π/2)',
+        (WidgetTester tester) async {
+      final GameState s = _stateWith(v6, <Piece>[
+        _piece('t0', 0, const TrackPosition(0)),
+      ]);
+      String? tapped;
+      await tester.pumpWidget(MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: dim,
+            height: dim,
+            child: BoardView(
+              state: s,
+              viewerIndex: 2,
+              onPieceTap: (String id) => tapped = id,
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      // Ny formel: π − 2·(2π/6) = π/3 ≈ 60°. Gammel (hardkodet π/2, uafhængig
+      // af segments): π − 2·(π/2) = 0. Forskel π/3 rad (~60°) ved radius
+      // ≈162px → langt over 30px-tolerancen.
+      const double expectedRotation = pi / 3;
+      final Offset expectedCenter =
+          BoardView.debugPieceCenters(s, dim, expectedRotation)['t0']!;
+      final Offset boardTopLeft = tester.getTopLeft(find.byType(BoardView));
+      await tester.tapAt(boardTopLeft + expectedCenter);
+      await tester.pump();
+
+      expect(tapped, 't0');
+    });
+
+    testWidgets(
+        'quarterTurn-leddet bruger π/segments (ikke hardkodet π/4)',
+        (WidgetTester tester) async {
+      final GameState s = _stateWith(v6, <Piece>[
+        _piece('t0', 0, const TrackPosition(0)),
+      ]);
+      String? tapped;
+      await tester.pumpWidget(MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: dim,
+            height: dim,
+            child: BoardView(
+              state: s,
+              quarterTurn: true,
+              onPieceTap: (String id) => tapped = id,
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+
+      // Ny formel (viewerIndex=0): π − π/6 = 5π/6. Gammel (hardkodet π/4):
+      // π − π/4 = 3π/4. Forskel π/12 rad (~15°) ved radius ≈173px (quarterTurn
+      // sætter _scale=1.07) → ≈45px forskel i skærm-center, over 30px-
+      // tolerancen. quarterTurn=true ⇒ scale=1.07 skal med i beregningen af
+      // det FORVENTEDE center, ellers matcher testen ikke sig selv.
+      const double expectedRotation = 5 * pi / 6;
+      final Offset expectedCenter = BoardView.debugPieceCenters(
+          s, dim, expectedRotation,
+          scale: 1.07)['t0']!;
+      final Offset boardTopLeft = tester.getTopLeft(find.byType(BoardView));
+      await tester.tapAt(boardTopLeft + expectedCenter);
+      await tester.pump();
+
+      expect(tapped, 't0');
     });
   });
 }
