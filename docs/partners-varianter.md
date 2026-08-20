@@ -66,8 +66,8 @@ Gælder alle udgaver, medmindre variantafsnittet siger andet.
 - Målcirklerne fyldes **indefra og ud**: første brik i inderste cirkel osv.
   En brik, der er "låst fast", er inaktiv resten af spillet.
 - I målcirklerne kan brikker **ikke** springe over hinanden.
-- Passer kortets værdi ikke, **skal** de overskydende træk rykkes **baglæns**
-  ("vende" på en fri målcirkel) — fx 5'er hvor 2 rækker: 2 frem + 3 tilbage.
+###- Passer kortets værdi ikke, **skal** de overskydende træk rykkes **baglæns**
+###  ("vende" på en fri målcirkel) — fx 5'er hvor 2 rækker: 2 frem + 3 tilbage.
 - −4-kortet og byttekortet kan **aldrig** bruges på brikker i målcirklerne.
 - Turneringspræcisering (2023): flyttes en brik, der allerede står i
   slutfeltet, skal den enten kunne låses fast eller flyttes helt ud af
