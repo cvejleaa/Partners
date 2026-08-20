@@ -4,9 +4,12 @@
 //  T1 registret indeholder p25 og resolver korrekt.
 //  T2 p25 er strukturelt = klassisk (bræt uændret; kun kort adskiller).
 //  T3 p25's kort adskiller sig PÅ 5-kortet (jumpsBlockade) og KUN dér.
+//  T3b klassisk (ingen overrides) resolver til BASEN uændret — falder ikke
+//     tilbage til CardRules.defaults() og taber dermed ikke admins live-regler.
 //  T4 (kernen) motoren lader FAKTISK 5-kortet passere et blokeret startfelt
 //     med p25's regler, men IKKE med klassiske regler — ende-til-ende.
 //  T5 serialisering bevarer variant-id OG jumpsBlockade-flaget (round-trip).
+//  T6 resolveCardRules komponerer BASEN (ikke defaults()) med p25's overrides.
 //
 // Hver test er mutations-følsom: fjernes p25-override, ~/segments-delegationen
 // eller jumpsBlockade-honoreringen i _advanceFrom, bliver en test rød.
@@ -33,6 +36,27 @@ void main() {
       expect(variantFromId('p25').id, 'p25');
       expect(variantFromId('findes-ikke').id, 'classic');
       expect(variantFromId(null).id, 'classic');
+    });
+    test(
+        'variantFromDoc: defensiv klampning af variantId fra et Firestore-doc '
+        '(bruges af startGameFromLobby/createRematch/lobby-UI)', () {
+      // Den normale sti: kendt string-id slås korrekt op.
+      expect(variantFromDoc(<String, dynamic>{'variantId': 'p25'}).id, 'p25');
+      // Fjendtlig/skæv lobby-deltager: variantId er IKKE en string (fx et tal
+      // eller et map) — skal klampes til klassisk, ikke kaste eller vælte
+      // starten. Muteres `is String`-tjekket væk (fx til blot `!= null`),
+      // bliver denne assertion rød (enten et forkert id eller en cast-fejl).
+      expect(variantFromDoc(<String, dynamic>{'variantId': 42}).id, 'classic');
+      expect(
+          variantFromDoc(<String, dynamic>{
+            'variantId': <String, dynamic>{'hack': true}
+          }).id,
+          'classic');
+      // Ukendt string-id og manglende felt klampes også til klassisk.
+      expect(
+          variantFromDoc(<String, dynamic>{'variantId': 'findes-ikke'}).id,
+          'classic');
+      expect(variantFromDoc(<String, dynamic>{}).id, 'classic');
     });
   });
 
@@ -63,6 +87,28 @@ void main() {
           classic.forRank(Rank.three).forwardSteps);
       // Klassisk 5 kan IKKE hoppe — det er præcis forskellen.
       expect(classic.forRank(Rank.five).jumpsBlockade, isFalse);
+    });
+  });
+
+  group(
+      'T3b — klassisk (cardRuleOverrides == null): resolveCardRules returnerer '
+      'BASEN uændret, ikke defaults()', () {
+    test(
+        'admin-tilpassede LIVE regler overlever klassisk resolve (falder '
+        'IKKE tilbage til CardRules.defaults())', () {
+      // Basen AFVIGER bevidst fra defaults() (admin har gjort Dame til
+      // byttekort i stedet for 12 frem) — så testen ikke er en tautologi.
+      final CardRules live = CardRules.defaults().withRank(
+          Rank.queen, const CardRuleConfig(swap: true, forwardSteps: <int>[]));
+      final CardRules resolved = classicVariant.resolveCardRules(live);
+      // Muteres resolveCardRules til at returnere CardRules.defaults() (eller
+      // bygge et nyt regelsæt) i null-grenen frem for selve basen, taber
+      // klassisk admins live-regler tavst — denne assertion bliver rød.
+      expect(resolved.forRank(Rank.queen).swap, isTrue,
+          reason: 'klassisk uden overrides må bevare admins live-regler');
+      expect(resolved.forRank(Rank.queen).forwardSteps, isEmpty);
+      // Den ellers upåvirkede Es er stadig som live (=defaults for Es).
+      expect(resolved.forRank(Rank.ace).forwardSteps, live.forRank(Rank.ace).forwardSteps);
     });
   });
 
