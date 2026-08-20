@@ -133,5 +133,32 @@ void main() {
       // bærer hop-flaget efter round-trip.
       expect(back.cardRules.forRank(Rank.five).jumpsBlockade, isTrue);
     });
+
+    test(
+        'klassisk kort-map får IKKE jumpsBlockade-nøglen (bagud-kompat); '
+        'p25s 5-kort får den', () {
+      final Map<String, dynamic> classicFive =
+          CardRules.defaults().toJson()['five'] as Map<String, dynamic>;
+      // Nøglen må slet ikke stå for klassisk — ikke bare være false — så
+      // gamle Firestore-docs (skrevet før feltet fandtes) forbliver
+      // byte-identiske, og et manglende felt læses entydigt som false.
+      expect(classicFive.containsKey('jumpsBlockade'), isFalse,
+          reason: 'klassisk 5-kort må ikke skrive jumpsBlockade-nøglen');
+
+      final Map<String, dynamic> p25Five =
+          partners25.cardRules!.toJson()['five'] as Map<String, dynamic>;
+      expect(p25Five['jumpsBlockade'], isTrue,
+          reason: 'p25s Hopsakort SKAL skrive nøglen som true');
+
+      // Et gammelt/klassisk kort-map uden nøglen skal læses som false —
+      // det er selve bagud-kompat-kontrakten.
+      final CardRuleConfig fromOldDoc =
+          CardRuleConfig.fromJson(<String, dynamic>{
+        'exitStart': false,
+        'forwardSteps': <int>[5],
+        'swap': false,
+      });
+      expect(fromOldDoc.jumpsBlockade, isFalse);
+    });
   });
 }
