@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../game/card_rules.dart';
 import '../../models/playing_card.dart';
 import '../../game/ai/ai_player.dart';
+import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
 import '../../state/display_config.dart';
@@ -101,8 +102,15 @@ class AdminScreen extends ConsumerWidget {
               if (context.mounted) {
                 final err = ref.read(cardRulesSaveErrorProvider);
                 final vErr = ref.read(variantCardRulesSaveErrorProvider);
+                // Intet gemt for 25 år (stored=false) = seedet gælder og der
+                // skrives bevidst ikke — sig det, frem for at påstå "gemt".
+                final bool vStored =
+                    ref.read(variantCardRulesProvider).stored;
                 final String msg = err.isEmpty && vErr.isEmpty
-                    ? 'Gemt (klassisk + 25 år)'
+                    ? (vStored
+                        ? 'Gemt (klassisk + 25 år)'
+                        : 'Gemt (klassisk) · 25 år følger forsmagen (intet '
+                            'at gemme)')
                     : <String>[
                         if (err.isNotEmpty) 'Klassisk: $err',
                         if (vErr.isNotEmpty) '25 år: $vErr',
@@ -201,15 +209,19 @@ class AdminScreen extends ConsumerWidget {
                       : 'Henter regler fra database…',
                   style: const TextStyle(fontSize: 12),
                 ),
-                Text(
-                  '25 år-regler: '
-                  '${ref.watch(variantCardRulesLoadSourceProvider).isEmpty ? 'henter…' : ref.watch(variantCardRulesLoadSourceProvider)}'
-                  ' (seed = forsmagen, firestore = dine gemte)',
-                  style: const TextStyle(fontSize: 12),
-                ),
+                Builder(builder: (BuildContext _) {
+                  final String vSource =
+                      ref.watch(variantCardRulesLoadSourceProvider);
+                  return Text(
+                    '25 år-regler: ${vSource.isEmpty ? 'henter…' : vSource} '
+                    '(seed = forsmagen, firestore = dine gemte, prefs = '
+                    'lokal kopi)',
+                    style: const TextStyle(fontSize: 12),
+                  );
+                }),
                 if (status.savedAt != null)
                   Text(
-                    'Sidst gemt i database: ${_hhmmss(status.savedAt!)}',
+                    'Klassisk sidst gemt i database: ${_hhmmss(status.savedAt!)}',
                     style: const TextStyle(fontSize: 12),
                   ),
                 if (status.lastLoadError.isNotEmpty)
@@ -535,10 +547,12 @@ class _RankTile extends ConsumerWidget {
     final CardRules classic = ref.watch(cardRulesProvider);
     final VariantAdminConfig va = ref.watch(variantCardRulesProvider);
     final CardRuleConfig classicCfg = classic.forRank(rank);
-    // De EFFEKTIVE 25 år-regler for denne rang (klassisk + overrides) — det er
-    // dét et spil faktisk får, så det er dét admin skal se.
+    // De EFFEKTIVE 25 år-regler for denne rang — beregnet med SAMME resolver
+    // som spil-oprettelsen (effectiveCardRules), så forhåndsvisningen aldrig
+    // kan drive fra det spillerne faktisk får.
     final CardRuleConfig p25Cfg =
-        classic.withOverrides(va.overrides).forRank(rank);
+        effectiveCardRules(partners25, classic, stored: va.overrides)
+            .forRank(rank);
     final bool diverges = !CardRules.sameConfig(classicCfg, p25Cfg);
     final bool hasOwn = va.overrides.containsKey(rank);
 
@@ -656,6 +670,15 @@ class _ConfigEditorState extends State<_ConfigEditor> {
   late TextEditingController _backwardCtrl;
   late TextEditingController _splitCtrl;
 
+  /// Senest committede config — så vores EGEN værdi, der kommer retur gennem
+  /// provideren, ikke re-synker felterne. Uden denne vagt låser frem-feltet
+  /// sig selv midt i indtastningen: tøm "5" for at skrive "8" → tom = [] →
+  /// commit → resync → _forwardOn=false → feltet disables og mister fokus.
+  /// Det ville ramme præcis afskrivnings-workflowet (skriv sættet af kort for
+  /// kort). Eksterne ændringer (load/"Hent nu"/nulstil/følg-klassisk) synker
+  /// stadig.
+  CardRuleConfig? _lastCommitted;
+
   @override
   void initState() {
     super.initState();
@@ -668,6 +691,11 @@ class _ConfigEditorState extends State<_ConfigEditor> {
   @override
   void didUpdateWidget(_ConfigEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Vores egen netop-committede værdi kom retur → rør ikke felter/toggles.
+    if (_lastCommitted != null &&
+        CardRules.sameConfig(_lastCommitted!, widget.config)) {
+      return;
+    }
     // Når configen ændres udefra (Firestore-load, "Hent nu", nulstil, følg-
     // klassisk) skal toggles/felter opdateres. sameConfig dækker ALLE felter
     // (inkl. jumpsBlockade), så et load der kun flipper hop også synker.
@@ -719,6 +747,7 @@ class _ConfigEditorState extends State<_ConfigEditor> {
       swap: _swap,
       jumpsBlockade: _jump,
     );
+    _lastCommitted = cfg;
     widget.onChanged(cfg);
   }
 
@@ -793,7 +822,7 @@ class _ConfigEditorState extends State<_ConfigEditor> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Hoppe over blokade (5↷)'),
           subtitle: const Text(
-            'Må passere et blokeret startfelt',
+            'Må passere et blokeret startfelt — gælder kun fremad-skridt',
             style: TextStyle(fontSize: 11),
           ),
           value: _jump,
@@ -900,6 +929,11 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
   }
 
   void _commitMeta() {
+    // UÆNDRET = ingen skrivning. Ellers ville et klik ind og ud af feltet
+    // gøre kode-seedet til "admins gemte valg" (stored=true) og fryse det i
+    // databasen — hvorefter en senere kode-ændring af forsmaget ikke slår
+    // igennem.
+    if (_nameCtrl.text == _syncedName && _descCtrl.text == _syncedDesc) return;
     _syncedName = _nameCtrl.text;
     _syncedDesc = _descCtrl.text;
     ref.read(variantCardRulesProvider.notifier).updateMeta(
@@ -913,7 +947,9 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
     final CardRules classic = ref.watch(cardRulesProvider);
     final VariantAdminConfig va = ref.watch(variantCardRulesProvider);
     _syncMeta(va);
-    final CardRules p25Effective = classic.withOverrides(va.overrides);
+    // Samme resolver som spil-oprettelsen — én kilde til "hvad får spillerne".
+    final CardRules p25Effective =
+        effectiveCardRules(partners25, classic, stored: va.overrides);
     final int divergent = Rank.values
         .where((Rank r) => !CardRules.sameRank(classic, p25Effective, r))
         .length;
@@ -1003,7 +1039,7 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
                     ],
                   ),
                 );
-                if (ok == true) {
+                if (ok == true && mounted) {
                   ref
                       .read(variantCardRulesProvider.notifier)
                       .materializeAll(p25Effective);

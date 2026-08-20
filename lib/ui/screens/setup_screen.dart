@@ -39,22 +39,19 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   VariantConfig _variant = classicVariant;
 
   /// Navn/beskrivelse med admins evt. egne tekster (fx når 25 år-sættet er
-  /// afskrevet fra det fysiske spil). Fallback: variantens kode-tekst.
-  String _displayName(VariantConfig v) {
-    if (v.id == 'p25') {
-      final String? n = ref.watch(variantCardRulesProvider).name;
-      if (n != null && n.trim().isNotEmpty) return n.trim();
-    }
-    return v.name;
-  }
+  /// afskrevet fra det fysiske spil). Selve reglen (trim + tom → kode-tekst)
+  /// bor i variant_config.dart (variantNameFrom), delt med online-lobbyen.
+  String _displayName(VariantConfig v) => variantNameFrom(
+      v,
+      v.id == partners25.id
+          ? ref.watch(variantCardRulesProvider).name
+          : null);
 
-  String? _displayDescription(VariantConfig v) {
-    if (v.id == 'p25') {
-      final String? d = ref.watch(variantCardRulesProvider).description;
-      if (d != null && d.trim().isNotEmpty) return d.trim();
-    }
-    return v.description;
-  }
+  String? _displayDescription(VariantConfig v) => variantDescriptionFrom(
+      v,
+      v.id == partners25.id
+          ? ref.watch(variantCardRulesProvider).description
+          : null);
 
   @override
   void dispose() {
@@ -226,7 +223,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                               cardRules: effectiveCardRules(
                                 _variant,
                                 ref.read(cardRulesProvider),
-                                stored: _variant.id == 'p25' &&
+                                stored: _variant.id == partners25.id &&
                                         ref
                                             .read(variantCardRulesProvider)
                                             .stored

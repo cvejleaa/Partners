@@ -235,26 +235,32 @@ Map<Rank, CardRuleConfig>? storedOverridesFor(
 
 /// Admin kan gemme eget navn/beskrivelse for en variant (fx når 25 år-sættet
 /// er afskrevet fra det fysiske spil og "(forsmag)"-forbeholdet ikke længere
-/// er sandt). Disse to læser dem DEFENSIVT fra samme `variants`-map med
-/// fallback til variantens kode-definerede tekst.
-String variantDisplayName(VariantConfig v, dynamic variantsRaw) {
-  if (variantsRaw is Map) {
-    final dynamic entry = variantsRaw[v.id];
-    if (entry is Map && entry['name'] is String &&
-        (entry['name'] as String).trim().isNotEmpty) {
-      return (entry['name'] as String).trim();
-    }
-  }
-  return v.name;
-}
+/// er sandt). Reglen "admin-tekst vinder, men kun når udfyldt (trimmet)" bor
+/// ÉT sted — [variantNameFrom]/[variantDescriptionFrom] — og genbruges af både
+/// doc-læserne her og setup-skærmens controller-baserede visning, så de to
+/// stier ikke driver fra hinanden.
+String variantNameFrom(VariantConfig v, String? adminName) =>
+    (adminName != null && adminName.trim().isNotEmpty)
+        ? adminName.trim()
+        : v.name;
 
-String? variantDisplayDescription(VariantConfig v, dynamic variantsRaw) {
-  if (variantsRaw is Map) {
-    final dynamic entry = variantsRaw[v.id];
-    if (entry is Map && entry['description'] is String &&
-        (entry['description'] as String).trim().isNotEmpty) {
-      return (entry['description'] as String).trim();
-    }
-  }
-  return v.description;
+String? variantDescriptionFrom(VariantConfig v, String? adminDescription) =>
+    (adminDescription != null && adminDescription.trim().isNotEmpty)
+        ? adminDescription.trim()
+        : v.description;
+
+/// Doc-læsende varianter (online-lobbyen): træk admin-teksten DEFENSIVT ud af
+/// `variants`-mappet og anvend reglen ovenfor.
+String variantDisplayName(VariantConfig v, dynamic variantsRaw) =>
+    variantNameFrom(v, _metaString(variantsRaw, v.id, 'name'));
+
+String? variantDisplayDescription(VariantConfig v, dynamic variantsRaw) =>
+    variantDescriptionFrom(v, _metaString(variantsRaw, v.id, 'description'));
+
+String? _metaString(dynamic variantsRaw, String id, String key) {
+  if (variantsRaw is! Map) return null;
+  final dynamic entry = variantsRaw[id];
+  if (entry is! Map) return null;
+  final dynamic value = entry[key];
+  return value is String ? value : null;
 }

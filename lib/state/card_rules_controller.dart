@@ -222,4 +222,11 @@ class CardRulesController extends StateNotifier<CardRules> {
     _userTouched = false;
     await _load();
   }
+
+  @override
+  void dispose() {
+    // En kø-lagt (debounced) skrivning må ikke overleve controlleren.
+    _saveTimer?.cancel();
+    super.dispose();
+  }
 }

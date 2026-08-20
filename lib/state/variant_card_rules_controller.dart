@@ -167,6 +167,13 @@ class VariantCardRulesController extends StateNotifier<VariantAdminConfig> {
   }
 
   Future<void> _save() async {
+    // Intet gemt (stored=false) = kode-seedet er autoriteten — SKRIV IKKE.
+    // Ellers ville "Gem nu" lige efter en nulstilling genoplive det slettede
+    // felt og fryse seedet fast i databasen.
+    if (!state.stored) {
+      errorSink?.call('');
+      return;
+    }
     final Map<String, dynamic> payload = variantSavePayload(
       _variantId,
       rulesJson: cardRuleOverridesToJson(state.overrides),
@@ -192,7 +199,13 @@ class VariantCardRulesController extends StateNotifier<VariantAdminConfig> {
       }
       // mergeFields: ERSTAT præcis variants.p25 (så en fjernet rang faktisk
       // forsvinder) uden at røre 'rules'/'updatedAt' eller andre varianter.
-      await doc.set(payload, SetOptions(mergeFields: <Object>['variants.$_variantId']));
+      // FieldPath (ikke dotted string), så et fremtidigt variant-id med
+      // specialtegn ikke knækker stien.
+      await doc.set(
+          payload,
+          SetOptions(mergeFields: <Object>[
+            FieldPath(<String>['variants', _variantId]),
+          ]));
       errorSink?.call('');
     } catch (e) {
       errorSink?.call('$e');
@@ -256,14 +269,16 @@ class VariantCardRulesController extends StateNotifier<VariantAdminConfig> {
       return;
     }
     try {
-      await _doc?.update(<String, dynamic>{
-        'variants.$_variantId': FieldValue.delete(),
+      await _doc?.update(<Object, Object?>{
+        FieldPath(<String>['variants', _variantId]): FieldValue.delete(),
       });
       errorSink?.call('');
     } catch (e) {
-      // not-found = intet at slette; alt andet rapporteres.
-      final String msg = '$e';
-      errorSink?.call(msg.contains('not-found') ? '' : msg);
+      // not-found = doc'et findes ikke endnu = intet at slette (OK). Alt andet
+      // rapporteres. Typed fejlkode frem for skrøbelig streng-matchning.
+      final bool notFound =
+          e is FirebaseException && e.code == 'not-found';
+      errorSink?.call(notFound ? '' : '$e');
     }
   }
 
@@ -275,5 +290,12 @@ class VariantCardRulesController extends StateNotifier<VariantAdminConfig> {
   Future<void> refresh() async {
     _userTouched = false;
     await _load();
+  }
+
+  @override
+  void dispose() {
+    // En kø-lagt (debounced) skrivning må ikke overleve controlleren.
+    _saveTimer?.cancel();
+    super.dispose();
   }
 }

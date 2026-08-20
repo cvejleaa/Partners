@@ -199,11 +199,17 @@ Map<Rank, CardRuleConfig> cardRuleOverridesFromJson(Map<String, dynamic> json) {
 List<String> deckSanityWarnings(CardRules rules) {
   final List<String> warnings = <String>[];
   int hopCount = 0;
+  int hopWithoutForward = 0;
   bool anyExit = false;
   bool anyForward = false;
   for (final Rank r in Rank.values) {
     final CardRuleConfig c = rules.forRank(r);
-    if (c.jumpsBlockade) hopCount++;
+    if (c.jumpsBlockade) {
+      hopCount++;
+      // Hop gælder kun fremad-skridt i motoren — på et kort uden dem er
+      // flaget virkningsløst (og ville lyve på kortet, hvis chippen viste det).
+      if (c.forwardSteps.isEmpty) hopWithoutForward++;
+    }
     if (c.exitStart) anyExit = true;
     if (c.forwardSteps.isNotEmpty || c.splitTotal != null) anyForward = true;
   }
@@ -217,6 +223,10 @@ List<String> deckSanityWarnings(CardRules rules) {
   if (hopCount >= 3) {
     warnings.add('$hopCount af ${Rank.values.length} kort kan hoppe over '
         'blokade — blokaden mister sin værdi som forsvar.');
+  }
+  if (hopWithoutForward > 0) {
+    warnings.add('$hopWithoutForward kort har hop slået til uden fremad-skridt '
+        '— hop virker kun på fremad-bevægelse og har ingen effekt dér.');
   }
   return warnings;
 }

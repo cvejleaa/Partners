@@ -57,10 +57,13 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
   final CardRuleConfig c = rules.forRank(card.rank!);
   // Ekstra evner vises som chips — HOP skal kunne ses på kortet, ellers ligner
   // et Hopsakort et almindeligt talkort, og modstanderen forstår ikke hvorfor
-  // blokaden blev passeret. Samme ordlyd som i admin ("hop").
+  // blokaden blev passeret. Samme ordlyd som i admin ("hop"). Hop gælder KUN
+  // fremad-skridt i motoren (rules.dart), så chippen vises kun når kortet
+  // faktisk HAR fremad-skridt — ellers ville kortet love en evne, der ingen
+  // effekt har.
   final List<String> extraChips = <String>[
     if (c.swap) 'Byt to brikker',
-    if (c.jumpsBlockade) '↷ Hopper over blokade',
+    if (c.jumpsBlockade && c.forwardSteps.isNotEmpty) '↷ Hopper over blokade',
   ];
   final bool hasForward = c.forwardSteps.isNotEmpty;
   final bool hasBackward = c.backwardSteps != null;

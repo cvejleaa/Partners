@@ -9,7 +9,8 @@
 /// beviser selve mergeFields-semantikken.
 library;
 
-/// Klassisk-gemmets felter. Bevidst UDEN 'variants'.
+/// Klassisk-gemmets felter. Bevidst UDEN 'variants'. ('updatedAt' tilføjes af
+/// kalderen, som også nævner den i sine mergeFields.)
 Map<String, dynamic> classicSavePayload(Map<String, dynamic> rulesJson) =>
     <String, dynamic>{'rules': rulesJson};
 
