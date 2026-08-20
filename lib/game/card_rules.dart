@@ -11,6 +11,7 @@ class CardRuleConfig {
     this.backwardSteps,
     this.splitTotal,
     this.swap = false,
+    this.jumpsBlockade = false,
   });
 
   /// Kan rykke en brik ud af start (til eget ud-felt).
@@ -29,6 +30,12 @@ class CardRuleConfig {
   /// Kan bytte to brikker på banen (klassisk Knægt).
   final bool swap;
 
+  /// Må PASSERE et blokeret fremmed startfelt (UD-felt med en brik på) under en
+  /// fremad-bevægelse — "Hopsakortet" 5↷ i Partners+/Duo/25 år. Klassisk: false
+  /// (en brik på sit eget UD-felt spærrer passage for alle andre). Gælder kun
+  /// fremad-skridt (ikke baglæns/split).
+  final bool jumpsBlockade;
+
   CardRuleConfig copyWith({
     bool? exitStart,
     List<int>? forwardSteps,
@@ -37,6 +44,7 @@ class CardRuleConfig {
     int? splitTotal,
     bool clearSplit = false,
     bool? swap,
+    bool? jumpsBlockade,
   }) {
     return CardRuleConfig(
       exitStart: exitStart ?? this.exitStart,
@@ -44,6 +52,7 @@ class CardRuleConfig {
       backwardSteps: clearBackward ? null : (backwardSteps ?? this.backwardSteps),
       splitTotal: clearSplit ? null : (splitTotal ?? this.splitTotal),
       swap: swap ?? this.swap,
+      jumpsBlockade: jumpsBlockade ?? this.jumpsBlockade,
     );
   }
 
@@ -53,6 +62,9 @@ class CardRuleConfig {
         if (backwardSteps != null) 'backwardSteps': backwardSteps,
         if (splitTotal != null) 'splitTotal': splitTotal,
         'swap': swap,
+        // Kun skrevet når sat, så gamle/klassiske docs forbliver uændrede og
+        // et manglende felt læses som false (bagud-kompat).
+        if (jumpsBlockade) 'jumpsBlockade': jumpsBlockade,
       };
 
   factory CardRuleConfig.fromJson(Map<String, dynamic> json) {
@@ -64,6 +76,7 @@ class CardRuleConfig {
       backwardSteps: json['backwardSteps'] as int?,
       splitTotal: json['splitTotal'] as int?,
       swap: json['swap'] as bool? ?? false,
+      jumpsBlockade: json['jumpsBlockade'] as bool? ?? false,
     );
   }
 }

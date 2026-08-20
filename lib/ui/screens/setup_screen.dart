@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../utils/palette.dart';
 import '../../app.dart';
 import '../../game/ai/ai_player.dart';
+import '../../models/variant_config.dart';
 import '../../state/card_rules_controller.dart';
 import 'admin_screen.dart';
 import 'game_screen.dart';
@@ -31,6 +32,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
   /// Valgt AI-sværhedsgrad (0=Begynder, 1=Normal, 2=Skarp).
   int _aiLevel = kAiLevelDefault;
+
+  /// Valgt variant. Default klassisk. Afgør bræt/kort — vælges FØRST, fordi
+  /// "hvad spiller vi" bestemmer resten af opsætningen.
+  VariantConfig _variant = classicVariant;
 
   @override
   void dispose() {
@@ -82,6 +87,39 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               'Pladsen overfor er din makker.',
             ),
             const SizedBox(height: 16),
+            // Variant FØRST: "hvad spiller vi" bestemmer bræt og kort. Dropdown
+            // (ikke SegmentedButton), så den kan rumme flere kommende varianter.
+            Row(
+              children: <Widget>[
+                const Icon(Icons.style, size: 18),
+                const SizedBox(width: 8),
+                const Text('Spil:'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButton<VariantConfig>(
+                    isExpanded: true,
+                    value: _variant,
+                    items: <DropdownMenuItem<VariantConfig>>[
+                      for (final VariantConfig v in kAllVariants)
+                        DropdownMenuItem<VariantConfig>(
+                            value: v, child: Text(v.name)),
+                    ],
+                    onChanged: (VariantConfig? v) {
+                      if (v != null) setState(() => _variant = v);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            if (_variant.description != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 6),
+                child: Text(
+                  _variant.description!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            const SizedBox(height: 12),
             RadioGroup<int>(
               groupValue: _humanSeat,
               onChanged: (int? v) {
@@ -163,6 +201,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                               setups,
                               cardRules: ref.read(cardRulesProvider),
                               aiLevel: _aiLevel,
+                              variant: _variant,
                             );
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(

@@ -63,7 +63,8 @@ class Rules {
       for (final Player a in activePool) {
         for (final Piece p in a.pieces) {
           if (p.position is StartPosition) continue;
-          final Move? m = _tryAdvance(state, a, p, steps, card);
+          final Move? m = _tryAdvance(state, a, p, steps, card,
+              jumpsBlockade: cfg.jumpsBlockade);
           if (m != null) moves.add(m);
         }
       }
@@ -169,9 +170,11 @@ class Rules {
     Player player,
     Piece piece,
     int steps,
-    PlayingCard card,
-  ) {
-    final PiecePosition? to = _advanceFrom(state, player, piece, steps);
+    PlayingCard card, {
+    bool jumpsBlockade = false,
+  }) {
+    final PiecePosition? to =
+        _advanceFrom(state, player, piece, steps, jumpsBlockade: jumpsBlockade);
     if (to == null) return null;
     if (to is HomeStretchPosition) {
       // Hjemstrækket: _advanceFrom har allerede sikret at felterne er frie.
@@ -251,8 +254,9 @@ class Rules {
     GameState state,
     Player player,
     Piece piece,
-    int steps,
-  ) {
+    int steps, {
+    bool jumpsBlockade = false,
+  }) {
     final PiecePosition pos = piece.position;
     if (pos is StartPosition) return null;
 
@@ -293,10 +297,14 @@ class Rules {
           return HomeStretchPosition(player.index, slot);
         }
         // Fremmed UD-felt: ryk forbi uden at tælle skridtet (14 → 1 direkte),
-        // medmindre der står brikker på det — så spærrer det.
+        // medmindre der står brikker på det — så spærrer det. Et Hopsakort
+        // (jumpsBlockade, fx 5↷) må dog passere selv et blokeret fremmed UD.
         final int? udOwner = _entryOwner(next);
         if (udOwner != null && udOwner != player.index) {
-          if (state.piecesAt(TrackPosition(next)).isNotEmpty) return null;
+          if (!jumpsBlockade &&
+              state.piecesAt(TrackPosition(next)).isNotEmpty) {
+            return null;
+          }
           idx = next;
           continue;
         }

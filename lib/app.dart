@@ -20,6 +20,7 @@ import 'models/move.dart';
 import 'models/piece.dart';
 import 'models/player.dart';
 import 'models/playing_card.dart';
+import 'models/variant_config.dart';
 import 'online/online_service.dart';
 import 'online/push_service.dart';
 import 'online/serialize.dart';
@@ -105,9 +106,15 @@ class GameController extends StateNotifier<GameState> {
   }
 
   void startGame(List<PlayerSetup> setups,
-      {CardRules? cardRules, int aiLevel = kAiLevelDefault}) {
+      {CardRules? cardRules,
+      int aiLevel = kAiLevelDefault,
+      VariantConfig variant = classicVariant}) {
     this.aiLevel = aiLevel;
-    const BoardGeometry geom = BoardGeometry();
+    // Varianten bestemmer geometri og brik-antal (klassisk/25 år: samme værdier
+    // som før). Bærer varianten sit eget kort-setup, vinder det over admin-
+    // reglerne; ellers bruges de indsendte (admin-)regler.
+    final BoardGeometry geom = variant.geometry;
+    final CardRules? resolvedRules = variant.cardRules ?? cardRules;
     final List<Player> players = <Player>[
       for (int i = 0; i < setups.length; i++)
         Player(
@@ -116,7 +123,7 @@ class GameController extends StateNotifier<GameState> {
           color: setups[i].color,
           isHuman: setups[i].isHuman,
           pieces: <Piece>[
-            for (int s = 0; s < 4; s++)
+            for (int s = 0; s < variant.piecesPerPlayer; s++)
               Piece(
                 id: 'p$i.$s',
                 ownerIndex: i,
@@ -138,7 +145,8 @@ class GameController extends StateNotifier<GameState> {
       phase: GamePhase.setup,
       handNumber: 0,
       starterIndex: starter,
-      cardRules: cardRules,
+      cardRules: resolvedRules,
+      variant: variant,
     );
     _engine = GameEngine(state: s, rng: _rng);
     _aiLog.clear();

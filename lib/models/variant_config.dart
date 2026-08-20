@@ -1,4 +1,6 @@
+import '../game/card_rules.dart';
 import 'board.dart';
+import 'playing_card.dart';
 
 /// Hvordan kort-byttet mellem spillere fungerer i en variant.
 ///
@@ -41,6 +43,7 @@ class VariantConfig {
   const VariantConfig({
     required this.id,
     required this.name,
+    this.description,
     this.playerCount = 4,
     this.teams = const <List<int>>[
       <int>[0, 2],
@@ -56,11 +59,16 @@ class VariantConfig {
     this.forcedPlay = false,
     this.winCondition = WinCondition.teamAllHome,
     this.destinationsPerPlayer = 1,
+    this.cardRules,
   });
 
   /// Stabil identitet (gemmes i spil-dokumentet, se serialisering).
   final String id;
   final String name;
+
+  /// Kort forklaring til variant-vælgeren (fx approksimations-forbehold).
+  /// `null` for den selvforklarende klassiske udgave.
+  final String? description;
 
   final int playerCount;
 
@@ -90,6 +98,13 @@ class VariantConfig {
 
   /// Duo: 2 briktyper med hver sin start/destination. 1 for alle andre.
   final int destinationsPerPlayer;
+
+  /// Variantens EGET kort-regelsæt. `null` = brug den globale/admin-konfigurerede
+  /// [CardRules] (klassisk). Sat = varianten bærer sine egne kort, som ved
+  /// oprettelse resolves ind i [GameState.cardRules] (kim), hvorefter det spils
+  /// state er runtime-autoritet — en senere ændring af variant-definitionen
+  /// rører ikke et igangværende spil (kort serialiseres uafhængigt i 'cr').
+  final CardRules? cardRules;
 
   /// Samlet antal felter på ringen: segmenter × (UD-felt + nummererede felter).
   /// Klassisk: 4 × (1 + 14) = 60. Partners+: 6 × (1 + 13) = 84.
@@ -137,9 +152,36 @@ const VariantConfig classicVariant = VariantConfig(
   name: 'Partners',
 );
 
-/// Alle kendte varianter (indtil videre kun klassisk). Registret bruges til at
-/// resolve en gemt variant-id tilbage til dens config.
-const List<VariantConfig> kAllVariants = <VariantConfig>[classicVariant];
+/// Partners 25 år (jubilæumsudgave). Strukturelt = klassisk (4 spillere, 2v2,
+/// samme bræt), så den spiller og renderer som klassisk. Forskellen ligger i
+/// kortsættet — men den fulde officielle kortliste er ikke offentliggjort
+/// (docs/partners-varianter.md markerer den [HUL]). Derfor en TILNÆRMET udgave,
+/// mærket "(forsmag)": klassisk base + det kendetegnende **Hopsakort** (5↷),
+/// der som det eneste kort må passere et blokeret fremmed startfelt. De øvrige
+/// jubilæumskort (fx det sammensatte 7/+2−5) kræver motor-mekanik, der ikke
+/// findes endnu, og er bevidst udeladt frem for at gætte.
+///
+/// Bygget fra [CardRules.defaults] med kun den ændrede rang eksplicit, så den
+/// ikke kan divergere fra klassisk hvis defaults ændres. Ikke `const`, fordi
+/// [CardRules.defaults] er en factory.
+final VariantConfig partners25 = VariantConfig(
+  id: 'p25',
+  name: 'Partners 25 år (forsmag)',
+  description: 'Tilnærmet jubilæumsudgave: som klassisk, men 5-kortet er '
+      'Hopsakortet — det må som det eneste passere et blokeret startfelt. '
+      'Den fulde jubilæumskortliste er ikke offentliggjort.',
+  cardRules: CardRules.defaults().withRank(
+    Rank.five,
+    const CardRuleConfig(forwardSteps: <int>[5], jumpsBlockade: true),
+  ),
+);
+
+/// Alle kendte varianter. Registret bruges til at resolve en gemt variant-id
+/// tilbage til dens config og til at fylde variant-vælgeren.
+final List<VariantConfig> kAllVariants = <VariantConfig>[
+  classicVariant,
+  partners25,
+];
 
 /// Slå en variant op på dens [id]. En manglende eller ukendt id (fx et
 /// spil-dokument gemt FØR variant-feltet fandtes, eller en gammel log) resolver
