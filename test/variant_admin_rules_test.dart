@@ -185,4 +185,28 @@ void main() {
       expect(CardRules.sameConfig(a, a), isTrue);
     });
   });
+
+  group('A7 — variantDisplayName/Description: admins tekst vinder, trimmet',
+      () {
+    test('gemt navn/beskrivelse bruges (trimmet); tom beskrivelse falder '
+        'tilbage til kode-teksten', () {
+      final Map<String, dynamic> raw = <String, dynamic>{
+        'p25': <String, dynamic>{'name': '  Mit navn  ', 'description': ''},
+      };
+      // Muteres funktionen til altid at returnere v.name (ignorerer admins
+      // gemte tekst), bliver denne rød.
+      expect(variantDisplayName(partners25, raw), 'Mit navn');
+      // Tom streng skal IKKE overtrumfe kode-beskrivelsen (kun ikke-tomt gør).
+      expect(variantDisplayDescription(partners25, raw), partners25.description);
+    });
+
+    test('intet gemt / ikke-map → kode-teksten (fallback), ikke tom/null', () {
+      expect(variantDisplayName(partners25, null), partners25.name);
+      expect(variantDisplayName(partners25, 'hack'), partners25.name);
+      expect(variantDisplayName(partners25, <String, dynamic>{}),
+          partners25.name);
+      expect(variantDisplayDescription(classicVariant, null),
+          classicVariant.description);
+    });
+  });
 }
