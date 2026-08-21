@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/models/variant_config.dart';
+import 'package:partners/online/serialize.dart';
 import 'package:partners/ui/widgets/board_view.dart';
 
 import 'test_helpers.dart';
@@ -138,6 +139,23 @@ void main() {
       expect(classicSig, isNot(p25Sig));
       // Og sig'en er stabil for samme variant (ingen støj i låsen).
       expect(BoardView.debugVisualSig(makeState(variant: partners25)), p25Sig);
+    });
+  });
+
+  group('F4 — Fortsæt-badgen læser vid fra AUTOSAVE-formatet', () {
+    test('vid ligger i raw[state] — topniveau-læsning gav altid Klassisk', () {
+      // Byg det RIGTIGE autosave-format (samme form som app._autosave):
+      final Map<String, dynamic> raw = <String, dynamic>{
+        'state': gameStateToMap(makeState(variant: partners25)),
+        'savedAt': 0,
+      };
+      // Muteres helperen tilbage til raw['vid'] (topniveau — den fejl brugeren
+      // så live: blåt 25 år-spil med grøn 'Klassisk'-badge), bliver denne rød.
+      expect(variantFromAutosave(raw).id, 'p25');
+      // Defensivt: manglende/skævt state → klassisk.
+      expect(variantFromAutosave(<String, dynamic>{}).id, 'classic');
+      expect(
+          variantFromAutosave(<String, dynamic>{'state': 42}).id, 'classic');
     });
   });
 }

@@ -416,7 +416,16 @@ class _BoardPainter extends CustomPainter {
           ..color = const Color(0xFFEAD9B5)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2);
-    _text(canvas, 'Partners', center, dim * 0.035 * scale, const Color(0xFFEAD9B5));
+    // To linjer: "Partners" + variantens korte navn ("Klassisk"/"25 år") —
+    // versionen står dermed midt på selve spillepladen, for BEGGE varianter
+    // (samme positiv-tilstedeværelses-princip som badgen: et par læres, en
+    // enkelt markering gør ikke).
+    _text(canvas, 'Partners', center - Offset(0, dim * 0.018 * scale),
+        dim * 0.035 * scale, const Color(0xFFEAD9B5));
+    _text(canvas, state.variant.shortLabel,
+        center + Offset(0, dim * 0.022 * scale), dim * 0.026 * scale,
+        const Color(0xFFEAD9B5),
+        weight: FontWeight.w500);
 
     // Brikker (animeret hvis aktiv).
     for (final _PiecePoint pp in computePiecePoints(state, dim, rotation,

@@ -241,9 +241,10 @@ class _ResumeButton extends ConsumerWidget {
                 // Variant-badgen følger med det gemte spil ("samme sted hver
                 // gang") — vid læses defensivt af det rå save.
                 VariantBadge(
-                  variant: variantFromId(saved.raw['vid'] is String
-                      ? saved.raw['vid'] as String
-                      : null),
+                  // vid ligger i raw['state'], ikke på topniveau — én delt,
+                  // testet vagt (variantFromAutosave), så fejlen ikke kan
+                  // genopstå et andet sted.
+                  variant: variantFromAutosave(saved.raw),
                   compact: true,
                   interactive: false,
                 ),

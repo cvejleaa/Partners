@@ -246,6 +246,16 @@ VariantConfig variantFromId(String? id) {
 VariantConfig variantFromDoc(Map<String, dynamic> doc) =>
     variantFromId(doc['variantId'] is String ? doc['variantId'] as String : null);
 
+/// Resolve varianten fra det LOKALE autosave-format ({'state':
+/// gameStateToMap(...), 'savedAt': ...}) — vid ligger i state-mappet, IKKE på
+/// topniveau (en topniveau-læsning viste altid 'Klassisk'-badge for gemte
+/// 25 år-spil). Defensiv: manglende/skævt → klassisk.
+VariantConfig variantFromAutosave(Map<String, dynamic> raw) {
+  final dynamic st = raw['state'];
+  return variantFromId(
+      (st is Map && st['vid'] is String) ? st['vid'] as String : null);
+}
+
 /// Den ENE resolver for et spils faktiske kortregler:
 /// [base] (de live/admin-regler for klassisk) + variantens overrides ovenpå.
 /// Precedens: admin-GEMTE overrides for varianten ([stored]) > variantens
