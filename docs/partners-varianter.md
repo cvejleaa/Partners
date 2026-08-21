@@ -342,19 +342,24 @@ spillere i 2 hold á 2, alder 8+, spilletid 30-45 min. Indhold: spilleplade,
 - **Grundmekanik som klassisk**: 2v2, makkerbyt efter hver uddeling, spil for
   makkeren når man er i mål, vinder ved 8 brikker i mål.
 - **Kortbunken** er en blanding af kort fra klassisk, Duo og Partners+ plus
-  helt nye kort. Bekræftede/aflæste kort ud over de klassiske:
+  helt nye kort. Specialkortene, BEKRÆFTET mod et fysisk eksemplar (ejerens
+  aflæsning af kortene, 2026 — se foto-referencen i denne repos historik):
 
-| Kort | Funktion(er) |
+| Kort | Funktion(er) — bekræftet |
 |---|---|
-| 7 ELLER +2−5 | NYT: flyt én brik 7 frem ELLER 2 frem og derefter 5 tilbage (kan potentielt slå 2 brikker hjem i samme træk) |
-| Byt plads ELLER 9 | NYT dobbeltkort: byt to brikker ELLER 9 frem — præcis regeltekst ikke fundet |
-| 11 ELLER ×1-træk | NYT dobbeltkort (kortface "11" + "*1") — præcis regeltekst ikke fundet |
-| 4×1 | 4 enkelttræk fordelt på flere brikker (fra Duo) |
-| 5↷ | 5 frem, springer over blokeret startfelt (fra Partners+/Duo) |
+| 7 ELLER +2−5 | Flyt én brik 7 frem, ELLER først 2 frem og derefter 5 tilbage MED SAMME BRIK — kan være heldig at slå 2 brikker hjem i samme træk (landing både på mellem- og slutfeltet) |
+| Byt plads ELLER 9 | Byt to brikker ELLER flyt én brik 9 frem |
+| 11 ELLER 1×1 | Flyt én brik 11 frem, ELLER flyt TO brikker 1 felt frem hver |
+| 4×1 | 4 enkelttræk fordelt på flere brikker — samme mekanik som klassisk 7×1, blot 4 |
+| 5↷ | 5 frem, springer over blokeret startfelt (Hopsakortet, fra Partners+/Duo) |
 
-- **[HUL]** Den komplette kortliste med antal pr. type er ikke offentliggjort,
-  og der findes ingen officiel regel-PDF online. Om fx +2−-kortet og 2♥♥
-  indgår, er ubekræftet. Fuld implementering kræver et fysisk eksemplar.
+- **[HUL — reduceret]** Antal pr. korttype og den fulde liste af ALMINDELIGE
+  kort er stadig ikke talt op; specialkortene ovenfor er bekræftet. 2♥♥ er
+  fortsat ubekræftet.
+- App-status: 5↷ (hop) er implementeret som motor-mekanik; "Byt ELLER 9" og
+  4×1 kan udtrykkes med eksisterende mekanikker (swap+frem, split) via
+  admin-skærmens variant-kolonne. "+2−5" (sekvens-træk) og "1×1 med to
+  brikker" (multi-brik-træk) kræver nye motor-mekanikker.
 
 Kilder: gameinventors.dk/PARTNERS-25-AaR · hyggeonkel.dk/produkt/partners-25
 (inkl. æske- og kortfotos) · lad-os-spille.dk/spil/partners-25-aar/ ·
