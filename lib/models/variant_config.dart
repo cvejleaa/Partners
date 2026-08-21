@@ -246,6 +246,45 @@ VariantConfig variantFromId(String? id) {
 VariantConfig variantFromDoc(Map<String, dynamic> doc) =>
     variantFromId(doc['variantId'] is String ? doc['variantId'] as String : null);
 
+/// Form-validering af et variant-id fra utroede data (spil-docs, logs).
+/// Samme alfabet som vores egne id'er ('classic', 'p25', 'cv-<slug>') —
+/// afviser alt der ikke kan være et id (maps, tal, tomt, kontroltegn).
+final RegExp _kVariantIdForm = RegExp(r'^[a-z0-9-]{1,32}$');
+
+/// Resolve varianten til et GEMT spils state ([gameStateFromMap]) — og KUN
+/// dér. Forskellen fra den klampende [variantFromId]: et ukendt, men
+/// velformet id BEVARES som en minimal klassisk-formet config med id'et
+/// intakt, i stedet for at klampe til 'classic'.
+///
+/// Grunden er round-trippet: state læses og SKRIVES TILBAGE af klienter, der
+/// ikke nødvendigvis kender varianten (hvert online-træk, AI-træk hos værten,
+/// autosave-resume). Klampede vi her, ville ét træk fra én sådan klient
+/// overskrive 'vid' med 'classic' i doc'et — permanent forkert bordfarve OG
+/// forkert statistik-attribution for alle fire spillere. Geometri og kort er
+/// alligevel korrekte (admin-varianter er klassisk-formede, og 'cr' bærer de
+/// opløste regler) — kun navn/farve mangler, og dem resolver UI-laget.
+VariantConfig variantForState(String? vid) {
+  if (vid == null || !_kVariantIdForm.hasMatch(vid)) return classicVariant;
+  for (final VariantConfig v in kAllVariants) {
+    if (v.id == vid) return v;
+  }
+  return VariantConfig(id: vid, name: vid);
+}
+
+/// Attributions-nøglen til statistik pr. variant: det RÅ `state.vid` fra et
+/// spil-dokument. Bevidst IKKE normaliseret gennem [variantFromId] — det ville
+/// folde enhver (fx senere slettet eller endnu ikke indlæst) variant ned i
+/// 'classic'-spanden. Kun formen valideres; ukendt/manglende/skævt → 'classic'
+/// (semantisk korrekt for historiske docs: kun klassisk fandtes før feltet).
+/// Læser state — IKKE top-niveau 'variantId': AI-docs har intet top-felt, og
+/// online-doc'ets top-felt kan ændres af ethvert medlem midt i spillet;
+/// state'n er runtime-autoriteten.
+String variantIdOfGameDoc(Map<String, dynamic> game) {
+  final dynamic st = game['state'];
+  final dynamic vid = st is Map ? st['vid'] : null;
+  return (vid is String && _kVariantIdForm.hasMatch(vid)) ? vid : 'classic';
+}
+
 /// Resolve varianten fra det LOKALE autosave-format ({'state':
 /// gameStateToMap(...), 'savedAt': ...}) — vid ligger i state-mappet, IKKE på
 /// topniveau (en topniveau-læsning viste altid 'Klassisk'-badge for gemte

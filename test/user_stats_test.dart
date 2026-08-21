@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/game/card_rules.dart';
 import 'package:partners/models/board.dart';
 import 'package:partners/models/playing_card.dart';
+import 'package:partners/models/variant_config.dart';
 import 'package:partners/online/serialize.dart';
+import 'package:partners/stats/stats_repository.dart';
 import 'package:partners/stats/user_stats.dart';
 
 void main() {
@@ -39,13 +41,16 @@ void main() {
     int? finishedMs,
     List<Map<String, dynamic>> log = const <Map<String, dynamic>>[],
     Map<String, dynamic>? cardRules,
+    String? vid,
   }) =>
       <String, dynamic>{
         'status': 'over',
         'uids': uids,
         'names': names,
         'winningTeamIndex': winningTeam,
-        'state': <String, dynamic>{'hn': hands},
+        // vid ligger i state (som gameStateToMap skriver det) — attributions-
+        // nøglen læses derfra, aldrig fra topniveau.
+        'state': <String, dynamic>{'hn': hands, if (vid != null) 'vid': vid},
         'hostUid': hostUid ?? uids.first,
         'cardRules': cardRules ?? CardRules.defaults().toJson(),
         'log': log,
@@ -258,5 +263,189 @@ void main() {
     // Sanity: de fremmede uids optræder slet ikke i resultatet fra det
     // fulde sæt af spil, når kun u0's egne spil filtreres frem.
     expect(statsOwnOnly.containsKey('u5'), isFalse);
+  });
+
+  group('statistik pr. variant', () {
+    test('byVariant partitionerer korrekt OG top-niveau er summen', () {
+      final r = computePartitionedStats(<Map<String, dynamic>>[
+        game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+            winningTeam: 0, hands: 5, createdMs: 100, vid: 'classic'),
+        game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+            winningTeam: 1, hands: 4, createdMs: 200, vid: 'classic'),
+        game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+            winningTeam: 0, hands: 7, createdMs: 300, vid: 'p25'),
+      ]);
+      // Nøjagtigt de to varianter der har spil — ingen tomme nøgler.
+      expect(r.byVariant.keys.toSet(), <String>{'classic', 'p25'});
+      expect(r.byVariant['classic']!['u0']!.gamesPlayed, 2);
+      expect(r.byVariant['classic']!['u0']!.gamesWon, 1);
+      expect(r.byVariant['p25']!['u0']!.gamesPlayed, 1);
+      expect(r.byVariant['p25']!['u0']!.gamesWon, 1);
+      // Top-niveau = alle spil (2 + 1), IKKE en kopi af en enkelt spand.
+      expect(r.total['u0']!.gamesPlayed, 3);
+      expect(r.total['u0']!.gamesWon, 2);
+      // Spil uden vid (historisk doc) attribueres classic.
+      final r2 = computePartitionedStats(<Map<String, dynamic>>[
+        game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+            winningTeam: 0, hands: 5),
+      ]);
+      expect(r2.byVariant.keys.toSet(), <String>{'classic'});
+    });
+
+    test('streaks er PR. VARIANT: et p25-nederlag bryder ikke klassisk-stimen',
+        () {
+      final r = computePartitionedStats(<Map<String, dynamic>>[
+        game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+            winningTeam: 0, hands: 5, createdMs: 100, vid: 'classic'),
+        game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+            winningTeam: 1, hands: 4, createdMs: 200, vid: 'p25'),
+        game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+            winningTeam: 0, hands: 6, createdMs: 300, vid: 'classic'),
+      ]);
+      // Samlet: sejr, nederlag, sejr → stime 1.
+      expect(r.total['u0']!.currentWinStreak, 1);
+      // Klassisk-spanden ser kun de to klassiske sejre → stime 2. (En
+      // implementation der deler streak-tilstand på tværs af spande ville
+      // give 1 her → rød.)
+      expect(r.byVariant['classic']!['u0']!.currentWinStreak, 2);
+    });
+
+    test('delekort tælles på reglens FORM — i 25 år er det 4-kortet', () {
+      // Effektive 25 år-regler: split ligger på Rank.four (4×1); 7'eren er
+      // 7-frem/+2−5 og har INTET splitTotal.
+      final p25Rules = CardRules.defaults()
+          .withOverrides(partners25.cardRuleOverrides!)
+          .toJson();
+      final r = computeAllStats(<Map<String, dynamic>>[
+        game(
+          uids: <String>['u0', 'u1', 'u2', 'u3'],
+          names: <String>['A', 'B', 'C', 'D'],
+          winningTeam: 0,
+          hands: 3,
+          vid: 'p25',
+          cardRules: p25Rules,
+          log: <Map<String, dynamic>>[
+            moveEntry(0, const PlayingCard.exit(0), [
+              (id: 'p0.0', from: const StartPosition(0, 0), to: const TrackPosition(0)),
+            ]),
+            moveEntry(0, const PlayingCard.exit(1), [
+              (id: 'p0.1', from: const StartPosition(0, 1), to: const TrackPosition(0)),
+            ]),
+            // 4×1 delt over to brikker → tæller som DELT.
+            moveEntry(0, const PlayingCard(Rank.four, Suit.hearts), [
+              (id: 'p0.0', from: const TrackPosition(0), to: const TrackPosition(2)),
+              (id: 'p0.1', from: const TrackPosition(0), to: const TrackPosition(2)),
+            ]),
+            // 4×1 spillet på én brik → tæller som SAMLET.
+            moveEntry(0, const PlayingCard(Rank.four, Suit.spades), [
+              (id: 'p0.0', from: const TrackPosition(2), to: const TrackPosition(6)),
+            ]),
+            // 25 år-7'eren (7 frem, ét step) er IKKE et delekort — den gamle
+            // rang-bundne tæller (`rank == seven`) talte den som "samlet 7"
+            // og gav dermed falsk statistik i varianten → denne linje + de to
+            // ovenfor gør den implementation rød (den ville give 0 delt/2
+            // samlet i stedet for 1/1).
+            moveEntry(0, const PlayingCard(Rank.seven, Suit.clubs), [
+              (id: 'p0.1', from: const TrackPosition(2), to: const TrackPosition(9)),
+            ]),
+          ],
+        ),
+      ]);
+      final s = r['u0']!;
+      expect(s.split7Count, 1);
+      expect(s.solid7Count, 1);
+      // +2−5-sekvensen (2 steps, SAMME brik) tæller som samlet, ikke delt —
+      // kun hvis rangen overhovedet har splitTotal (det har 7'eren ikke i
+      // 25 år, så den tælles slet ikke).
+    });
+
+    test('docJsonFor: kun spillede varianter, nested uden timestamp, slim form',
+        () {
+      final r = computePartitionedStats(<Map<String, dynamic>>[
+        game(uids: ['u0', 'u1', 'u2', 'u3'], names: ['A', 'B', 'C', 'D'],
+            winningTeam: 0, hands: 5, vid: 'p25'),
+      ]);
+      final full = StatsRepository.docJsonFor(r.total['u0']!, r.byVariant,
+          slim: false);
+      // Top-niveau har timestamp; nested har IKKE (N+1-sentinel-fælden).
+      expect(full.containsKey('updatedAt'), isTrue);
+      final by = full['byVariant'] as Map<String, dynamic>;
+      expect(by.keys.toSet(), <String>{'p25'});
+      expect((by['p25'] as Map).containsKey('updatedAt'), isFalse);
+      expect((by['p25'] as Map)['gamesPlayed'], 1);
+
+      final slim = StatsRepository.docJsonFor(r.total['u0']!, r.byVariant,
+          slim: true);
+      final slimBy = (slim['byVariant'] as Map)['p25'] as Map;
+      // Slank ranglisteform: bærer toplisternes felter, men IKKE de tunge
+      // maps (payload-loftet for den offentlige userStatsOnline).
+      expect(slimBy['gamesPlayed'], 1);
+      expect(slimBy['gamesWon'], 1);
+      expect(slimBy.containsKey('partnerStats'), isFalse);
+      expect(slimBy.containsKey('rivalStats'), isFalse);
+      expect(slimBy.containsKey('favoriteStarter'), isFalse);
+    });
+
+    test('UserStatsDoc.fromJson: gamle docs uden byVariant → tom map', () {
+      final doc = UserStatsDoc.fromJson(<String, dynamic>{
+        'uid': 'u0',
+        'displayName': 'A',
+        'gamesPlayed': 7,
+      });
+      expect(doc.total.gamesPlayed, 7);
+      expect(doc.byVariant, isEmpty);
+      // Skævt byVariant (fjendtligt/korrupt) → ignoreres defensivt.
+      final skew = UserStatsDoc.fromJson(<String, dynamic>{
+        'uid': 'u0',
+        'byVariant': 42,
+      });
+      expect(skew.byVariant, isEmpty);
+    });
+
+    test('recordAggregateFor: manglende byVariant hos aktiv bruger → INGEN '
+        'rekorder (aldrig top-niveau-fallback)', () {
+      // Bruger med 40 spil i cachen, men cachen er endnu ikke variant-opdelt
+      // (genberegning mangler). En implementation der falder tilbage til
+      // top-niveau-aggregatet ville returnere doc.total her → rød. (Det var
+      // netop fejlen: en langsom variant kunne aldrig slå den samlede rekord.)
+      final active = UserStatsDoc.fromJson(<String, dynamic>{
+        'uid': 'u0',
+        'displayName': 'A',
+        'gamesPlayed': 40,
+        'shortestWin': 3,
+      });
+      expect(StatsRepository.recordAggregateFor(active, 'p25'), isNull);
+
+      // byVariant HAR varianten → præcis dét aggregat.
+      final scoped = UserStatsDoc.fromJson(<String, dynamic>{
+        'uid': 'u0',
+        'gamesPlayed': 40,
+        'shortestWin': 3,
+        'byVariant': <String, dynamic>{
+          'p25': <String, dynamic>{'uid': 'u0', 'gamesPlayed': 2, 'shortestWin': 9},
+        },
+      });
+      expect(
+          StatsRepository.recordAggregateFor(scoped, 'p25')!.shortestWin, 9);
+
+      // Helt tom cache (0 spil) → tomt aggregat (førstegangs-logik).
+      final empty = UserStatsDoc.fromJson(
+          <String, dynamic>{'uid': 'u0', 'displayName': 'A'});
+      final agg = StatsRepository.recordAggregateFor(empty, 'classic');
+      expect(agg, isNotNull);
+      expect(agg!.gamesPlayed, 0);
+    });
+
+    test('chunked: 501 docs → flere batches, ingen tabes, rækkefølgen holder',
+        () {
+      final items = List<int>.generate(501, (i) => i);
+      final chunks = StatsRepository.chunked(items, 150);
+      expect(chunks.map((c) => c.length).toList(), <int>[150, 150, 150, 51]);
+      expect(chunks.expand((c) => c).toList(), items);
+      // Grænsetilfælde: præcis delelig og tom liste.
+      expect(StatsRepository.chunked(List<int>.generate(300, (i) => i), 150)
+          .map((c) => c.length), <int>[150, 150]);
+      expect(StatsRepository.chunked(<int>[], 150), isEmpty);
+    });
   });
 }

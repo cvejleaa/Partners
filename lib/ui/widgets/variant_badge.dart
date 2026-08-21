@@ -52,6 +52,10 @@ class VariantBadge extends StatelessWidget {
               horizontal: compact ? 7 : 10, vertical: compact ? 3 : 5),
           child: Text(
             variant.shortLabel,
+            // Custom-varianters shortLabel er deres fulde navn — uden ellipsis
+            // ville et langt navn give RenderFlex-overflow i AppBar-rækken.
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Colors.white,
               fontSize: compact ? 11 : 13,

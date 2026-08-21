@@ -144,36 +144,65 @@ void main() {
     });
   });
 
-  group('rekorder fra seneste spil', () {
+  group('rekorder fra seneste spil (variant-scopede)', () {
     test('hurtigste sejr giver rekord når sidste spil matcher bedste', () {
       final aggregate = stats(gamesWon: 5, shortestWin: 7);
       final lastGame = stats(gamesWon: 1, shortestWin: 7);
-      final records =
-          recordsFromLastGame(aggregate: aggregate, lastGame: lastGame);
+      final records = recordsFromLastGame(
+          aggregate: aggregate, lastGame: lastGame, variantLabel: '25 år');
       expect(records.any((r) => r.id == 'fastest_win'), isTrue);
+      // Etiketten SKAL stå i teksten — det er den, der adskiller "rekord i
+      // 25 år" fra den samlede historik.
+      expect(records.firstWhere((r) => r.id == 'fastest_win').message,
+          contains('25 år'));
     });
 
     test('ingen hurtigste-sejr-rekord hvis sidste spil var langsommere', () {
       final aggregate = stats(gamesWon: 5, shortestWin: 5);
       final lastGame = stats(gamesWon: 1, shortestWin: 9);
-      final records =
-          recordsFromLastGame(aggregate: aggregate, lastGame: lastGame);
+      final records = recordsFromLastGame(
+          aggregate: aggregate, lastGame: lastGame, variantLabel: 'Klassisk');
       expect(records.any((r) => r.id == 'fastest_win'), isFalse);
+    });
+
+    test('første sejr i en variant fejres som FØRSTE sejr, ikke rekord', () {
+      // Aggregatet rummer allerede sidste spil (recompute-rækkefølgen), så
+      // 1 sejr i varianten = det var den første.
+      final aggregate = stats(gamesWon: 1, shortestWin: 8);
+      final lastGame = stats(gamesWon: 1, shortestWin: 8);
+      final records = recordsFromLastGame(
+          aggregate: aggregate, lastGame: lastGame, variantLabel: '25 år');
+      expect(records.any((r) => r.id == 'first_win'), isTrue);
+      expect(records.firstWhere((r) => r.id == 'first_win').message,
+          contains('25 år'));
+      expect(records.any((r) => r.id == 'fastest_win'), isFalse);
+    });
+
+    test('sejr nr. 2 giver INTET hurtigste-sejr-banner (småstikprøve)', () {
+      // 2. sejr slår næsten altid "rekorden" fra 1. sejr — et banner her er
+      // støj. Den GAMLE opførsel (banner ved hver hurtigste sejr, uanset
+      // stikprøve) ville give fastest_win her → denne test bliver rød.
+      final aggregate = stats(gamesWon: 2, shortestWin: 6);
+      final lastGame = stats(gamesWon: 1, shortestWin: 6);
+      final records = recordsFromLastGame(
+          aggregate: aggregate, lastGame: lastGame, variantLabel: 'Klassisk');
+      expect(records.any((r) => r.id == 'fastest_win'), isFalse);
+      expect(records.any((r) => r.id == 'first_win'), isFalse);
     });
 
     test('flest slag i ét spil giver rekord', () {
       final aggregate = stats(maxCapturesInGame: 6);
       final lastGame = stats(maxCapturesInGame: 6);
-      final records =
-          recordsFromLastGame(aggregate: aggregate, lastGame: lastGame);
+      final records = recordsFromLastGame(
+          aggregate: aggregate, lastGame: lastGame, variantLabel: 'Klassisk');
       expect(records.any((r) => r.id == 'most_captures'), isTrue);
     });
 
     test('ingen rekorder for et helt almindeligt spil', () {
       final aggregate = stats(gamesWon: 5, shortestWin: 5, maxCapturesInGame: 6);
       final lastGame = stats(gamesWon: 0, maxCapturesInGame: 1);
-      final records =
-          recordsFromLastGame(aggregate: aggregate, lastGame: lastGame);
+      final records = recordsFromLastGame(
+          aggregate: aggregate, lastGame: lastGame, variantLabel: 'Klassisk');
       expect(records, isEmpty);
     });
 
@@ -181,6 +210,7 @@ void main() {
       final records = recordsFromLastGame(
         aggregate: stats(),
         lastGame: stats(homeStretchEntries: 4),
+        variantLabel: 'Klassisk',
       );
       expect(records.any((r) => r.id == 'all_home'), isTrue);
     });

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../stats/badges.dart';
 import '../../stats/stats_repository.dart';
@@ -16,7 +17,11 @@ class SiteStatsScreen extends StatefulWidget {
 
 class _SiteStatsScreenState extends State<SiteStatsScreen> {
   final _repo = StatsRepository();
-  Map<String, UserStats> _allStats = <String, UserStats>{};
+  Map<String, UserStatsDoc> _allStats = <String, UserStatsDoc>{};
+
+  /// Valgt variant-chip for TOPLISTERNE. null = "Alle". Site-tallene
+  /// (_siteCard) er ALTID på tværs af varianter — captionen siger det.
+  String? _vid;
   int _liveGames = 0;
   int _totalGames = 0;
   int _registeredPlayers = 0;
@@ -108,9 +113,9 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
           .orderBy('gamesPlayed', descending: true)
           .limit(500)
           .get();
-      _allStats = <String, UserStats>{
+      _allStats = <String, UserStatsDoc>{
         for (final d in onlineSnap.docs)
-          d.id: UserStats.fromJson(Map<String, dynamic>.from(d.data()))
+          d.id: UserStatsDoc.fromJson(Map<String, dynamic>.from(d.data()))
       };
 
       // Registrerede spillere = alle med en profil-cache (inkl. dem der kun har
@@ -172,10 +177,14 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
                       child: Text(
                         'Ranglisterne tæller kun spil mod andre spillere — '
                         'solospil mod computeren tælles med i din egen profil, '
-                        'men ikke her.',
+                        'men ikke her. Site-tallene ovenfor er på tværs af '
+                        'varianter, og toplisterne bygger på de op til 500 '
+                        'mest aktive spillere.',
                         style: TextStyle(fontSize: 12, color: Colors.black54),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    _variantChips(),
                     const SizedBox(height: 8),
                     _ranking('🏆 Win-rate (mindst 3 spil)',
                         _topBy((s) => s.gamesPlayed >= 3 ? s.winRate : -1,
@@ -193,7 +202,7 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
                                 : -1,
                             (s) => s.avgCapturesPerGame.toStringAsFixed(1))),
                     _ranking(
-                        '✂️ Mest split-7-glade',
+                        '✂️ Mest dele-glade (delekort)',
                         _topBy(
                             (s) =>
                                 (s.split7Count + s.solid7Count) >= 3
@@ -205,14 +214,19 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
                         '🏠 Flest brikker i mål',
                         _topBy((s) => s.homeStretchEntries.toDouble(),
                             (s) => '${s.homeStretchEntries}')),
-                    _ranking(
-                        '🏆 Flest badges',
-                        _topBy(
-                            (s) => unlockedBadgeCount(s) > 0
-                                ? unlockedBadgeCount(s).toDouble()
-                                : -1,
-                            (s) =>
-                                '${unlockedBadgeCount(s)}/${kAllBadges.length}')),
+                    // Badges er livstids (på tværs af varianter) — under en
+                    // variant-chip ville listen modsige profil-reglen, så den
+                    // vises kun for "Alle". (Den slanke per-variant-form
+                    // rummer heller ikke badge-felterne.)
+                    if (_vid == null)
+                      _ranking(
+                          '🏆 Flest badges',
+                          _topBy(
+                              (s) => unlockedBadgeCount(s) > 0
+                                  ? unlockedBadgeCount(s).toDouble()
+                                  : -1,
+                              (s) =>
+                                  '${unlockedBadgeCount(s)}/${kAllBadges.length}')),
                   ],
                 ),
     );
@@ -239,12 +253,55 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
     );
   }
 
+  /// Chip-rækken for toplisterne. Datadrevet: indbyggede varianter + alle
+  /// nøgler der findes i de indlæste docs' byVariant (custom-varianter dukker
+  /// op af sig selv). Ingen spil-antal på chips her — antallet er pr. bruger
+  /// og ville ikke betyde noget på en fælles rangliste.
+  Widget _variantChips() {
+    final customIds = <String>{
+      for (final d in _allStats.values) ...d.byVariant.keys,
+    }..removeAll(<String>[for (final v in kAllVariants) v.id]);
+    final vids = <String>[
+      for (final v in kAllVariants) v.id,
+      ...customIds.toList()..sort(),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: <Widget>[
+        FilterChip(
+          label: const Text('Alle'),
+          selected: _vid == null,
+          onSelected: (_) => setState(() => _vid = null),
+        ),
+        for (final vid in vids)
+          FilterChip(
+            label: Text(variantForState(vid).shortLabel),
+            selected: _vid == vid,
+            selectedColor: variantForState(vid).badgeColor,
+            checkmarkColor: _vid == vid ? Colors.white : null,
+            labelStyle:
+                _vid == vid ? const TextStyle(color: Colors.white) : null,
+            onSelected: (_) => setState(() => _vid = vid),
+          ),
+      ],
+    );
+  }
+
+  /// Statsene for den valgte chip: "Alle" = top-niveau; variant = byVariant-
+  /// posten (mangler den, har brugeren ingen spil i varianten → udelades).
+  UserStats? _selectedStats(UserStatsDoc d) =>
+      _vid == null ? d.total : d.byVariant[_vid];
+
   List<MapEntry<UserStats, String>> _topBy(
       double Function(UserStats) score, String Function(UserStats) display) {
     final entries = _allStats.values
+        .map(_selectedStats)
+        .whereType<UserStats>()
         // Spillere uden online-spil har en 0-stats online-cache (skrives så
         // gamle tal ryddes) — de skal ikke optræde som "spøgelses-rækker" med 0
-        // i de ranglister der ikke selv har en minimums-tærskel.
+        // i de ranglister der ikke selv har en minimums-tærskel. Læser den
+        // VALGTE spands gamesPlayed, ikke top-niveauets.
         .where((s) => s.gamesPlayed > 0)
         .map((s) => MapEntry(s, score(s)))
         .where((e) => e.value >= 0)
@@ -259,8 +316,9 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
   /// uids) tilføjes et kort uid-fragment så rækkerne kan kendes fra hinanden.
   String _disambiguatedName(UserStats s) {
     final bool isMe = s.uid == FirebaseAuth.instance.currentUser?.uid;
-    final int dupes =
-        _allStats.values.where((o) => o.displayName == s.displayName).length;
+    final int dupes = _allStats.values
+        .where((o) => o.total.displayName == s.displayName)
+        .length;
     if (dupes <= 1) return isMe ? '${s.displayName} (dig)' : s.displayName;
     final String tail =
         s.uid.length >= 4 ? s.uid.substring(s.uid.length - 4) : s.uid;

@@ -28,25 +28,42 @@ class GameRecord {
 
 /// Find personlige rekorder sat i det seneste spil.
 ///
-/// [aggregate] er brugerens samlede (gemte) stats; [lastGame] er stats for KUN
-/// det seneste afsluttede spil. Begge skal være for samme bruger. Returnerer en
-/// (muligvis tom) liste af rekorder.
+/// [aggregate] er brugerens VARIANT-SCOPEDE (gemte) stats for det spils
+/// variant; [lastGame] er stats for KUN det seneste afsluttede spil. Begge
+/// skal være for samme bruger. [variantLabel] er variantens korte etiket
+/// ("Klassisk"/"25 år"/custom-navn) og indgår i rekord-teksten, så "Ny
+/// rekord i 25 år!" ikke kan forveksles med den samlede historik. Returnerer
+/// en (muligvis tom) liste af rekorder.
 List<GameRecord> recordsFromLastGame({
   required UserStats aggregate,
   required UserStats lastGame,
+  required String variantLabel,
 }) {
   final records = <GameRecord>[];
 
-  // 🏁 Hurtigste sejr nogensinde.
+  // 🏁 Hurtigste sejr i varianten.
   final lastWin = lastGame.shortestWin;
   final bestWin = aggregate.shortestWin;
   if (lastWin != null && lastGame.gamesWon > 0 && bestWin != null) {
-    // Sidste spil satte rekorden hvis dens hand-tal matcher aggregatets bedste.
-    if (lastWin <= bestWin) {
+    // Småstikprøve-regel: med under 3 sejre i varianten er "rekord" et tomt
+    // ord (2. sejr slår næsten altid noget). Præcis: 1 sejr → "Første sejr",
+    // 2 sejre → intet banner, ≥3 sejre → ægte rekord-sammenligning. (Grænsen
+    // 3 er valgt så den GAMLE opførsel — banner ved hver hurtigste sejr fra
+    // spil ét — ville fejle en test på netop sejr nr. 2.)
+    if (aggregate.gamesWon <= 1) {
+      records.add(GameRecord(
+        id: 'first_win',
+        emoji: '🎉',
+        message: 'Første sejr i $variantLabel!',
+      ));
+    } else if (aggregate.gamesWon >= 3 && lastWin <= bestWin) {
+      // Sidste spil satte rekorden hvis dens hand-tal matcher aggregatets
+      // bedste.
       records.add(GameRecord(
         id: 'fastest_win',
         emoji: '🏁',
-        message: 'Ny rekord! Hurtigste sejr nogensinde ($lastWin hænder)',
+        message:
+            'Ny rekord i $variantLabel! Hurtigste sejr ($lastWin hænder)',
       ));
     }
   }

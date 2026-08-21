@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../stats/badges.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 import '../../utils/avatars.dart';
 import '../widgets/badge_chip.dart';
+import '../widgets/variant_badge.dart';
 import 'friends_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -264,22 +266,68 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   }
 }
 
-class _AllTimeTab extends StatelessWidget {
+class _AllTimeTab extends StatefulWidget {
   const _AllTimeTab({required this.uid, required this.repo, this.error});
   final String uid;
   final StatsRepository repo;
   final String? error;
 
   @override
+  State<_AllTimeTab> createState() => _AllTimeTabState();
+}
+
+class _AllTimeTabState extends State<_AllTimeTab> {
+  /// Valgt variant-chip. null = "Alle" (top-niveau, som i dag).
+  String? _vid;
+
+  /// Chip-listen er DATADREVET: indbyggede varianter + alle nøgler der faktisk
+  /// findes i brugerens byVariant (så admin-definerede varianter dukker op af
+  /// sig selv, når de får spil — uden at røre denne skærm igen).
+  List<String> _chipVids(UserStatsDoc doc) => <String>[
+        for (final v in kAllVariants) v.id,
+        ...(doc.byVariant.keys
+            .where((k) => kAllVariants.every((v) => v.id != k))
+            .toList()
+          ..sort()),
+      ];
+
+  Widget _chipRow(UserStatsDoc doc) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: <Widget>[
+        FilterChip(
+          label: Text('Alle · ${doc.total.gamesPlayed}'),
+          selected: _vid == null,
+          onSelected: (_) => setState(() => _vid = null),
+        ),
+        for (final vid in _chipVids(doc))
+          FilterChip(
+            // Spil-antallet står PÅ chippen, så man ser stikprøvens størrelse
+            // før man læser procenter ("25 år · 3" advarer i sig selv).
+            label: Text(
+                '${variantForState(vid).shortLabel} · ${doc.byVariant[vid]?.gamesPlayed ?? 0}'),
+            selected: _vid == vid,
+            selectedColor: variantForState(vid).badgeColor,
+            checkmarkColor: _vid == vid ? Colors.white : null,
+            labelStyle:
+                _vid == vid ? const TextStyle(color: Colors.white) : null,
+            onSelected: (_) => setState(() => _vid = vid),
+          ),
+      ],
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<UserStats?>(
-      stream: repo.watch(uid),
+    return StreamBuilder<UserStatsDoc?>(
+      stream: widget.repo.watchDoc(widget.uid),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final stats = snap.data;
-        if (stats == null) {
+        final doc = snap.data;
+        if (doc == null) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -292,18 +340,109 @@ class _AllTimeTab extends StatelessWidget {
                     textAlign: TextAlign.center,
                   ),
                 ),
-                if (error != null)
+                if (widget.error != null)
                   Padding(
                     padding: const EdgeInsets.all(12),
-                    child:
-                        Text(error!, style: const TextStyle(color: Colors.red)),
+                    child: Text(widget.error!,
+                        style: const TextStyle(color: Colors.red)),
                   ),
               ],
             ),
           );
         }
-        return _StatsBody(stats: stats, singleGame: false);
+        final UserStats? shown = _vid == null ? doc.total : doc.byVariant[_vid];
+        final leading = <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _chipRow(doc),
+          ),
+          // Sammenligningen på tværs (kun når "Alle" er valgt og der faktisk
+          // er noget at sammenligne — én variant er ingen sammenligning).
+          if (_vid == null && doc.byVariant.length >= 2)
+            _VariantComparisonCard(doc: doc, chipVids: _chipVids(doc)),
+        ];
+        if (shown == null || shown.gamesPlayed == 0) {
+          return ListView(
+            padding: const EdgeInsets.all(12),
+            children: <Widget>[
+              ...leading,
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                    _vid == null
+                        ? 'Ingen spil endnu.'
+                        : 'Ingen spil i denne variant endnu.',
+                    textAlign: TextAlign.center),
+              ),
+            ],
+          );
+        }
+        return _StatsBody(
+          stats: shown,
+          singleGame: false,
+          leading: leading,
+          // Badges er livstids-præstationer og vises kun under "Alle" — under
+          // en variant-chip ville et (altid identisk) badge-kort friste til at
+          // læse dem som optjent i varianten.
+          showBadges: _vid == null,
+        );
       },
+    );
+  }
+}
+
+/// "Dine varianter" — én række pr. variant med spil: antal · sejre · snit
+/// hænder pr. sejr. Det er sammenligningen der gør pr-variant-statistik
+/// værdifuld ("vinder vi hurtigere i 25 år?"), så den står øverst.
+class _VariantComparisonCard extends StatelessWidget {
+  const _VariantComparisonCard({required this.doc, required this.chipVids});
+  final UserStatsDoc doc;
+  final List<String> chipVids;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (final vid in chipVids) {
+      final s = doc.byVariant[vid];
+      if (s == null || s.gamesPlayed == 0) continue;
+      final v = variantForState(vid);
+      rows.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 10,
+              height: 10,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                  color: v.badgeColor, shape: BoxShape.circle),
+            ),
+            Expanded(child: Text(v.shortLabel)),
+            Text(
+              '${s.gamesPlayed} spil · ${s.gamesWon} sejre'
+              '${s.avgHandsPerWin > 0 ? ' · ${s.avgHandsPerWin.toStringAsFixed(1)} hænder/sejr' : ''}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ));
+    }
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text('Dine varianter',
+                style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            ...rows,
+          ],
+        ),
+      ),
     );
   }
 }
@@ -318,7 +457,7 @@ class _LastGameTab extends StatefulWidget {
 }
 
 class _LastGameTabState extends State<_LastGameTab> {
-  Future<UserStats?>? _future;
+  Future<LastGameStats?>? _future;
 
   @override
   void initState() {
@@ -335,14 +474,14 @@ class _LastGameTabState extends State<_LastGameTab> {
         });
         await _future;
       },
-      child: FutureBuilder<UserStats?>(
+      child: FutureBuilder<LastGameStats?>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final stats = snap.data;
-          if (stats == null) {
+          final last = snap.data;
+          if (last == null) {
             return ListView(
               children: const <Widget>[
                 Padding(
@@ -355,7 +494,26 @@ class _LastGameTabState extends State<_LastGameTab> {
               ],
             );
           }
-          return _StatsBody(stats: stats, singleGame: true);
+          return _StatsBody(
+            stats: last.stats,
+            singleGame: true,
+            leading: <Widget>[
+              // Read-only mærke for det SPILS variant (sidste spil HAR en
+              // variant — et filter ville ikke give mening her). Ikke
+              // interaktivt: info-dialogen kender ikke custom-varianters
+              // beskrivelse fra dette sted.
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: VariantBadge(
+                    variant: variantForState(last.variantId),
+                    interactive: false,
+                  ),
+                ),
+              ),
+            ],
+          );
         },
       ),
     );
@@ -364,10 +522,19 @@ class _LastGameTabState extends State<_LastGameTab> {
 
 /// Viser stats. Når [singleGame] er true skjules tværgående tal
 /// (streaks, makker-/rival-aggregater) der ikke giver mening for ét spil.
+/// [leading] indsættes øverst (variant-chips/badge); [showBadges] slår
+/// badge-sektionen fra i variant-visning (badges er livstids, på tværs).
 class _StatsBody extends StatelessWidget {
-  const _StatsBody({required this.stats, required this.singleGame});
+  const _StatsBody({
+    required this.stats,
+    required this.singleGame,
+    this.leading = const <Widget>[],
+    this.showBadges = true,
+  });
   final UserStats stats;
   final bool singleGame;
+  final List<Widget> leading;
+  final bool showBadges;
 
   @override
   Widget build(BuildContext context) {
@@ -375,13 +542,18 @@ class _StatsBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: <Widget>[
-        if (!singleGame) _BadgesSection(stats: s),
+        ...leading,
+        if (!singleGame && showBadges) _BadgesSection(stats: s),
         _section('Sejre & resultater', <Widget>[
           _statRow(singleGame ? 'Resultat' : 'Vundne spil',
               singleGame
                   ? (s.gamesWon > 0 ? 'Vundet' : 'Tabt')
                   : '${s.gamesWon}/${s.gamesPlayed}'),
-          if (!singleGame)
+          // Under 5 spil er en procent støj (1/3 → "33 %") — brøken står i
+          // rækken ovenfor, og procent-rækken venter til stikprøven kan bære
+          // den. (Grænsen 5 er valgt så 2/3-tilfældet — det spil-rådgiveren
+          // pegede på — IKKE viser procent.)
+          if (!singleGame && s.gamesPlayed >= 5)
             _statRow('Win-rate', '${(s.winRate * 100).toStringAsFixed(0)}%'),
           if (s.shortestWin != null)
             _statRow(singleGame ? 'Antal hænder' : 'Kortest sejr 🏁',
@@ -416,9 +588,11 @@ class _StatsBody extends StatelessWidget {
             _statRow('Makker', s.partnerStats.values.first.displayName),
         ]),
         _section('Stil & strategi', <Widget>[
+          // "Delekort", ikke "7'er": i 25 år ligger delingen på 4×1-kortet —
+          // tallet tælles på reglens form (splitTotal), ikke på rangen.
           if (s.split7Count + s.solid7Count > 0)
-            _statRow('Split-7 vs Saml-7 ✂️',
-                '${(s.split7Ratio * 100).toStringAsFixed(0)}% split (${s.split7Count}/${s.split7Count + s.solid7Count})'),
+            _statRow('Delekort: delt vs samlet ✂️',
+                '${(s.split7Ratio * 100).toStringAsFixed(0)}% delt (${s.split7Count}/${s.split7Count + s.solid7Count})'),
           if (s.captureGames > 0)
             _statRow(singleGame ? 'Slag givet ⚔️' : 'Slag pr. spil ⚔️',
                 singleGame
@@ -538,7 +712,9 @@ class _BadgesSection extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Text('Optjen badges ved at spille og udvikle din stil.',
+            Text(
+                'Optjen badges ved at spille og udvikle din stil. Badges '
+                'tæller alle dine spil — også på tværs af varianter.',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             for (final entry in groups.entries) ...<Widget>[
               const SizedBox(height: 12),

@@ -115,8 +115,12 @@ GameState gameStateFromMap(Map<String, dynamic> m) {
     });
   }
   // Manglende 'vid' (spil gemt før variant-feltet, eller en gammel log) →
-  // klassisk.
-  final VariantConfig variant = variantFromId(m['vid'] as String?);
+  // klassisk. Et UKENDT id bevares derimod (variantForState, ikke den
+  // klampende variantFromId): state skrives tilbage af klienter der ikke
+  // kender varianten, og en klamp her ville overskrive 'vid' med 'classic'
+  // i doc'et — og dermed forgifte statistik-attributionen permanent.
+  final VariantConfig variant =
+      variantForState(m['vid'] is String ? m['vid'] as String : null);
   return GameState(
     players: (m['pl'] as List)
         .map((e) => playerFromMap(Map<String, dynamic>.from(e as Map)))

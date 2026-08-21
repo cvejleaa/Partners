@@ -14,7 +14,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../game/card_rules.dart';
 import '../game/progress.dart';
-import '../models/playing_card.dart';
+import '../models/variant_config.dart';
 import '../online/serialize.dart';
 import 'replay_engine.dart';
 
@@ -171,7 +171,10 @@ class UserStats {
 
   // ---- Firestore round-trip ----
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
+  /// [withTimestamp] = false bruges for kopierne inde i `byVariant`-mappet:
+  /// en nested `FieldValue.serverTimestamp()` pr. variant er N+1 sentinels pr.
+  /// skrivning uden informationsværdi — doc'ets top-niveau-timestamp dækker.
+  Map<String, dynamic> toJson({bool withTimestamp = true}) => <String, dynamic>{
         'uid': uid,
         'displayName': displayName,
         'gamesPlayed': gamesPlayed,
@@ -208,7 +211,25 @@ class UserStats {
         'lossMarginGames': lossMarginGames,
         'maxWinMargin': maxWinMargin,
         'minWinMargin': minWinMargin,
-        'updatedAt': FieldValue.serverTimestamp(),
+        if (withTimestamp) 'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+  /// SLANK per-variant-form til den OFFENTLIGE `userStatsOnline`-collection
+  /// (site-skærmen henter op til 500 docs ved hver åbning — den fulde form med
+  /// partner-/rival-maps ville gange payloaden med antal varianter). Indeholder
+  /// KUN de felter site-skærmens variant-toplister læser; badge-ranglisten er
+  /// livstids (på tværs af varianter) og læser aldrig herfra.
+  Map<String, dynamic> toSlimRankingJson() => <String, dynamic>{
+        'uid': uid,
+        'displayName': displayName,
+        'gamesPlayed': gamesPlayed,
+        'gamesWon': gamesWon,
+        'currentWinStreak': currentWinStreak,
+        'totalCaptures': totalCaptures,
+        'captureGames': captureGames,
+        'split7Count': split7Count,
+        'solid7Count': solid7Count,
+        'homeStretchEntries': homeStretchEntries,
       };
 
   factory UserStats.fromJson(Map<String, dynamic> m) {
@@ -262,6 +283,31 @@ class UserStats {
   }
 }
 
+/// Et helt `userStats`/`userStatsOnline`-dokument: top-niveau = alle spil
+/// (bagudkompatibelt — gamle docs uden `byVariant` parser til tom map), plus
+/// pr-variant-spandene under `byVariant.{vid}`.
+class UserStatsDoc {
+  UserStatsDoc(this.total, this.byVariant);
+
+  final UserStats total;
+
+  /// vid → stats for KUN den variants spil. Kun varianter med spil har nøgler.
+  final Map<String, UserStats> byVariant;
+
+  factory UserStatsDoc.fromJson(Map<String, dynamic> m) {
+    final by = <String, UserStats>{};
+    final dynamic raw = m['byVariant'];
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        if (k is String && v is Map) {
+          by[k] = UserStats.fromJson(Map<String, dynamic>.from(v));
+        }
+      });
+    }
+    return UserStatsDoc(UserStats.fromJson(m), by);
+  }
+}
+
 class PairStats {
   PairStats({this.displayName = '', this.games = 0, this.wins = 0});
   String displayName;
@@ -288,8 +334,30 @@ class PairStats {
 /// er afsluttet (`status != 'over'`) springes over. Sorteres kronologisk efter
 /// `finishedAt` (eller `createdAt`) for korrekt streak-beregning.
 Map<String, UserStats> computeAllStats(
-    List<Map<String, dynamic>> games) {
-  final result = <String, UserStats>{};
+    List<Map<String, dynamic>> games) =>
+    computePartitionedStats(games).total;
+
+/// Samlet + pr-variant i ÉN gennemgang.
+class PartitionedStats {
+  PartitionedStats(this.total, this.byVariant);
+
+  /// Alle spil (= det hidtidige [computeAllStats]-resultat).
+  final Map<String, UserStats> total;
+
+  /// vid → (uid → stats). Kun varianter med mindst ét afsluttet spil får en
+  /// nøgle. Streaks er pr. variant: et nederlag i én variant bryder IKKE
+  /// stimen i en anden (stimen "i 25 år" betyder stime blandt 25 år-spil).
+  final Map<String, Map<String, UserStats>> byVariant;
+}
+
+/// Beregn samlet OG pr-variant uden at gange replay-omkostningen: de dyre
+/// pr-spil-fakta (replay af hele loggen) udledes ÉN gang pr. spil
+/// ([_deriveGame]) og anvendes derefter på både total-spanden og spillets
+/// variant-spand ([_applyGame]). Kronologien (streaks) bevares, fordi begge
+/// spande fyldes i samme sorterede gennemløb.
+PartitionedStats computePartitionedStats(List<Map<String, dynamic>> games) {
+  final total = <String, UserStats>{};
+  final byVariant = <String, Map<String, UserStats>>{};
 
   // Sortér kronologisk så win-streaks beregnes i rigtig rækkefølge.
   final ordered = List<Map<String, dynamic>>.from(games);
@@ -301,10 +369,13 @@ Map<String, UserStats> computeAllStats(
 
   for (final game in ordered) {
     if (game['status'] != 'over') continue;
-    _accumulateGame(game, result);
+    final _GameFacts facts = _deriveGame(game);
+    _applyGame(facts, total);
+    _applyGame(facts,
+        byVariant.putIfAbsent(variantIdOfGameDoc(game), () => <String, UserStats>{}));
   }
 
-  return result;
+  return PartitionedStats(total, byVariant);
 }
 
 int? _timestampMs(dynamic v) {
@@ -313,8 +384,53 @@ int? _timestampMs(dynamic v) {
   return null;
 }
 
-void _accumulateGame(
-    Map<String, dynamic> game, Map<String, UserStats> bucket) {
+/// De pr-spil udledte fakta — alt det dyre (replay, log-gennemgang) samlet ét
+/// sted, så [_applyGame] kan køres på flere spande uden genberegning.
+class _GameFacts {
+  _GameFacts({
+    required this.uids,
+    required this.names,
+    required this.winningTeam,
+    required this.handNumber,
+    required this.marginFields,
+    required this.hostUid,
+    required this.isFullyOnline,
+    required this.minutes,
+    required this.thinkSecondsBySeat,
+    required this.captureGivenBySeat,
+    required this.captureReceivedBySeat,
+    required this.homeStretchEntriesBySeat,
+    required this.splitCount,
+    required this.solidCount,
+    required this.swapCount,
+    required this.openerCount,
+    required this.passBySeat,
+    required this.cardsDiscardedBySeat,
+    required this.protectionBySeat,
+  });
+
+  final List<dynamic> uids;
+  final List<dynamic> names;
+  final int? winningTeam;
+  final int handNumber;
+  final int? marginFields;
+  final String? hostUid;
+  final bool isFullyOnline;
+  final double? minutes;
+  final Map<int, List<double>> thinkSecondsBySeat;
+  final Map<int, int> captureGivenBySeat;
+  final Map<int, int> captureReceivedBySeat;
+  final Map<int, int> homeStretchEntriesBySeat;
+  final Map<int, int> splitCount;
+  final Map<int, int> solidCount;
+  final Map<int, int> swapCount;
+  final Map<int, Map<String, int>> openerCount;
+  final Map<int, int> passBySeat;
+  final Map<int, int> cardsDiscardedBySeat;
+  final Map<int, int> protectionBySeat;
+}
+
+_GameFacts _deriveGame(Map<String, dynamic> game) {
   final uids = (game['uids'] as List?)?.cast<dynamic>() ?? const <dynamic>[];
   final names = (game['names'] as List?)?.cast<dynamic>() ?? const <dynamic>[];
   final winningTeam = (game['winningTeamIndex'] as num?)?.toInt();
@@ -408,8 +524,8 @@ void _accumulateGame(
   }
 
   // Pr. spiller-tæller for log-baserede stats.
-  final split7Count = <int, int>{};
-  final solid7Count = <int, int>{};
+  final splitCount = <int, int>{};
+  final solidCount = <int, int>{};
   final swapCount = <int, int>{};
   final openerCount = <int, Map<String, int>>{};
   final passBySeat = <int, int>{};
@@ -433,15 +549,19 @@ void _accumulateGame(
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
 
-    if (!card.isExit && card.rank == Rank.seven) {
-      // Sekvens-træk (+2−5 i 25 år) er 2 steps med SAMME brik — det er ikke en
-      // delt 7'er. Rang-tjekket alene ville fejltælle i varianter.
+    // Delekort tælles på FORMEN af spillets faktiske regler, ikke på rangen:
+    // kortet er et delekort hvis dets OPLØSTE regel har splitTotal (klassisk
+    // 7'eren; i 25 år 4×1-kortet — rang-tjekket `rank == seven` gav dér falsk
+    // "0% split" og talte 25 år-7'eren, som slet ikke kan deles). Sekvens-træk
+    // (+2−5) er 2 steps med SAMME brik og tæller som "samlet", ikke "delt".
+    if (!card.isExit &&
+        cardRules.forRank(card.rank!).splitTotal != null) {
       final bool samePiece = steps.length == 2 &&
           steps[0]['pieceId'] == steps[1]['pieceId'];
       if (steps.length > 1 && !samePiece) {
-        split7Count[seat] = (split7Count[seat] ?? 0) + 1;
+        splitCount[seat] = (splitCount[seat] ?? 0) + 1;
       } else {
-        solid7Count[seat] = (solid7Count[seat] ?? 0) + 1;
+        solidCount[seat] = (solidCount[seat] ?? 0) + 1;
       }
     }
     // Byt tælles på FORMEN (A↔B), ikke på rangen: i 25 år ligger byttet på
@@ -477,6 +597,52 @@ void _accumulateGame(
       protectionBySeat[ev.player] = 0;
     }
   }
+
+  return _GameFacts(
+    uids: uids,
+    names: names,
+    winningTeam: winningTeam,
+    handNumber: handNumber,
+    marginFields: marginFields,
+    hostUid: hostUid,
+    isFullyOnline: isFullyOnline,
+    minutes: minutes,
+    thinkSecondsBySeat: thinkSecondsBySeat,
+    captureGivenBySeat: captureGivenBySeat,
+    captureReceivedBySeat: captureReceivedBySeat,
+    homeStretchEntriesBySeat: homeStretchEntriesBySeat,
+    splitCount: splitCount,
+    solidCount: solidCount,
+    swapCount: swapCount,
+    openerCount: openerCount,
+    passBySeat: passBySeat,
+    cardsDiscardedBySeat: cardsDiscardedBySeat,
+    protectionBySeat: protectionBySeat,
+  );
+}
+
+/// Anvend et spils udledte fakta på en spand. Ren akkumulering — ingen
+/// replay/log-læsning her, så det er billigt at køre på flere spande.
+void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
+  final uids = f.uids;
+  final names = f.names;
+  final winningTeam = f.winningTeam;
+  final handNumber = f.handNumber;
+  final marginFields = f.marginFields;
+  final hostUid = f.hostUid;
+  final isFullyOnline = f.isFullyOnline;
+  final minutes = f.minutes;
+  final thinkSecondsBySeat = f.thinkSecondsBySeat;
+  final captureGivenBySeat = f.captureGivenBySeat;
+  final captureReceivedBySeat = f.captureReceivedBySeat;
+  final homeStretchEntriesBySeat = f.homeStretchEntriesBySeat;
+  final splitCount = f.splitCount;
+  final solidCount = f.solidCount;
+  final swapCount = f.swapCount;
+  final openerCount = f.openerCount;
+  final passBySeat = f.passBySeat;
+  final cardsDiscardedBySeat = f.cardsDiscardedBySeat;
+  final protectionBySeat = f.protectionBySeat;
 
   // Update bucket pr. spiller.
   for (int seat = 0; seat < uids.length; seat++) {
@@ -541,8 +707,8 @@ void _accumulateGame(
     s.homeStretchEntries += homeStretchEntriesBySeat[seat] ?? 0;
 
     // Stil.
-    s.split7Count += split7Count[seat] ?? 0;
-    s.solid7Count += solid7Count[seat] ?? 0;
+    s.split7Count += splitCount[seat] ?? 0;
+    s.solid7Count += solidCount[seat] ?? 0;
     s.swapCount += swapCount[seat] ?? 0;
     s.protectionCount += protectionBySeat[seat] ?? 0;
     final opener = openerCount[seat];
