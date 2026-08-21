@@ -437,6 +437,11 @@ List<String> customVariantIdsFrom(dynamic variantsRaw,
   final ids = <String>[];
   variantsRaw.forEach((dynamic k, dynamic v) {
     if (k is! String || !_kVariantIdForm.hasMatch(k)) return;
+    // Indbyggede id'er er ALDRIG customs — et (fjendtligt/forvirret) entry
+    // med custom:true på fx 'p25' må ikke få varianten til at optræde
+    // dobbelt i vælgerne. (Samme regel som variantFromRaw, der heller ikke
+    // lader et entry om-tematisere en builtin.)
+    if (kAllVariants.any((VariantConfig b) => b.id == k)) return;
     if (!isCustomVariantEntry(v)) return;
     if (!includeArchived && v['archived'] == true) return;
     ids.add(k);
