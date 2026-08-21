@@ -14,21 +14,53 @@ library;
 Map<String, dynamic> classicSavePayload(Map<String, dynamic> rulesJson) =>
     <String, dynamic>{'rules': rulesJson};
 
-/// Variant-gemmets felter: hele variantens under-map (rules + evt. navn/
-/// beskrivelse) under variants.{id}. Bevidst UDEN 'rules' (klassisk).
+/// ÉN variants entry-json (variants.{id}-værdien). Skrivningen bruger
+/// mergeFields på HELE entryen, så alt hvad varianten ejer — regler, navn,
+/// beskrivelse, mærke, tema, custom/arkiv-flag — skal med hver gang; et felt
+/// der udelades her SLETTES ved næste gem (QC-fund: en kortredigering må
+/// aldrig kunne slette variantens tema).
+Map<String, dynamic> variantEntryJson({
+  required Map<String, dynamic> rulesJson,
+  String? name,
+  String? description,
+  String? label,
+  String? theme,
+  bool custom = false,
+  bool archived = false,
+}) =>
+    <String, dynamic>{
+      'rules': rulesJson,
+      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+      if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
+      if (theme != null && theme.trim().isNotEmpty) 'theme': theme.trim(),
+      if (custom) 'custom': true,
+      if (archived) 'archived': true,
+    };
+
+/// Variant-gemmets felter: hele variantens under-map under variants.{id}.
+/// Bevidst UDEN 'rules' (klassisk).
 Map<String, dynamic> variantSavePayload(
   String variantId, {
   required Map<String, dynamic> rulesJson,
   String? name,
   String? description,
+  String? label,
+  String? theme,
+  bool custom = false,
+  bool archived = false,
 }) =>
     <String, dynamic>{
       'variants': <String, dynamic>{
-        variantId: <String, dynamic>{
-          'rules': rulesJson,
-          if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
-          if (description != null && description.trim().isNotEmpty)
-            'description': description.trim(),
-        },
+        variantId: variantEntryJson(
+          rulesJson: rulesJson,
+          name: name,
+          description: description,
+          label: label,
+          theme: theme,
+          custom: custom,
+          archived: archived,
+        ),
       },
     };

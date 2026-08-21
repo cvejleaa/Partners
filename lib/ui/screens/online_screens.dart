@@ -10,6 +10,7 @@ import '../../models/variant_config.dart';
 import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
+import '../../state/variant_card_rules_controller.dart';
 import '../../utils/palette.dart';
 import '../widgets/variant_badge.dart';
 import 'online_game_screen.dart';
@@ -249,7 +250,7 @@ class OnlineHomeScreen extends ConsumerWidget {
         // samtidig, så det er her man "kender forskel på dem".
         title: Row(children: <Widget>[
           VariantBadge(
-            variant: variantFromId(g.variantId),
+            variant: g.variant,
             compact: true,
             // Hele rækken åbner spillet — badgen må ikke være en dead zone.
             interactive: false,
@@ -507,11 +508,14 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
               const <dynamic>[false, false, false, false];
           final bool isHost = d['hostUid'] == svc.uid;
           final int aiLevel = (d['aiLevel'] as num?)?.toInt() ?? kAiLevelDefault;
-          // Valgt variant (defensiv læsning via variantFromDoc; ukendt →
-          // klassisk). Alle ser den, kun værten kan ændre den. Navn/beskrivelse
-          // kan være admin-tilpassede (kopieret ind i doc'et ved oprettelse).
-          final VariantConfig variant = variantFromDoc(d);
+          // Valgt variant, materialiseret fra doc'ets egen cardRulesVariants-
+          // kopi (variantFromRaw): en gæst der ALDRIG har set en custom
+          // variant får navn/farve/mærke fra kopien — ingen registry, ingen
+          // race. Ukendt/skævt → klassisk udseende med id som etiket.
           final dynamic variantsRaw = d['cardRulesVariants'];
+          final VariantConfig variant = variantFromRaw(
+              d['variantId'] is String ? d['variantId'] as String : null,
+              variantsRaw);
           // Spillet får AI-spillere hvis der er en åben plads (fyldes ved start).
           final bool willHaveAi = uids.any((dynamic u) => u == null);
           final int seatOfMe = uids.indexOf(svc.uid);
@@ -555,20 +559,46 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: isHost
-                          ? DropdownButton<String>(
-                              isExpanded: true,
-                              value: variant.id,
-                              items: <DropdownMenuItem<String>>[
-                                for (final VariantConfig v in kAllVariants)
-                                  DropdownMenuItem<String>(
-                                      value: v.id,
-                                      child: Text(
-                                          variantDisplayName(v, variantsRaw))),
-                              ],
-                              onChanged: (String? id) {
-                                if (id != null) svc.setVariant(code, id);
-                              },
-                            )
+                          ? Builder(builder: (BuildContext _) {
+                              // Værtens egen variant-liste (inkl. egne
+                              // varianter oprettet EFTER lobbyen blev til).
+                              final List<VariantConfig> selectable =
+                                  ref.watch(selectableVariantsProvider);
+                              final bool inList = selectable
+                                  .any((VariantConfig v) => v.id == variant.id);
+                              return DropdownButton<String>(
+                                isExpanded: true,
+                                value: variant.id,
+                                items: <DropdownMenuItem<String>>[
+                                  for (final VariantConfig v in <VariantConfig>[
+                                    ...selectable,
+                                    // Allerede-valgt variant der siden er
+                                    // arkiveret: behold som gyldigt valg.
+                                    if (!inList) variant,
+                                  ])
+                                    DropdownMenuItem<String>(
+                                        value: v.id,
+                                        child: Text(
+                                            variantDisplayName(v, variantsRaw),
+                                            overflow: TextOverflow.ellipsis)),
+                                ],
+                                onChanged: (String? id) {
+                                  if (id == null) return;
+                                  // QC-fund: lobbyens cardRulesVariants-kopi
+                                  // er taget ved OPRETTELSEN — en custom
+                                  // valgt nu skal have sit entry med, ellers
+                                  // ser gæsterne klassisk look og starten
+                                  // finder ingen regler.
+                                  final dynamic entry = ref
+                                      .read(variantCardRulesProvider)
+                                      .toRawJson()[id];
+                                  svc.setVariant(code, id,
+                                      entry: entry is Map<String, dynamic>
+                                          ? entry
+                                          : null);
+                                },
+                              );
+                            })
                           : Text(variantDisplayName(variant, variantsRaw),
                               style: const TextStyle(
                                   fontWeight: FontWeight.w600)),

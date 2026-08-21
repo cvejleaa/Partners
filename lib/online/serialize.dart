@@ -105,7 +105,7 @@ Map<String, dynamic> gameStateToMap(GameState s) => {
       'so': s.sittingOut.toList(),
     };
 
-GameState gameStateFromMap(Map<String, dynamic> m) {
+GameState gameStateFromMap(Map<String, dynamic> m, {dynamic variantsRaw}) {
   final exchange = <int, PlayingCard?>{};
   final eb = m['eb'];
   if (eb is Map) {
@@ -115,12 +115,16 @@ GameState gameStateFromMap(Map<String, dynamic> m) {
     });
   }
   // Manglende 'vid' (spil gemt før variant-feltet, eller en gammel log) →
-  // klassisk. Et UKENDT id bevares derimod (variantForState, ikke den
-  // klampende variantFromId): state skrives tilbage af klienter der ikke
-  // kender varianten, og en klamp her ville overskrive 'vid' med 'classic'
-  // i doc'et — og dermed forgifte statistik-attributionen permanent.
-  final VariantConfig variant =
-      variantForState(m['vid'] is String ? m['vid'] as String : null);
+  // klassisk. Et UKENDT id bevares derimod (variantFromRaw bygger på
+  // variantForState, ikke den klampende variantFromId): state skrives
+  // tilbage af klienter der ikke kender varianten, og en klamp her ville
+  // overskrive 'vid' med 'classic' i doc'et — og dermed forgifte
+  // statistik-attributionen permanent. [variantsRaw] (doc'ets
+  // cardRulesVariants-kopi eller config-doc'ets variants-map) er valgfri og
+  // giver custom-varianter navn/tema; uden den er udseendet klassisk, men
+  // id'et stadig intakt.
+  final VariantConfig variant = variantFromRaw(
+      m['vid'] is String ? m['vid'] as String : null, variantsRaw);
   return GameState(
     players: (m['pl'] as List)
         .map((e) => playerFromMap(Map<String, dynamic>.from(e as Map)))

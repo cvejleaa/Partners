@@ -10,6 +10,7 @@ import '../../online/online_service.dart';
 import '../../services/feedback_service.dart';
 import '../../stats/records.dart';
 import '../../stats/stats_repository.dart';
+import '../../state/variant_card_rules_controller.dart';
 import '../widgets/variant_badge.dart';
 
 class WinScreen extends ConsumerStatefulWidget {
@@ -88,7 +89,13 @@ class _WinScreenState extends ConsumerState<WinScreen>
     final uid = ref.read(authStateProvider).valueOrNull?.uid;
     if (uid == null) return;
     try {
-      final records = await _repo.lastGameRecordsFor(uid);
+      // Custom-varianters mærke opløses fra config-doc'ets variants-map, så
+      // rekord-teksten siger "Ny rekord i Familie!" og ikke id'et.
+      final dynamic variantsRaw =
+          ref.read(variantCardRulesProvider).toRawJson();
+      final records = await _repo.lastGameRecordsFor(uid,
+          labelFor: (String vid) =>
+              variantFromRaw(vid, variantsRaw).shortLabel);
       if (!mounted) return;
       if (records.isNotEmpty) setState(() => _records = records);
     } catch (_) {}

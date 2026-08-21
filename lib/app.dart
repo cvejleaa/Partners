@@ -320,11 +320,15 @@ class GameController extends StateNotifier<GameState> {
   /// save'et ikke kunne deserialiseres (fx et gammelt format fra før nye
   /// felter blev tilføjet) — så rydder vi det korrupte save så knappen
   /// forsvinder i stedet for at crashe hver gang.
-  bool resumeFrom(SavedGameInfo info) {
+  bool resumeFrom(SavedGameInfo info, {dynamic variantsRaw}) {
     try {
       final Map<String, dynamic> map = info.raw;
-      final GameState s =
-          gameStateFromMap(Map<String, dynamic>.from(map['state'] as Map));
+      // variantsRaw (config-doc'ets variants-map) materialiserer en custom
+      // variants navn/tema ved genoptag — uden den er udseendet klassisk,
+      // men vid/reglerne ('cr') stadig korrekte.
+      final GameState s = gameStateFromMap(
+          Map<String, dynamic>.from(map['state'] as Map),
+          variantsRaw: variantsRaw);
       _engine = GameEngine(state: s, rng: _rng);
       _aiLog
         ..clear()

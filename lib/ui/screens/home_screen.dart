@@ -6,6 +6,7 @@ import '../../models/variant_config.dart';
 import '../widgets/variant_badge.dart';
 import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
+import '../../state/variant_card_rules_controller.dart';
 import '../../utils/avatars.dart';
 import 'admin_screen.dart';
 import 'game_screen.dart';
@@ -218,8 +219,10 @@ class _ResumeButton extends ConsumerWidget {
                 backgroundColor: const Color(0xFF2E7D32),
               ),
               onPressed: () async {
-                final bool ok =
-                    ref.read(gameProvider.notifier).resumeFrom(saved);
+                final bool ok = ref.read(gameProvider.notifier).resumeFrom(
+                    saved,
+                    variantsRaw:
+                        ref.read(variantCardRulesProvider).toRawJson());
                 if (!ok) {
                   // Korrupt/forældet save — det er nu ryddet. Fjern knappen og
                   // vis en kort besked i stedet for at navigere ind i et tomt
@@ -244,7 +247,9 @@ class _ResumeButton extends ConsumerWidget {
                   // vid ligger i raw['state'], ikke på topniveau — én delt,
                   // testet vagt (variantFromAutosave), så fejlen ikke kan
                   // genopstå et andet sted.
-                  variant: variantFromAutosave(saved.raw),
+                  variant: variantFromAutosave(saved.raw,
+                      variantsRaw:
+                          ref.watch(variantCardRulesProvider).toRawJson()),
                   compact: true,
                   interactive: false,
                 ),

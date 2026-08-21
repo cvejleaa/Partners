@@ -102,13 +102,13 @@ class AdminScreen extends ConsumerWidget {
               if (context.mounted) {
                 final err = ref.read(cardRulesSaveErrorProvider);
                 final vErr = ref.read(variantCardRulesSaveErrorProvider);
-                // Intet gemt for 25 år (stored=false) = seedet gælder og der
-                // skrives bevidst ikke — sig det, frem for at påstå "gemt".
+                // Intet variant-entry gemt = seedet gælder og der skrives
+                // bevidst ikke — sig det, frem for at påstå "gemt".
                 final bool vStored =
-                    ref.read(variantCardRulesProvider).stored;
+                    ref.read(variantCardRulesProvider).entries.isNotEmpty;
                 final String msg = err.isEmpty && vErr.isEmpty
                     ? (vStored
-                        ? 'Gemt (klassisk + 25 år)'
+                        ? 'Gemt (klassisk + varianter)'
                         : 'Gemt (klassisk) · 25 år følger de indbyggede '
                             'specialkort (intet at gemme)')
                     : <String>[
@@ -147,7 +147,10 @@ class AdminScreen extends ConsumerWidget {
               );
               if (ok != true) return;
               ctrl.resetDefaults();
-              await variantCtrl.resetToSeed();
+              // Kun 25 år nulstilles — egne varianter er admins arbejde og
+              // røres ikke af den generelle nulstilling (de har deres egne
+              // "Nulstil kort"/"Arkivér"-greb i variant-sektionen).
+              await variantCtrl.resetRules(partners25.id);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content:
@@ -547,15 +550,23 @@ class _RankTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final CardRules classic = ref.watch(cardRulesProvider);
-    final VariantAdminConfig va = ref.watch(variantCardRulesProvider);
+    final String selId = ref.watch(selectedAdminVariantIdProvider);
+    final VariantAdminConfig va = ref.watch(selectedVariantAdminProvider);
+    final VariantConfig selVariant = selId == partners25.id
+        ? partners25
+        : variantFromRaw(
+            selId, ref.watch(variantCardRulesProvider).toRawJson());
+    final String selLabel = selVariant.shortLabel;
     final CardRuleConfig classicCfg = classic.forRank(rank);
-    // De EFFEKTIVE 25 år-regler for denne rang — beregnet med SAMME resolver
+    // De EFFEKTIVE variant-regler for denne rang — beregnet med SAMME resolver
     // som spil-oprettelsen (effectiveCardRules), så forhåndsvisningen aldrig
-    // kan drive fra det spillerne faktisk får.
-    final CardRuleConfig p25Cfg =
-        effectiveCardRules(partners25, classic, stored: va.overrides)
+    // kan drive fra det spillerne faktisk får. For en custom er kode-seedet
+    // null, så tomme overrides = klassisk (derfor viser en ny variant
+    // "Følger klassisk" på alle 13 kort).
+    final CardRuleConfig variantCfg =
+        effectiveCardRules(selVariant, classic, stored: va.overrides)
             .forRank(rank);
-    final bool diverges = !CardRules.sameConfig(classicCfg, p25Cfg);
+    final bool diverges = !CardRules.sameConfig(classicCfg, variantCfg);
     final bool hasOwn = va.overrides.containsKey(rank);
 
     return Card(
@@ -581,7 +592,7 @@ class _RankTile extends ConsumerWidget {
         ),
         subtitle: Text(diverges
             ? 'Klassisk: ${_configSummary(classicCfg)}  ·  '
-                '25 år: ${_configSummary(p25Cfg)}'
+                '$selLabel: ${_configSummary(variantCfg)}'
             : _configSummary(classicCfg)),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: <Widget>[
@@ -593,11 +604,11 @@ class _RankTile extends ConsumerWidget {
                   ref.read(cardRulesProvider.notifier).updateRank(rank, cfg),
             );
             final Widget p25Col = _ConfigEditor(
-              title: 'Partners 25 år',
-              config: p25Cfg,
+              title: selVariant.name,
+              config: variantCfg,
               onChanged: (CardRuleConfig cfg) => ref
                   .read(variantCardRulesProvider.notifier)
-                  .updateRank(rank, cfg),
+                  .updateRank(selId, rank, cfg),
               trailing: hasOwn
                   ? Row(mainAxisSize: MainAxisSize.min, children: <Widget>[
                       const Text('Egen regel',
@@ -609,7 +620,7 @@ class _RankTile extends ConsumerWidget {
                         visualDensity: VisualDensity.compact,
                         onPressed: () => ref
                             .read(variantCardRulesProvider.notifier)
-                            .clearRank(rank),
+                            .clearRank(selId, rank),
                       ),
                     ])
                   : const Text('Følger klassisk',
@@ -992,8 +1003,8 @@ class _ConfigEditorState extends State<_ConfigEditor> {
   }
 }
 
-/// Header-sektion for 25 år-kolonnen: admins eget navn/beskrivelse (så
-/// den indbyggede tekst kan afløses), "kopiér
+/// Header-sektion for variant-kolonnen: VÆLGEREN (25 år + egne varianter),
+/// "Ny variant"-grebet, admins navn/mærke/beskrivelse/tema, "kopiér
 /// klassisk"-grebet (fuldt uafhængigt snapshot i ét tryk), afvigelses-tælleren
 /// og sanity-advarsler for BEGGE regelsæt. Advarsler, aldrig spærringer —
 /// admin er autoritet.
@@ -1008,35 +1019,50 @@ class _VariantAdminHeader extends ConsumerStatefulWidget {
 class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _descCtrl;
+  late final TextEditingController _labelCtrl;
+
+  /// Hvilken variant felterne er synket for — et variantskifte SKAL resynke,
+  /// ellers taster admin videre i den forrige variants tekster.
+  String _syncedFor = '';
   String _syncedName = '';
   String _syncedDesc = '';
+  String _syncedLabel = '';
 
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController();
     _descCtrl = TextEditingController();
+    _labelCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _descCtrl.dispose();
+    _labelCtrl.dispose();
     super.dispose();
   }
 
-  void _syncMeta(VariantAdminConfig va) {
-    // Synk kun når den EKSTERNE værdi ændrer sig (load/nulstil), så vi ikke
-    // overskriver mens admin taster.
+  void _syncMeta(String id, VariantAdminConfig va) {
+    // Synk kun når den EKSTERNE værdi ændrer sig (load/nulstil/variantskifte),
+    // så vi ikke overskriver mens admin taster.
+    final bool switched = id != _syncedFor;
+    _syncedFor = id;
     final String n = va.name ?? '';
     final String d = va.description ?? '';
-    if (n != _syncedName) {
+    final String l = va.label ?? '';
+    if (switched || n != _syncedName) {
       _syncedName = n;
       _nameCtrl.text = n;
     }
-    if (d != _syncedDesc) {
+    if (switched || d != _syncedDesc) {
       _syncedDesc = d;
       _descCtrl.text = d;
+    }
+    if (switched || l != _syncedLabel) {
+      _syncedLabel = l;
+      _labelCtrl.text = l;
     }
   }
 
@@ -1045,28 +1071,160 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
     // gøre kode-seedet til "admins gemte valg" (stored=true) og fryse det i
     // databasen — hvorefter en senere kode-ændring af seedet ikke slår
     // igennem.
-    if (_nameCtrl.text == _syncedName && _descCtrl.text == _syncedDesc) return;
+    if (_nameCtrl.text == _syncedName &&
+        _descCtrl.text == _syncedDesc &&
+        _labelCtrl.text == _syncedLabel) {
+      return;
+    }
     _syncedName = _nameCtrl.text;
     _syncedDesc = _descCtrl.text;
+    _syncedLabel = _labelCtrl.text;
     ref.read(variantCardRulesProvider.notifier).updateMeta(
+          _syncedFor,
           name: _nameCtrl.text,
           description: _descCtrl.text,
+          label: _labelCtrl.text,
         );
+  }
+
+  Future<void> _newVariantDialog() async {
+    final nameCtrl = TextEditingController();
+    final labelCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    String themeId = kVariantThemes.first.id;
+    final String? error = await showDialog<String?>(
+      context: context,
+      builder: (BuildContext ctx) => StatefulBuilder(
+        builder: (BuildContext ctx, StateSetter setDlg) => AlertDialog(
+          title: const Text('Ny variant'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'En egen variant er altid klassisk-formet (4 spillere, '
+                  'samme bræt) og starter med klassiske kortregler — '
+                  'tilpas kortene bagefter i kolonnen. Navnet giver '
+                  'variantens faste id, som aldrig kan ændres.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  maxLength: kMaxCustomNameLength,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Navn',
+                    hintText: 'fx Familie-special',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                TextField(
+                  controller: labelCtrl,
+                  maxLength: kMaxCustomLabelLength,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Kort mærke (badgen på bordet)',
+                    hintText: 'fx Familie',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Beskrivelse (valgfri)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text('Farvetema',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: <Widget>[
+                    for (final VariantTheme t in kVariantThemes)
+                      ChoiceChip(
+                        avatar: CircleAvatar(
+                            backgroundColor: t.badgeColor, radius: 8),
+                        label: Text(t.name),
+                        selected: themeId == t.id,
+                        onSelected: (_) => setDlg(() => themeId = t.id),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Faste, kontrast-efterprøvede temaer — grøn og marineblå '
+                  'er reserveret til Klassisk og 25 år.',
+                  style: TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Annullér')),
+            FilledButton(
+              onPressed: () async {
+                final String? err = await ref
+                    .read(variantCardRulesProvider.notifier)
+                    .createVariant(
+                      name: nameCtrl.text,
+                      label: labelCtrl.text,
+                      theme: themeId,
+                      description: descCtrl.text,
+                    );
+                if (!ctx.mounted) return;
+                if (err != null) {
+                  ScaffoldMessenger.of(ctx)
+                      .showSnackBar(SnackBar(content: Text(err)));
+                  return; // dialogen bliver åben, admin kan rette navnet
+                }
+                Navigator.pop(ctx, slugForVariantName(nameCtrl.text));
+              },
+              child: const Text('Opret'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (error != null && mounted) {
+      // Ny variant valgt med det samme — det er dén admin vil redigere nu.
+      ref.read(selectedAdminVariantIdProvider.notifier).state = error;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final CardRules classic = ref.watch(cardRulesProvider);
-    final VariantAdminConfig va = ref.watch(variantCardRulesProvider);
-    _syncMeta(va);
+    final String selId = ref.watch(selectedAdminVariantIdProvider);
+    final VariantsAdminState all = ref.watch(variantCardRulesProvider);
+    final VariantAdminConfig va = all.configFor(selId);
+    _syncMeta(selId, va);
+    final Map<String, dynamic> raw = all.toRawJson();
+    final VariantConfig selVariant =
+        selId == partners25.id ? partners25 : variantFromRaw(selId, raw);
+    final String selLabel = selVariant.shortLabel;
     // Samme resolver som spil-oprettelsen — én kilde til "hvad får spillerne".
-    final CardRules p25Effective =
-        effectiveCardRules(partners25, classic, stored: va.overrides);
+    final CardRules effective =
+        effectiveCardRules(selVariant, classic, stored: va.overrides);
     final int divergent = Rank.values
-        .where((Rank r) => !CardRules.sameRank(classic, p25Effective, r))
+        .where((Rank r) => !CardRules.sameRank(classic, effective, r))
         .length;
     final List<String> classicWarnings = deckSanityWarnings(classic);
-    final List<String> p25Warnings = deckSanityWarnings(p25Effective);
+    final List<String> variantWarnings = deckSanityWarnings(effective);
+    // Vælgeren: 25 år + ALLE customs (også arkiverede — admin skal kunne
+    // gendanne dem; de markeres i teksten).
+    final List<String> selectableIds = <String>[
+      partners25.id,
+      ...customVariantIdsFrom(raw, includeArchived: true),
+    ];
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -1079,8 +1237,47 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
               children: <Widget>[
                 const Icon(Icons.style, size: 18),
                 const SizedBox(width: 8),
-                const Text('Partners 25 år',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
+                // Variant-vælgeren: hvilken variant redigerer højre kolonne?
+                Expanded(
+                  child: DropdownButton<String>(
+                    value: selectableIds.contains(selId)
+                        ? selId
+                        : partners25.id,
+                    isExpanded: true,
+                    items: <DropdownMenuItem<String>>[
+                      for (final String id in selectableIds)
+                        DropdownMenuItem<String>(
+                          value: id,
+                          child: Text(
+                            id == partners25.id
+                                ? variantNameFrom(
+                                    partners25, all.configFor(id).name)
+                                : '${variantFromRaw(id, raw).name}'
+                                    '${all.configFor(id).archived ? ' (arkiveret)' : ''}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (String? id) {
+                      if (id != null) {
+                        _commitMeta(); // gem den forrige variants felter først
+                        ref
+                            .read(selectedAdminVariantIdProvider.notifier)
+                            .state = id;
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: _newVariantDialog,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Ny variant'),
+                ),
+              ],
+            ),
+            Row(
+              children: <Widget>[
                 const Spacer(),
                 Text(
                   '$divergent af ${Rank.values.length} kort afviger fra '
@@ -1097,66 +1294,188 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
             ),
             const SizedBox(height: 8),
             // Navn/beskrivelse: vises i variant-vælgeren og online-lobbyen.
-            // Tomt felt = variantens indbyggede tekst.
+            // Tomt felt = variantens indbyggede tekst (kun 25 år har en).
             TextField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(
+              maxLength: kMaxCustomNameLength,
+              decoration: InputDecoration(
                 isDense: true,
+                counterText: '',
                 labelText: 'Navn i variant-vælgeren',
-                hintText: 'Partners 25 år',
-                helperText:
-                    'Tomt = indbygget navn. Har du afskrevet det fysiske sæt, '
-                    'så skriv fx "Partners 25 år".',
-                border: OutlineInputBorder(),
+                hintText: selId == partners25.id ? 'Partners 25 år' : null,
+                helperText: selId == partners25.id
+                    ? 'Tomt = indbygget navn.'
+                    : 'Variantens id ($selId) er fast og følger IKKE med '
+                        'ved omdøbning.',
+                border: const OutlineInputBorder(),
               ),
               onEditingComplete: _commitMeta,
               onTapOutside: (_) => _commitMeta(),
             ),
             const SizedBox(height: 8),
+            if (va.custom) ...<Widget>[
+              TextField(
+                controller: _labelCtrl,
+                maxLength: kMaxCustomLabelLength,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  counterText: '',
+                  labelText: 'Kort mærke (badgen på bordet)',
+                  hintText: 'Tomt = navnet',
+                  border: OutlineInputBorder(),
+                ),
+                onEditingComplete: _commitMeta,
+                onTapOutside: (_) => _commitMeta(),
+              ),
+              const SizedBox(height: 8),
+            ],
             TextField(
               controller: _descCtrl,
               maxLines: 2,
               decoration: const InputDecoration(
                 isDense: true,
                 labelText: 'Beskrivelse i variant-vælgeren',
-                hintText:
-                    'Tilnærmet jubilæumsudgave … (indbygget tekst når tom)',
                 border: OutlineInputBorder(),
               ),
               onEditingComplete: _commitMeta,
               onTapOutside: (_) => _commitMeta(),
             ),
+            if (va.custom) ...<Widget>[
+              const SizedBox(height: 8),
+              // Tema-valg: kurateret, aldrig frie farver.
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: <Widget>[
+                  for (final VariantTheme t in kVariantThemes)
+                    ChoiceChip(
+                      avatar: CircleAvatar(
+                          backgroundColor: t.badgeColor, radius: 8),
+                      label: Text(t.name),
+                      selected: (va.theme ?? kVariantThemes.last.id) == t.id,
+                      onSelected: (_) => ref
+                          .read(variantCardRulesProvider.notifier)
+                          .updateMeta(selId, theme: t.id),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Regelændringer gælder kun NYE spil. Har varianten allerede '
+                'spillede spil, så overvej en ny variant i stedet — ellers '
+                'blander statistikken to regelsæt under samme navn.',
+                style: TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+            ],
             const SizedBox(height: 10),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.copy_all, size: 18),
-              label: const Text('Kopiér klassisk til 25 år (alle 13 kort)'),
-              onPressed: () async {
-                final bool? ok = await showDialog<bool>(
-                  context: context,
-                  builder: (BuildContext ctx) => AlertDialog(
-                    title: const Text('Kopiér klassisk til 25 år?'),
-                    content: const Text(
-                        'Alle 13 kort får en EGEN regel (den nuværende '
-                        'effektive 25 år-regel). Derefter er 25 år et fuldt '
-                        'uafhængigt sæt: senere klassisk-ændringer følger '
-                        'IKKE med. Brug dette når du afskriver det fysiske '
-                        'sæt kort for kort.'),
-                    actions: <Widget>[
-                      TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Annullér')),
-                      FilledButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Kopiér')),
-                    ],
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: <Widget>[
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.copy_all, size: 18),
+                  label: Text(
+                      'Kopiér klassisk til $selLabel (alle 13 kort)'),
+                  onPressed: () async {
+                    final bool? ok = await showDialog<bool>(
+                      context: context,
+                      builder: (BuildContext ctx) => AlertDialog(
+                        title: Text('Kopiér klassisk til $selLabel?'),
+                        content: Text(
+                            'Alle 13 kort får en EGEN regel (den nuværende '
+                            'effektive $selLabel-regel). Derefter er '
+                            '$selLabel et fuldt uafhængigt sæt: senere '
+                            'klassisk-ændringer følger IKKE med.'),
+                        actions: <Widget>[
+                          TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Annullér')),
+                          FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Kopiér')),
+                        ],
+                      ),
+                    );
+                    if (ok == true && mounted) {
+                      ref
+                          .read(variantCardRulesProvider.notifier)
+                          .materializeAll(selId, effective);
+                    }
+                  },
+                ),
+                if (va.custom)
+                  OutlinedButton.icon(
+                    icon: Icon(
+                        va.archived ? Icons.unarchive : Icons.archive,
+                        size: 18),
+                    label: Text(va.archived
+                        ? 'Gendan variant'
+                        : 'Arkivér variant'),
+                    onPressed: () async {
+                      if (!va.archived) {
+                        final bool? ok = await showDialog<bool>(
+                          context: context,
+                          builder: (BuildContext ctx) => AlertDialog(
+                            title: Text('Arkivér $selLabel?'),
+                            content: const Text(
+                                'Varianten forsvinder fra vælgerne og kan '
+                                'ikke startes i nye spil. Historiske spil '
+                                'og statistik beholder navn og farve, og '
+                                'igangværende spil spilles færdige. Kan '
+                                'gendannes her når som helst — varianter '
+                                'slettes aldrig helt (id\'et står i gamle '
+                                'spil).'),
+                            actions: <Widget>[
+                              TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(ctx, false),
+                                  child: const Text('Annullér')),
+                              FilledButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('Arkivér')),
+                            ],
+                          ),
+                        );
+                        if (ok != true) return;
+                      }
+                      if (mounted) {
+                        await ref
+                            .read(variantCardRulesProvider.notifier)
+                            .setArchived(selId, !va.archived);
+                      }
+                    },
                   ),
-                );
-                if (ok == true && mounted) {
-                  ref
-                      .read(variantCardRulesProvider.notifier)
-                      .materializeAll(p25Effective);
-                }
-              },
+                if (va.custom && va.overrides.isNotEmpty)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.link, size: 18),
+                    label: const Text('Nulstil kort (følg klassisk)'),
+                    onPressed: () async {
+                      final bool? ok = await showDialog<bool>(
+                        context: context,
+                        builder: (BuildContext ctx) => AlertDialog(
+                          title: Text('Nulstil $selLabel-kortene?'),
+                          content: const Text(
+                              'Alle egne kortregler fjernes, og varianten '
+                              'følger klassisk igen. Navn, mærke og tema '
+                              'bevares.'),
+                          actions: <Widget>[
+                            TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Annullér')),
+                            FilledButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Nulstil kort')),
+                          ],
+                        ),
+                      );
+                      if (ok == true && mounted) {
+                        await ref
+                            .read(variantCardRulesProvider.notifier)
+                            .resetRules(selId);
+                      }
+                    },
+                  ),
+              ],
             ),
             for (final String w in classicWarnings)
               Padding(
@@ -1165,10 +1484,10 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
                     style: TextStyle(
                         fontSize: 12, color: Colors.deepOrange.shade800)),
               ),
-            for (final String w in p25Warnings)
+            for (final String w in variantWarnings)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text('⚠ 25 år: $w',
+                child: Text('⚠ $selLabel: $w',
                     style: TextStyle(
                         fontSize: 12, color: Colors.deepOrange.shade800)),
               ),

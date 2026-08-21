@@ -244,11 +244,17 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     // Efter start er state'ns 'vid' autoriteten (matcher brættet); før start
     // gælder lobby-feltet. Defensivt hele vejen — loading/skævt → klassisk.
     final dynamic rawState = rawDoc?['state'];
+    // variantFromRaw: custom-varianters navn/tema materialiseres fra doc'ets
+    // egen cardRulesVariants-kopi — også for gæster der aldrig har set dem.
     final VariantConfig variant = rawDoc == null
         ? classicVariant
-        : (rawState is Map && rawState['vid'] is String)
-            ? variantFromId(rawState['vid'] as String)
-            : variantFromDoc(rawDoc);
+        : variantFromRaw(
+            (rawState is Map && rawState['vid'] is String)
+                ? rawState['vid'] as String
+                : (rawDoc['variantId'] is String
+                    ? rawDoc['variantId'] as String
+                    : null),
+            rawDoc['cardRulesVariants']);
     return Scaffold(
       backgroundColor: variant.tableColor,
       appBar: AppBar(
@@ -273,8 +279,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                 child: Text('Venter på at spillet starter…',
                     style: TextStyle(color: Colors.white)));
           }
-          final state =
-              gameStateFromMap(Map<String, dynamic>.from(d['state'] as Map));
+          final state = gameStateFromMap(
+              Map<String, dynamic>.from(d['state'] as Map),
+              variantsRaw: d['cardRulesVariants']);
           final uids = d['uids'] as List;
           final myUid = _svc.uid;
           final int mySeat = uids.indexOf(myUid);

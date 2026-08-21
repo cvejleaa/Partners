@@ -67,6 +67,7 @@ class VariantConfig {
     // Husets grønne (bruges også af "din tur"-chippen): hvid 13px-tekst har
     // 5,1:1 — 0xFF4CAF50 havde kun 2,8:1 og fejlede som informationsbærer.
     this.badgeColor = const Color(0xFF2E7D32),
+    this.customShortLabel,
   });
 
   /// Stabil identitet (gemmes i spil-dokumentet, se serialisering).
@@ -127,10 +128,15 @@ class VariantConfig {
   final Color feltColor;
   final Color badgeColor;
 
-  /// Kort badge-etiket ("Klassisk"/"25 år") — det spillerne SIGER ved bordet.
-  /// Falder tilbage til navnet for fremtidige varianter uden kort form.
+  /// Admin-defineret kort mærke for custom-varianter ("Kort mærke"-feltet,
+  /// maks. [kMaxCustomLabelLength] tegn). null for de indbyggede.
+  final String? customShortLabel;
+
+  /// Kort badge-etiket ("Klassisk"/"25 år"/admins mærke) — det spillerne
+  /// SIGER ved bordet. Falder tilbage til navnet for varianter uden kort form.
   String get shortLabel =>
-      id == 'classic' ? 'Klassisk' : (id == 'p25' ? '25 år' : name);
+      customShortLabel ??
+      (id == 'classic' ? 'Klassisk' : (id == 'p25' ? '25 år' : name));
 
   /// Tekst til badge-info-dialogen. Domænetekst bor HER (ikke i widgets):
   /// beskrivelsen når den findes, ellers klassisk-forklaringen.
@@ -251,6 +257,11 @@ VariantConfig variantFromDoc(Map<String, dynamic> doc) =>
 /// afviser alt der ikke kan være et id (maps, tal, tomt, kontroltegn).
 final RegExp _kVariantIdForm = RegExp(r'^[a-z0-9-]{1,32}$');
 
+/// Samme form-regel, eksporteret til skrive-vagter (fx setVariant): et id
+/// der ikke består her, må aldrig skrives i et spil-dokument.
+bool isWellFormedVariantId(String? id) =>
+    id != null && _kVariantIdForm.hasMatch(id);
+
 /// Resolve varianten til et GEMT spils state ([gameStateFromMap]) — og KUN
 /// dér. Forskellen fra den klampende [variantFromId]: et ukendt, men
 /// velformet id BEVARES som en minimal klassisk-formet config med id'et
@@ -289,11 +300,205 @@ String variantIdOfGameDoc(Map<String, dynamic> game) {
 /// gameStateToMap(...), 'savedAt': ...}) — vid ligger i state-mappet, IKKE på
 /// topniveau (en topniveau-læsning viste altid 'Klassisk'-badge for gemte
 /// 25 år-spil). Defensiv: manglende/skævt → klassisk.
-VariantConfig variantFromAutosave(Map<String, dynamic> raw) {
+/// [variantsRaw] (config-doc'ets variants-map fra controlleren) giver custom-
+/// varianter navn/tema på badgen; uden den vises et bevaret id med klassisk
+/// udseende (id-bevarende, IKKE klampende — badgen må ikke lyve 'Klassisk'
+/// om et custom-spil).
+VariantConfig variantFromAutosave(Map<String, dynamic> raw,
+    {dynamic variantsRaw}) {
   final dynamic st = raw['state'];
-  return variantFromId(
-      (st is Map && st['vid'] is String) ? st['vid'] as String : null);
+  return variantFromRaw(
+      (st is Map && st['vid'] is String) ? st['vid'] as String : null,
+      variantsRaw);
 }
+
+// ---------------------------------------------------------------------------
+// Admin-definerede varianter (customs): kuraterede temaer + ren materialisering
+// ---------------------------------------------------------------------------
+
+/// Et kurateret farvetema til admin-definerede varianter. FASTE, efterprøvede
+/// tripler — ingen fri farvevælger: bord/felt ligger i SAMME luminans-bånd som
+/// klassisk grøn (0,0182/0,0262) og 25 år-marineblå (0,0178/0,0260), så hvid
+/// tekst og brik-kontrast aldrig er ringere end i de indbyggede varianter; og
+/// badge-farven har ≥4,5:1 mod hvid 13px-tekst (informationsbæreren). Grøn og
+/// marineblå er RESERVERET til klassisk/25 år — temaerne her er valgt til at
+/// kunne skelnes fra dem og fra hinanden, også ved dæmpet skærm.
+class VariantTheme {
+  const VariantTheme({
+    required this.id,
+    required this.name,
+    required this.tableColor,
+    required this.feltColor,
+    required this.badgeColor,
+  });
+
+  final String id;
+  final String name;
+  final Color tableColor;
+  final Color feltColor;
+  final Color badgeColor;
+}
+
+/// De fire temaer (luminans i parentes; målt mod bånd 0,017–0,026):
+/// Rubin (0,0178/0,0260), Rav (0,0181/0,0257), Violet (0,0178/0,0260 — ægte
+/// lilla, r≈0,72·b, kan ikke forveksles med marineblåens b-dominans), Grafit
+/// (0,0177/0,0261). Badges mod hvid: 5,98/4,79/5,21/5,95 : 1.
+const List<VariantTheme> kVariantThemes = <VariantTheme>[
+  VariantTheme(
+    id: 'ruby',
+    name: 'Rubin',
+    tableColor: Color(0xFF3C1A1C),
+    feltColor: Color(0xFF4A2022),
+    badgeColor: Color(0xFFB03A3A),
+  ),
+  VariantTheme(
+    id: 'amber',
+    name: 'Rav',
+    tableColor: Color(0xFF352009),
+    feltColor: Color(0xFF40270B),
+    badgeColor: Color(0xFF8D6E1F),
+  ),
+  VariantTheme(
+    id: 'violet',
+    name: 'Violet',
+    tableColor: Color(0xFF301A44),
+    feltColor: Color(0xFF3A2056),
+    badgeColor: Color(0xFF7E57C2),
+  ),
+  VariantTheme(
+    id: 'graphite',
+    name: 'Grafit',
+    tableColor: Color(0xFF232428),
+    feltColor: Color(0xFF2B2D31),
+    badgeColor: Color(0xFF5A6570),
+  ),
+];
+
+/// Ukendt/manglende tema → Grafit (det neutrale): en variant med et tema-id
+/// fra en NYERE app-version skal stadig kunne vises, bare uden dens farve.
+VariantTheme variantThemeById(String? id) {
+  for (final VariantTheme t in kVariantThemes) {
+    if (t.id == id) return t;
+  }
+  return kVariantThemes.last; // graphite
+}
+
+/// Loft for antal custom-varianter (håndhæves i admin-UI'et). Regnestykket:
+/// hver variant med spil koster en byVariant-kopi i stats-docs — en TUNG
+/// brugers fulde kopi er ~16 KB, og Firestores doc-loft er 1 MiB ≈ 60 kopier.
+/// 12 holder selv tunge brugere langt fra loftet og chip-rækkerne læsbare.
+const int kMaxCustomVariants = 12;
+
+/// Grænser for admin-teksterne: navnet skal kunne stå i en dropdown/AppBar
+/// (ellipsis findes, men 18 tegn er læsegrænsen), mærket på badge-chippen.
+const int kMaxCustomNameLength = 18;
+const int kMaxCustomLabelLength = 10;
+
+/// Fast forbehold på alle custom-varianter — spillere skal kunne se forskel
+/// på husets egne opfindelser og de officielle udgaver.
+const String kCustomVariantDisclaimer =
+    'Husets egen variant, lavet af admin — ikke en officiel Partners-udgave.';
+
+/// Generér et stabilt id af navnet: 'cv-<slug>'. Id'et er PERMANENT efter
+/// oprettelse (det står i historiske spil-docs og stats-nøgler) — omdøbes
+/// varianten, beholdes id'et. Æ/Ø/Å translittereres, alt andet end [a-z0-9]
+/// bliver bindestreg, og længden holdes inden for id-formens 32 tegn.
+String slugForVariantName(String name) {
+  String s = name.trim().toLowerCase();
+  s = s
+      .replaceAll('æ', 'ae')
+      .replaceAll('ø', 'oe')
+      .replaceAll('å', 'aa')
+      .replaceAll('é', 'e')
+      .replaceAll('ü', 'u')
+      .replaceAll('ö', 'oe')
+      .replaceAll('ä', 'ae');
+  s = s.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+  s = s.replaceAll(RegExp(r'^-+|-+$'), '');
+  if (s.isEmpty) s = 'variant';
+  if (s.length > 24) {
+    s = s.substring(0, 24);
+    s = s.replaceAll(RegExp(r'-+$'), '');
+  }
+  return 'cv-$s';
+}
+
+/// Er [entry] (et rå variants-map-entry) en custom-variant? Ét sted, så
+/// materialisering, pickers og admin-UI deler definitionen.
+bool isCustomVariantEntry(dynamic entry) =>
+    entry is Map && entry['custom'] == true;
+
+/// Custom-variant-id'er i et rå variants-map. [includeArchived] = false er
+/// picker-listen (arkiverede kan ikke vælges til NYE spil); true er "alt der
+/// kan resolves" (historik/stats/admin).
+List<String> customVariantIdsFrom(dynamic variantsRaw,
+    {bool includeArchived = false}) {
+  if (variantsRaw is! Map) return const <String>[];
+  final ids = <String>[];
+  variantsRaw.forEach((dynamic k, dynamic v) {
+    if (k is! String || !_kVariantIdForm.hasMatch(k)) return;
+    if (!isCustomVariantEntry(v)) return;
+    if (!includeArchived && v['archived'] == true) return;
+    ids.add(k);
+  });
+  ids.sort();
+  return ids;
+}
+
+/// REN materialisering af en variant fra et rå variants-map (config-doc'et
+/// eller lobby-doc'ets cardRulesVariants-kopi) — QC-kravet i stedet for et
+/// globalt mutable registry: deterministisk, ingen hydrerings-rækkefølge,
+/// ingen race, testbar uden Firestore.
+///
+/// - Indbyggede id'er → kode-configen (en custom-entry kan ikke om-tematisere
+///   klassisk/25 år; admin-navne resolves separat via variantDisplayName).
+/// - Custom-entry (custom: true) → klassisk-FORMET config med temaets farver,
+///   admins navn/mærke og beskrivelsen + det faste forbehold. Kortreglerne
+///   ligger IKKE her — de resolves som altid via storedOverridesFor +
+///   effectiveCardRules (tomme gemte overrides = "følger klassisk").
+/// - Ukendt id/intet entry → variantForState-fallback (id bevaret, klassisk
+///   udseende) — spilbart via state'ns 'cr', kun navn/farve mangler.
+VariantConfig variantFromRaw(String? id, dynamic variantsRaw) {
+  final VariantConfig base = variantForState(id);
+  if (base.id == classicVariant.id || base.id == partners25.id) return base;
+  if (variantsRaw is! Map) return base;
+  final dynamic entry = variantsRaw[base.id];
+  if (!isCustomVariantEntry(entry)) return base;
+  final Map<dynamic, dynamic> e = entry as Map;
+  final VariantTheme theme =
+      variantThemeById(e['theme'] is String ? e['theme'] as String : null);
+  final String name = (e['name'] is String && (e['name'] as String).trim().isNotEmpty)
+      ? (e['name'] as String).trim()
+      : base.id;
+  final String? label =
+      (e['label'] is String && (e['label'] as String).trim().isNotEmpty)
+          ? (e['label'] as String).trim()
+          : null;
+  final String? adminDesc = (e['description'] is String &&
+          (e['description'] as String).trim().isNotEmpty)
+      ? (e['description'] as String).trim()
+      : null;
+  return VariantConfig(
+    id: base.id,
+    name: name,
+    description: adminDesc == null
+        ? kCustomVariantDisclaimer
+        : '$adminDesc\n\n$kCustomVariantDisclaimer',
+    tableColor: theme.tableColor,
+    feltColor: theme.feltColor,
+    badgeColor: theme.badgeColor,
+    customShortLabel: label,
+  );
+}
+
+/// Picker-listen (setup/lobby): indbyggede + ikke-arkiverede customs,
+/// materialiseret. Ét sted, så de to pickers ikke driver fra hinanden.
+List<VariantConfig> selectableVariantsFrom(dynamic variantsRaw) =>
+    <VariantConfig>[
+      ...kAllVariants,
+      for (final String id in customVariantIdsFrom(variantsRaw))
+        variantFromRaw(id, variantsRaw),
+    ];
 
 /// Chip-rækkernes fælles variant-liste: de indbyggede varianter først (fast
 /// rækkefølge), derefter EKSTRA id'er fundet i data (fx custom-varianter i

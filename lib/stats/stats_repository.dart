@@ -233,7 +233,11 @@ class StatsRepository {
   /// Mangler byVariant-nøglen, men brugeren HAR spil i cachen, er cachen bare
   /// ikke variant-opdelt endnu (genberegning mangler) → vis INGEN rekorder
   /// frem for falske. Returnerer tom liste ved manglende data.
-  Future<List<GameRecord>> lastGameRecordsFor(String uid) async {
+  /// [labelFor] kan opløse custom-varianters mærke (fx via config-doc'ets
+  /// variants-map i UI-laget); uden den vises id'et — ærligt, aldrig
+  /// 'Klassisk' om en custom.
+  Future<List<GameRecord>> lastGameRecordsFor(String uid,
+      {String Function(String variantId)? labelFor}) async {
     final last = await lastGameStatsFor(uid);
     if (last == null) return const <GameRecord>[];
     final doc = await getDoc(uid);
@@ -243,9 +247,9 @@ class StatsRepository {
     return recordsFromLastGame(
       aggregate: aggregate,
       lastGame: last.stats,
-      // Ukendte/custom-id'er viser id'et som etiket (variantForState bevarer
-      // det); kendte viser den korte badge-etiket ("Klassisk"/"25 år").
-      variantLabel: variantForState(last.variantId).shortLabel,
+      variantLabel: labelFor != null
+          ? labelFor(last.variantId)
+          : variantForState(last.variantId).shortLabel,
     );
   }
 

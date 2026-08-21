@@ -413,3 +413,22 @@ det matcher appens eksisterende admin-konfiguration og gør nye udgaver (fx
 - spillemagasinet.dk/spil/partners-braetspil/ (regeldebat/præciseringer)
 - ultraboardgames.com/partners/game-rules.php (engelsk regeloversættelse)
 - hyggeonkel.dk/overblik/partners-spil/ (sortimentsoverblik)
+
+## Husets egne varianter (admin-definerede, app-funktion)
+
+Fra Del B kan admin definere EGNE varianter i appen — altid klassisk-formede
+(4 spillere, 2v2 diagonalt, samme bræt); kun navn, kort mærke, beskrivelse,
+farvetema og kort-opsætning (indenfor de eksisterende korttyper) kan vælges.
+
+- **Id**: `cv-<slug>` af navnet ved oprettelsen, permanent (står i historiske
+  spil-docs og statistik-nøgler). Omdøbning ændrer ikke id'et.
+- **Temaer**: fire kuraterede, kontrast-efterprøvede tripler (Rubin, Rav,
+  Violet, Grafit) i samme luminans-bånd som klassisk grøn/25 år-navy. Grøn og
+  marineblå er reserveret til de indbyggede.
+- **Kortregler**: en ny variant FØLGER klassisk (tomme overrides), til admin
+  redigerer den — eller trykker "Kopiér klassisk" for et uafhængigt snapshot.
+- **Arkivering i stedet for sletning**: en arkiveret variant forsvinder fra
+  vælgerne, men historik/statistik beholder navn og farve, og igangværende
+  spil spilles færdige. Id'er genbruges aldrig.
+- **Forbehold**: alle egne varianter bærer automatisk teksten "Husets egen
+  variant, lavet af admin — ikke en officiel Partners-udgave."

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../stats/badges.dart';
+import '../../state/variant_card_rules_controller.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 import '../../utils/avatars.dart';
@@ -120,12 +121,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ],
           ),
         ),
-        body: TabBarView(
-          children: <Widget>[
-            _LastGameTab(uid: user.uid, repo: _repo),
-            _AllTimeTab(uid: user.uid, repo: _repo, error: _error),
-          ],
-        ),
+        body: Builder(builder: (BuildContext _) {
+          // Config-doc'ets variants-map (fra controlleren) opløser custom-
+          // varianters navn/tema på chips og badges — ellers står der rå id'er.
+          final dynamic variantsRaw =
+              ref.watch(variantCardRulesProvider).toRawJson();
+          return TabBarView(
+            children: <Widget>[
+              _LastGameTab(
+                  uid: user.uid, repo: _repo, variantsRaw: variantsRaw),
+              _AllTimeTab(
+                  uid: user.uid,
+                  repo: _repo,
+                  error: _error,
+                  variantsRaw: variantsRaw),
+            ],
+          );
+        }),
       ),
     );
   }
@@ -267,10 +279,14 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
 }
 
 class _AllTimeTab extends StatefulWidget {
-  const _AllTimeTab({required this.uid, required this.repo, this.error});
+  const _AllTimeTab(
+      {required this.uid, required this.repo, this.error, this.variantsRaw});
   final String uid;
   final StatsRepository repo;
   final String? error;
+
+  /// Config-doc'ets variants-map — opløser custom-varianters navn/tema.
+  final dynamic variantsRaw;
 
   @override
   State<_AllTimeTab> createState() => _AllTimeTabState();
@@ -302,9 +318,9 @@ class _AllTimeTabState extends State<_AllTimeTab> {
             // Spil-antallet står PÅ chippen, så man ser stikprøvens størrelse
             // før man læser procenter ("25 år · 3" advarer i sig selv).
             label: Text(
-                '${variantForState(vid).shortLabel} · ${doc.byVariant[vid]?.gamesPlayed ?? 0}'),
+                '${variantFromRaw(vid, widget.variantsRaw).shortLabel} · ${doc.byVariant[vid]?.gamesPlayed ?? 0}'),
             selected: _vid == vid,
-            selectedColor: variantForState(vid).badgeColor,
+            selectedColor: variantFromRaw(vid, widget.variantsRaw).badgeColor,
             checkmarkColor: _vid == vid ? Colors.white : null,
             labelStyle:
                 _vid == vid ? const TextStyle(color: Colors.white) : null,
@@ -355,7 +371,10 @@ class _AllTimeTabState extends State<_AllTimeTab> {
           // Sammenligningen på tværs (kun når "Alle" er valgt og der faktisk
           // er noget at sammenligne — én variant er ingen sammenligning).
           if (_vid == null && doc.byVariant.length >= 2)
-            _VariantComparisonCard(doc: doc, chipVids: _chipVids(doc)),
+            _VariantComparisonCard(
+                doc: doc,
+                chipVids: _chipVids(doc),
+                variantsRaw: widget.variantsRaw),
         ];
         if (shown == null || shown.gamesPlayed == 0) {
           return ListView(
@@ -391,9 +410,11 @@ class _AllTimeTabState extends State<_AllTimeTab> {
 /// hænder pr. sejr. Det er sammenligningen der gør pr-variant-statistik
 /// værdifuld ("vinder vi hurtigere i 25 år?"), så den står øverst.
 class _VariantComparisonCard extends StatelessWidget {
-  const _VariantComparisonCard({required this.doc, required this.chipVids});
+  const _VariantComparisonCard(
+      {required this.doc, required this.chipVids, this.variantsRaw});
   final UserStatsDoc doc;
   final List<String> chipVids;
+  final dynamic variantsRaw;
 
   @override
   Widget build(BuildContext context) {
@@ -401,7 +422,7 @@ class _VariantComparisonCard extends StatelessWidget {
     for (final vid in chipVids) {
       final s = doc.byVariant[vid];
       if (s == null || s.gamesPlayed == 0) continue;
-      final v = variantForState(vid);
+      final v = variantFromRaw(vid, variantsRaw);
       rows.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(
@@ -444,9 +465,11 @@ class _VariantComparisonCard extends StatelessWidget {
 }
 
 class _LastGameTab extends StatefulWidget {
-  const _LastGameTab({required this.uid, required this.repo});
+  const _LastGameTab(
+      {required this.uid, required this.repo, this.variantsRaw});
   final String uid;
   final StatsRepository repo;
+  final dynamic variantsRaw;
 
   @override
   State<_LastGameTab> createState() => _LastGameTabState();
@@ -503,7 +526,8 @@ class _LastGameTabState extends State<_LastGameTab> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: VariantBadge(
-                    variant: variantForState(last.variantId),
+                    variant:
+                        variantFromRaw(last.variantId, widget.variantsRaw),
                     interactive: false,
                   ),
                 ),

@@ -96,7 +96,8 @@ class GameSummary {
       this.isMyTurn = false,
       this.needsExchange = false,
       this.variantId = 'classic',
-      this.variantLabel = ''});
+      this.variantLabel = '',
+      this.variant = classicVariant});
   final String code;
   final String hostName;
   final String status;
@@ -108,6 +109,11 @@ class GameSummary {
   /// navn (admins evt. eget navn fra doc'ets cardRulesVariants-kopi).
   final String variantId;
   final String variantLabel;
+
+  /// Den MATERIALISEREDE variant (navn/tema fra doc'ets cardRulesVariants-
+  /// kopi) — badgen i listen skal vise custom-varianters farve/mærke uden
+  /// registry-opslag.
+  final VariantConfig variant;
 
   /// Spil-fase for igangværende spil ('play', 'exchange', …). Null = ukendt.
   final String? phase;
@@ -431,12 +437,20 @@ class OnlineService {
     final code = await createGame(
         colorValue: myColor, rules: rules, aiLevel: oldAiLevel);
 
-    // Bevar variant fra det gamle spil (en revanche af et 25 år-spil er 25 år).
-    // Læses defensivt via variantFromDoc; ukendt/skævt felt → klassisk.
-    final VariantConfig oldVariant = variantFromDoc(d);
-    if (oldVariant.id != classicVariant.id) {
+    // Bevar variant fra det gamle spil (en revanche af et 25 år-spil er 25
+    // år; en custom forbliver den custom). Entryen tages med fra det GAMLE
+    // docs kopi, så revanchen også virker for en variant der siden er
+    // arkiveret/ændret. Skævt felt → klassisk.
+    final String? oldVid =
+        d['variantId'] is String ? d['variantId'] as String : null;
+    if (oldVid != null && oldVid != classicVariant.id) {
       try {
-        await setVariant(code, oldVariant.id);
+        final dynamic oldCopy = d['cardRulesVariants'];
+        final dynamic oldEntry = oldCopy is Map ? oldCopy[oldVid] : null;
+        await setVariant(code, oldVid,
+            entry: oldEntry is Map
+                ? Map<String, dynamic>.from(oldEntry)
+                : null);
       } catch (_) {
         // En fejlet variant-kopiering må ikke forhindre revanchen (falder til
         // klassisk, som createGame allerede har sat).
@@ -580,10 +594,13 @@ class OnlineService {
     // hvor doc'et er: GameSummary er det eneste liste-laget ser. Efter start
     // er STATE'ns 'vid' autoriteten (doc-feltet kan i princippet ændres af et
     // medlem midt i spillet uden at røre brættet) — foretræk den.
-    final VariantConfig variant =
+    // Materialiseret fra doc'ets kopi, så "Mine spil"-badgen viser custom-
+    // varianters navn/farve. Under spillet er state.vid autoriteten.
+    final VariantConfig variant = variantFromRaw(
         (status == 'playing' && state is Map && state['vid'] is String)
-            ? variantFromId(state['vid'] as String)
-            : variantFromDoc(d);
+            ? state['vid'] as String
+            : (d['variantId'] is String ? d['variantId'] as String : null),
+        d['cardRulesVariants']);
     return GameSummary(
       id,
       d['hostName'] as String? ?? '?',
@@ -596,6 +613,7 @@ class OnlineService {
       needsExchange: needsExchange,
       variantId: variant.id,
       variantLabel: variantDisplayName(variant, d['cardRulesVariants']),
+      variant: variant,
     );
   }
 
@@ -647,9 +665,14 @@ class OnlineService {
     final uids = d['uids'] as List;
     final rules =
         CardRules.fromJson(Map<String, dynamic>.from(d['cardRules'] as Map));
-    // Læs varianten DEFENSIVT (variantFromDoc klamper ikke-string/ukendt til
-    // klassisk) — et skævt felt fra en fjendtlig lobby-deltager må ikke vælte start.
-    final VariantConfig variant = variantFromDoc(d);
+    // Materialisér varianten fra doc'ets EGEN cardRulesVariants-kopi
+    // (variantFromRaw): en custom variant bevarer sit id ind i state (og
+    // dermed 'vid' → statistik-attributionen) og får navn/tema med. Skævt
+    // felt fra en fjendtlig deltager → klassisk; velformet-men-ukendt id →
+    // klassisk-formet med id bevaret (spilbart, kun navn/farve mangler).
+    final VariantConfig variant = variantFromRaw(
+        d['variantId'] is String ? d['variantId'] as String : null,
+        d['cardRulesVariants']);
     // Opløs spillets faktiske kortregler ÉN gang her: klassisk (doc'ets
     // cardRules) + variantens overrides (admin-gemte fra cardRulesVariants
     // vinder over kode-seedet; manglende/skævt felt → seed). _initialState
@@ -688,12 +711,28 @@ class OnlineService {
     });
   }
 
-  /// Sæt spillets variant fra lobbyen (kun værten i UI'et). Kun kendte id'er
-  /// skrives — et ukendt id klampes til klassisk, så doc'et aldrig får en
-  /// variant der ikke kan resolves. startGameFromLobby læser feltet defensivt.
-  Future<void> setVariant(String code, String variantId) async {
-    await _games.doc(code).update(<String, dynamic>{
-      'variantId': variantFromId(variantId).id,
+  /// Sæt spillets variant fra lobbyen (kun værten i UI'et). Indbyggede id'er
+  /// skrives direkte; en CUSTOM variant skal have sit [entry] (config-doc'ets
+  /// variants.{id}-værdi) med, som samtidig kopieres ind i doc'ets
+  /// cardRulesVariants — kopien blev taget ved OPRETTELSEN, så en variant
+  /// skabt/valgt senere ville ellers mangle navn/tema/regler for gæsterne og
+  /// for startGameFromLobby (QC-fund). Vanformet id, eller ukendt id uden
+  /// entry, klampes til klassisk, så doc'et aldrig får en variant der ikke
+  /// kan resolves. startGameFromLobby læser feltet defensivt.
+  Future<void> setVariant(String code, String variantId,
+      {Map<String, dynamic>? entry}) async {
+    final bool builtin =
+        kAllVariants.any((VariantConfig v) => v.id == variantId);
+    if (!isWellFormedVariantId(variantId) || (!builtin && entry == null)) {
+      await _games.doc(code).update(<String, dynamic>{
+        'variantId': classicVariant.id,
+      });
+      return;
+    }
+    await _games.doc(code).update(<Object, Object?>{
+      'variantId': variantId,
+      if (entry != null)
+        FieldPath(<String>['cardRulesVariants', variantId]): entry,
     });
   }
 

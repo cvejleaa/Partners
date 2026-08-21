@@ -35,23 +35,35 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   /// Valgt AI-sværhedsgrad (0=Begynder, 1=Normal, 2=Skarp).
   int _aiLevel = kAiLevelDefault;
 
-  /// Valgt variant. Default klassisk. Afgør bræt/kort — vælges FØRST, fordi
-  /// "hvad spiller vi" bestemmer resten af opsætningen.
-  VariantConfig _variant = classicVariant;
+  /// Valgt variant-ID. Default klassisk. Afgør bræt/kort — vælges FØRST,
+  /// fordi "hvad spiller vi" bestemmer resten af opsætningen. Id frem for
+  /// config-instans: listen (inkl. admins egne varianter) materialiseres pr.
+  /// build af selectableVariantsProvider, så instanserne er ikke stabile.
+  String _variantId = classicVariant.id;
 
-  /// Navn/beskrivelse med admins evt. egne tekster (fx når 25 år-sættet er
-  /// afskrevet fra det fysiske spil). Selve reglen (trim + tom → kode-tekst)
-  /// bor i variant_config.dart (variantNameFrom), delt med online-lobbyen.
+  VariantConfig _variantFrom(List<VariantConfig> list) => list.firstWhere(
+      (VariantConfig v) => v.id == _variantId,
+      orElse: () => classicVariant);
+
+  /// Navn/beskrivelse med admins evt. egne tekster. Customs bærer allerede
+  /// deres admin-navn/-beskrivelse fra materialiseringen (variantFromRaw);
+  /// kun 25 år har en kode-tekst der kan afløses.
   String _displayName(VariantConfig v) => variantNameFrom(
       v,
       v.id == partners25.id
-          ? ref.watch(variantCardRulesProvider).name
+          ? ref
+              .watch(variantCardRulesProvider)
+              .configFor(partners25.id)
+              .name
           : null);
 
   String? _displayDescription(VariantConfig v) => variantDescriptionFrom(
       v,
       v.id == partners25.id
-          ? ref.watch(variantCardRulesProvider).description
+          ? ref
+              .watch(variantCardRulesProvider)
+              .configFor(partners25.id)
+              .description
           : null);
 
   @override
@@ -108,31 +120,41 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             // (ikke SegmentedButton), så den kan rumme flere kommende varianter.
             Row(
               children: <Widget>[
-                VariantBadge(variant: _variant, compact: true),
+                VariantBadge(
+                    variant:
+                        _variantFrom(ref.watch(selectableVariantsProvider)),
+                    compact: true),
                 const SizedBox(width: 8),
                 const Text('Spil:'),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: DropdownButton<VariantConfig>(
+                  child: DropdownButton<String>(
                     isExpanded: true,
-                    value: _variant,
-                    items: <DropdownMenuItem<VariantConfig>>[
-                      for (final VariantConfig v in kAllVariants)
-                        DropdownMenuItem<VariantConfig>(
-                            value: v, child: Text(_displayName(v))),
+                    value: _variantId,
+                    items: <DropdownMenuItem<String>>[
+                      // Indbyggede + admins egne (ikke-arkiverede) varianter.
+                      for (final VariantConfig v
+                          in ref.watch(selectableVariantsProvider))
+                        DropdownMenuItem<String>(
+                            value: v.id,
+                            child: Text(_displayName(v),
+                                overflow: TextOverflow.ellipsis)),
                     ],
-                    onChanged: (VariantConfig? v) {
-                      if (v != null) setState(() => _variant = v);
+                    onChanged: (String? id) {
+                      if (id != null) setState(() => _variantId = id);
                     },
                   ),
                 ),
               ],
             ),
-            if (_displayDescription(_variant) != null)
+            if (_displayDescription(
+                    _variantFrom(ref.watch(selectableVariantsProvider))) !=
+                null)
               Padding(
                 padding: const EdgeInsets.only(top: 2, bottom: 6),
                 child: Text(
-                  _displayDescription(_variant)!,
+                  _displayDescription(
+                      _variantFrom(ref.watch(selectableVariantsProvider)))!,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -218,23 +240,22 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                         ];
                         // Opløs spillets faktiske kortregler ÉN gang her:
                         // klassisk live + variantens overrides (admin-gemte
-                        // vinder over kode-seedet). startGame opløser ikke selv.
+                        // vinder over kode-seedet; en custom uden entry =
+                        // klassisk). startGame opløser ikke selv.
+                        final VariantConfig variant = _variantFrom(
+                            ref.read(selectableVariantsProvider));
+                        final VariantAdminConfig vc = ref
+                            .read(variantCardRulesProvider)
+                            .configFor(variant.id);
                         ref.read(gameProvider.notifier).startGame(
                               setups,
                               cardRules: effectiveCardRules(
-                                _variant,
+                                variant,
                                 ref.read(cardRulesProvider),
-                                stored: _variant.id == partners25.id &&
-                                        ref
-                                            .read(variantCardRulesProvider)
-                                            .stored
-                                    ? ref
-                                        .read(variantCardRulesProvider)
-                                        .overrides
-                                    : null,
+                                stored: vc.stored ? vc.overrides : null,
                               ),
                               aiLevel: _aiLevel,
-                              variant: _variant,
+                              variant: variant,
                             );
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(

@@ -1,21 +1,23 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/variant_config.dart';
+import '../../state/variant_card_rules_controller.dart';
 import '../../online/online_service.dart';
 import '../../stats/badges.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 
-class SiteStatsScreen extends StatefulWidget {
+class SiteStatsScreen extends ConsumerStatefulWidget {
   const SiteStatsScreen({super.key});
 
   @override
-  State<SiteStatsScreen> createState() => _SiteStatsScreenState();
+  ConsumerState<SiteStatsScreen> createState() => _SiteStatsScreenState();
 }
 
-class _SiteStatsScreenState extends State<SiteStatsScreen> {
+class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
   final _repo = StatsRepository();
   Map<String, UserStatsDoc> _allStats = <String, UserStatsDoc>{};
 
@@ -273,9 +275,15 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
         ),
         for (final vid in vids)
           FilterChip(
-            label: Text(variantForState(vid).shortLabel),
+            // Custom-varianters navn/tema fra config-doc'et (controlleren
+            // læser det for alle brugere, ikke kun admin).
+            label: Text(variantFromRaw(
+                    vid, ref.watch(variantCardRulesProvider).toRawJson())
+                .shortLabel),
             selected: _vid == vid,
-            selectedColor: variantForState(vid).badgeColor,
+            selectedColor: variantFromRaw(
+                    vid, ref.watch(variantCardRulesProvider).toRawJson())
+                .badgeColor,
             checkmarkColor: _vid == vid ? Colors.white : null,
             labelStyle:
                 _vid == vid ? const TextStyle(color: Colors.white) : null,
