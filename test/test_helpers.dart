@@ -5,6 +5,7 @@ import 'package:partners/models/game_state.dart';
 import 'package:partners/models/piece.dart';
 import 'package:partners/models/player.dart';
 import 'package:partners/models/playing_card.dart';
+import 'package:partners/models/variant_config.dart';
 
 GameState makeState({
   List<List<PiecePosition>>? piecePositions,
@@ -12,6 +13,7 @@ GameState makeState({
   int currentPlayerIndex = 0,
   GamePhase phase = GamePhase.play,
   CardRules? cardRules,
+  VariantConfig? variant,
 }) {
   const BoardGeometry geom = BoardGeometry();
   final List<Player> players = <Player>[];
@@ -51,5 +53,6 @@ GameState makeState({
     phase: phase,
     handNumber: 1,
     cardRules: cardRules,
+    variant: variant,
   );
 }

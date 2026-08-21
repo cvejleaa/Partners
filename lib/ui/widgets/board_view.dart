@@ -236,7 +236,11 @@ class _BoardPainter extends CustomPainter {
       ..write('/')
       ..write(state.geometry.segments)
       ..write('/')
-      ..write(state.variant.piecesPerPlayer);
+      ..write(state.variant.piecesPerPlayer)
+      // Variant-id: klassisk/p25 har IDENTISK geometri, så uden denne ville et
+      // variant-skift ikke udløse repaint af bord-farven (feltColor).
+      ..write('/')
+      ..write(state.variant.id);
     for (final Player p in state.players) {
       sb
         ..write(';')
@@ -300,7 +304,11 @@ class _BoardPainter extends CustomPainter {
     // (drejet) skive ikke løber over kanten.
     final double discR = min(dim * 0.46 * scale, dim * 0.492);
     final double shadowR = min(discR * 1.022, dim * 0.499);
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF14331F));
+    // Bord-farven kommer fra varianten (klassisk grøn / 25 år marineblå) —
+    // selve spillefladen ovenpå er creme uanset variant, så brikkernes
+    // læsbarhed er uændret.
+    canvas.drawRect(
+        Offset.zero & size, Paint()..color = state.variant.feltColor);
     final Rect boardRect = Rect.fromCircle(center: center, radius: shadowR);
     canvas.drawCircle(
       center,

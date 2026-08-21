@@ -96,7 +96,12 @@ class PlayerPanel extends StatelessWidget {
     // Starteren får en klar amber ramme + glød, så det er tydeligt hvem der
     // starter runden — også når det ikke er deres tur.
     const Color starterGold = Color(0xFFFFC107);
-    final Color borderColor = isStarter ? starterGold : dotColor;
+    // Tur-markeringen er HUE-UAFHÆNGIG (hvid ramme+glød): en farvet markering
+    // drukner når spillerens farve ligner bordet (grøn spiller på grøn flade —
+    // og med variant-farver også blå på blå). Identiteten bæres af prikken ved
+    // navnet, ikke af rammen.
+    final Color borderColor =
+        isStarter ? starterGold : (isCurrent ? Colors.white : dotColor);
     final double borderWidth = isStarter ? 3 : (isCurrent ? 2.5 : 1.2);
     final List<BoxShadow>? glow = isStarter
         ? <BoxShadow>[
@@ -106,16 +111,23 @@ class PlayerPanel extends StatelessWidget {
         : (isCurrent
             ? <BoxShadow>[
                 BoxShadow(
-                    color: dotColor.withValues(alpha: 0.6), blurRadius: 8),
+                    color: Colors.white.withValues(alpha: 0.45), blurRadius: 8),
               ]
             : null);
 
     // Starterens panel får en MØRK baggrund i stedet for spillerens (evt.
     // gyldne) farve, så den gyldne ramme ikke drukner i baggrunden. Farve-
     // identiteten bevares via prikken ved navnet + den centrale starter-chip.
+    // Øvrige paneler: spillerens farve komponeret på en NEUTRAL mørk bund
+    // (ikke direkte på bordfarven) — ellers forsvinder farven når den ligner
+    // bordet (før: grøn spiller ~1,4:1 på grøn flade; med variant-blå ville
+    // det ramme den blå spiller).
     final Color panelFill = isStarter
         ? Colors.black.withValues(alpha: 0.42)
-        : dotColor.withValues(alpha: isCurrent ? 0.55 : 0.28);
+        : Color.alphaBlend(
+            dotColor.withValues(alpha: isCurrent ? 0.55 : 0.28),
+            Colors.black.withValues(alpha: 0.35),
+          );
 
     final Widget box = Container(
       width: double.infinity,

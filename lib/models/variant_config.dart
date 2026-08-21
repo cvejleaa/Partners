@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import '../game/card_rules.dart';
 import 'board.dart';
 import 'playing_card.dart';
@@ -60,6 +62,9 @@ class VariantConfig {
     this.winCondition = WinCondition.teamAllHome,
     this.destinationsPerPlayer = 1,
     this.cardRuleOverrides,
+    this.tableColor = const Color(0xFF0E2A1A),
+    this.feltColor = const Color(0xFF14331F),
+    this.badgeColor = const Color(0xFF4CAF50),
   });
 
   /// Stabil identitet (gemmes i spil-dokumentet, se serialisering).
@@ -108,6 +113,22 @@ class VariantConfig {
   /// spillets state er runtime-autoritet (kort serialiseres uafhængigt i 'cr',
   /// så en senere ændring rører ikke et igangværende spil).
   final Map<Rank, CardRuleConfig>? cardRuleOverrides;
+
+  /// Variantens visuelle identitet i SPILLET (ambient bekræftelse — badgen
+  /// bærer informationen, farven bekræfter den). Klassisk = de eksisterende
+  /// grønne (defaults, byte-identisk); 25 år = marineblå som det fysiske sæts
+  /// æske. [tableColor] = spil-skærmenes Scaffold-baggrund; [feltColor] =
+  /// bræt-canvas + hånd-/status-fladerne. [badgeColor] er en TREDJE farve
+  /// valgt til at være læsbar på app-krom (grøn/hvid baggrund) — bord-farverne
+  /// selv har ~1,1:1 mod temaet og ville forsvinde som chip-farve.
+  final Color tableColor;
+  final Color feltColor;
+  final Color badgeColor;
+
+  /// Kort badge-etiket ("Klassisk"/"25 år") — det spillerne SIGER ved bordet.
+  /// Falder tilbage til navnet for fremtidige varianter uden kort form.
+  String get shortLabel =>
+      id == 'classic' ? 'Klassisk' : (id == 'p25' ? '25 år' : name);
 
   /// Samlet antal felter på ringen: segmenter × (UD-felt + nummererede felter).
   /// Klassisk: 4 × (1 + 14) = 60. Partners+: 6 × (1 + 13) = 84.
@@ -165,6 +186,13 @@ const VariantConfig classicVariant = VariantConfig(
 const VariantConfig partners25 = VariantConfig(
   id: 'p25',
   name: 'Partners 25 år',
+  // Marineblå som den fysiske æske. Lysstyrke-MATCHET mod klassisk grøn
+  // (relativ luminans 0,0178/0,0260 mod grønnens 0,0182/0,0262), så hvid
+  // tekst/kontrast er uændret — men med nok kulør til at læses som blå selv
+  // ved dæmpet skærm/nattilstand. (En mørkere navy ville miste kuløren.)
+  tableColor: Color(0xFF15243F),
+  feltColor: Color(0xFF1B2C4F),
+  badgeColor: Color(0xFF3D6DDB),
   description: 'Jubilæumsudgavens fem specialkort — 7/+2−5, byt/9, 11/1×1, '
       '4×1 og 5↷ — er skrevet af efter det fysiske spil. Antallet af hvert '
       'kort er ikke talt op, så kortfordelingen er appens egen.',

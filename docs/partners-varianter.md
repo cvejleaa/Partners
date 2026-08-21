@@ -356,6 +356,9 @@ spillere i 2 hold á 2, alder 8+, spilletid 30-45 min. Indhold: spilleplade,
 - **Bekræftet (ejer):** der er IKKE længere et −4/÷4-kort i 25 år — 4×1
   erstatter det klassiske 4-kort. Baglæns-bevægelse findes i 25 år kun som
   −5-delen af "7 ELLER +2−5".
+- **Bekræftet (ejer-foto, 2026):** æsken og kortryggene er MØRK MARINEBLÅ med
+  regnbue-hjul — kilden til appens 25 år-tema (variantens tableColor/feltColor
+  i variant_config.dart).
 - **[HUL — reduceret]** Antal pr. korttype og den fulde liste af ALMINDELIGE
   kort er stadig ikke talt op; specialkortene ovenfor er bekræftet. 2♥♥ er
   fortsat ubekræftet.

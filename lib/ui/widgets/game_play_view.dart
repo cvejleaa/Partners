@@ -546,7 +546,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      color: const Color(0xFF14331F),
+      color: _state.variant.feltColor,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.start,
@@ -613,7 +613,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      color: const Color(0xFF14331F),
+      color: _state.variant.feltColor,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.start,
@@ -1419,7 +1419,7 @@ class _SpectatorView extends StatelessWidget {
         ),
         Container(
           width: double.infinity,
-          color: const Color(0xFF14331F),
+          color: state.variant.feltColor,
           padding: const EdgeInsets.all(12),
           child: const Text('Du ser med (ikke din plads).',
               textAlign: TextAlign.center,

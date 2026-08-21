@@ -17,6 +17,7 @@ import '../../services/feedback_service.dart';
 import '../../state/display_config.dart';
 import '../widgets/card_counter_panel.dart';
 import '../widgets/game_play_view.dart';
+import '../widgets/variant_badge.dart';
 import 'setup_screen.dart';
 import 'win_screen.dart';
 
@@ -167,6 +168,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           MaterialPageRoute<void>(
             builder: (_) => WinScreen(
               winningTeamIndex: winner,
+              variant: state.variant,
               boardImage: shot,
               marginFields: margin,
               viewerWon: viewerWon,
@@ -186,11 +188,24 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       });
     }
     return Scaffold(
-      backgroundColor: const Color(0xFF0E2A1A),
+      // Variantens bord-farve (klassisk grøn / 25 år marineblå) — ambient
+      // bekræftelse af badgen i titlen.
+      backgroundColor: state.variant.tableColor,
       appBar: AppBar(
         backgroundColor: const Color(0xFF8B5E3C),
         foregroundColor: Colors.white,
-        title: Text('Hånd #${state.handNumber}  •  ${_phaseLabel(state.phase)}'),
+        // Identitet til venstre (badge), fase flekser og ellipserer — en
+        // tekst-sammensætning ville ellipsere fasen væk på 360 dp.
+        title: Row(children: <Widget>[
+          VariantBadge(variant: state.variant, compact: true),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Hånd #${state.handNumber}  •  ${_phaseLabel(state.phase)}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ]),
         actions: <Widget>[
           IconButton(
             tooltip: _showCardCounter

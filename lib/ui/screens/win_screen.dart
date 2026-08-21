@@ -4,6 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/variant_config.dart';
+import '../widgets/variant_badge.dart';
+
 import '../../app.dart';
 import '../../online/online_service.dart';
 import '../../services/feedback_service.dart';
@@ -22,6 +25,7 @@ class WinScreen extends ConsumerStatefulWidget {
     this.winnerColors = const <Color>[],
     this.onRematch,
     this.rematchLabel,
+    this.variant,
   });
 
   final int winningTeamIndex;
@@ -45,6 +49,10 @@ class WinScreen extends ConsumerStatefulWidget {
   /// hvis sat.
   final Future<void> Function(BuildContext context)? onRematch;
   final String? rematchLabel;
+
+  /// Hvilken variant spillet var — vises som badge ("vi vandt et 25 år-spil").
+  /// null = ukendt (ingen badge).
+  final VariantConfig? variant;
 
   @override
   ConsumerState<WinScreen> createState() => _WinScreenState();
@@ -134,6 +142,12 @@ class _WinScreenState extends ConsumerState<WinScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     const Text('🏆', style: TextStyle(fontSize: 64)),
+                    if (widget.variant != null) ...<Widget>[
+                      const SizedBox(height: 6),
+                      // "Vi vandt et 25 år-spil" — badgen er en del af
+                      // samtalen om sejren, ikke pynt.
+                      VariantBadge(variant: widget.variant!),
+                    ],
                     const SizedBox(height: 8),
                     Text(
                       headline,

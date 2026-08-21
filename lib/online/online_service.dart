@@ -94,12 +94,20 @@ class GameSummary {
       this.phase,
       this.currentName,
       this.isMyTurn = false,
-      this.needsExchange = false});
+      this.needsExchange = false,
+      this.variantId = 'classic',
+      this.variantLabel = ''});
   final String code;
   final String hostName;
   final String status;
   final List<String> playerNames;
   final String? hostUid;
+
+  /// Variant-identitet til "Mine spil"-badgen (kende forskel i LISTEN — det
+  /// eneste sted man ser flere spil samtidig). [variantLabel] er det RESOLVEDE
+  /// navn (admins evt. eget navn fra doc'ets cardRulesVariants-kopi).
+  final String variantId;
+  final String variantLabel;
 
   /// Spil-fase for igangværende spil ('play', 'exchange', …). Null = ukendt.
   final String? phase;
@@ -568,6 +576,9 @@ class OnlineService {
       }
     }
 
+    // Variant (defensivt; ukendt → klassisk) + resolvet navn — læses HER,
+    // hvor doc'et er: GameSummary er det eneste liste-laget ser.
+    final VariantConfig variant = variantFromDoc(d);
     return GameSummary(
       id,
       d['hostName'] as String? ?? '?',
@@ -578,6 +589,8 @@ class OnlineService {
       currentName: currentName,
       isMyTurn: isMyTurn,
       needsExchange: needsExchange,
+      variantId: variant.id,
+      variantLabel: variantDisplayName(variant, d['cardRulesVariants']),
     );
   }
 

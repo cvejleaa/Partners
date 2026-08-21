@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../game/ai/ai_player.dart';
 import '../../game/progress.dart';
 import '../../models/game_state.dart';
+import '../../models/variant_config.dart';
 import '../../models/move.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
@@ -18,6 +19,7 @@ import '../../state/display_config.dart';
 import '../../stats/stats_repository.dart';
 import '../widgets/card_view.dart';
 import '../widgets/game_play_view.dart';
+import '../widgets/variant_badge.dart';
 import 'online_screens.dart';
 import 'win_screen.dart';
 
@@ -234,12 +236,26 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     // heartbeat (~hver 1,75s i et 4-spillers spil, hos alle klienter). Feltet
     // holdes friskt løbende; selve rebuild'et sker højst hvert par sekunder.
     final Map<String, int> presenceMs = _presenceMs;
+    // Varianten skal på SCAFFOLD'en, som bygges FØR snap.when — læs doc'et
+    // defensivt her (loading/fejl/ukendt id → klassisk grøn). NB: ved allerførste
+    // load blinker fladen derfor grøn→blå for et 25 år-spil; navngivet fravalg
+    // (en initialVariantId-param gennem begge navigationssteder er ikke det værd).
+    final Map<String, dynamic>? rawDoc = snap.valueOrNull?.data();
+    final VariantConfig variant =
+        rawDoc == null ? classicVariant : variantFromDoc(rawDoc);
     return Scaffold(
-      backgroundColor: const Color(0xFF0E2A1A),
+      backgroundColor: variant.tableColor,
       appBar: AppBar(
         backgroundColor: const Color(0xFF8B5E3C),
         foregroundColor: Colors.white,
-        title: Text('Online — ${widget.code}'),
+        title: Row(children: <Widget>[
+          VariantBadge(variant: variant, compact: true),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text('Online — ${widget.code}',
+                overflow: TextOverflow.ellipsis),
+          ),
+        ]),
       ),
       body: snap.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -318,6 +334,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               Navigator.of(context).pushReplacement<void, void>(
                 MaterialPageRoute<void>(
                   builder: (_) => WinScreen(
+                    variant: state.variant,
                     winningTeamIndex: winner,
                     fromOnline: true,
                     boardImage: shot,

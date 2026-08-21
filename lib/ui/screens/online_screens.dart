@@ -10,6 +10,7 @@ import '../../models/variant_config.dart';
 import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
+import '../widgets/variant_badge.dart';
 import '../../utils/palette.dart';
 import 'online_game_screen.dart';
 
@@ -244,7 +245,17 @@ class OnlineHomeScreen extends ConsumerWidget {
           g.isPlaying ? Icons.play_circle : Icons.meeting_room,
           color: needAct ? const Color(0xFF2E7D32) : null,
         ),
-        title: Text('Spil ${g.code}  ·  vært: ${g.hostName}'),
+        // Variant-badge FØRST — listen er det eneste sted man ser flere spil
+        // samtidig, så det er her man "kender forskel på dem".
+        title: Row(children: <Widget>[
+          VariantBadge(
+              variant: variantFromId(g.variantId), compact: true),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text('Spil ${g.code}  ·  vært: ${g.hostName}',
+                overflow: TextOverflow.ellipsis),
+          ),
+        ]),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -528,7 +539,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                 // værten kan ændre den (afgør bræt/kort for alle).
                 Row(
                   children: <Widget>[
-                    const Icon(Icons.style, size: 18),
+                    VariantBadge(variant: variant, compact: true),
                     const SizedBox(width: 8),
                     const Text('Spil:'),
                     const SizedBox(width: 12),

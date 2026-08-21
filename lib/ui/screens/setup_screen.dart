@@ -7,6 +7,7 @@ import '../../game/ai/ai_player.dart';
 import '../../models/variant_config.dart';
 import '../../state/card_rules_controller.dart';
 import '../../state/variant_card_rules_controller.dart';
+import '../widgets/variant_badge.dart';
 import 'admin_screen.dart';
 import 'game_screen.dart';
 import 'self_test_screen.dart';
@@ -107,7 +108,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             // (ikke SegmentedButton), så den kan rumme flere kommende varianter.
             Row(
               children: <Widget>[
-                const Icon(Icons.style, size: 18),
+                VariantBadge(variant: _variant, compact: true),
                 const SizedBox(width: 8),
                 const Text('Spil:'),
                 const SizedBox(width: 12),
