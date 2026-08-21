@@ -467,17 +467,20 @@ VariantConfig variantFromRaw(String? id, dynamic variantsRaw) {
   final Map<dynamic, dynamic> e = entry as Map;
   final VariantTheme theme =
       variantThemeById(e['theme'] is String ? e['theme'] as String : null);
-  final String name = (e['name'] is String && (e['name'] as String).trim().isNotEmpty)
-      ? (e['name'] as String).trim()
-      : base.id;
-  final String? label =
-      (e['label'] is String && (e['label'] as String).trim().isNotEmpty)
-          ? (e['label'] as String).trim()
-          : null;
-  final String? adminDesc = (e['description'] is String &&
-          (e['description'] as String).trim().isNotEmpty)
-      ? (e['description'] as String).trim()
-      : null;
+  // Tekst-felterne kommer i online-flowet fra spil-DOC'ets kopi, som ethvert
+  // medlem kan skrive — kap længderne defensivt her (admin-UI'et kapper
+  // allerede ved indtastning), så en fjendtlig kopi ikke kan sprænge
+  // AppBar/dialoger med kilometerlang tekst.
+  String? cappedStr(dynamic v, int max) {
+    if (v is! String) return null;
+    final String t = v.trim();
+    if (t.isEmpty) return null;
+    return t.length > max ? t.substring(0, max) : t;
+  }
+
+  final String name = cappedStr(e['name'], 2 * kMaxCustomNameLength) ?? base.id;
+  final String? label = cappedStr(e['label'], 2 * kMaxCustomLabelLength);
+  final String? adminDesc = cappedStr(e['description'], 300);
   return VariantConfig(
     id: base.id,
     name: name,
