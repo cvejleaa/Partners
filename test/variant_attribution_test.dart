@@ -95,5 +95,23 @@ void main() {
           'classic');
       expect(variantIdOfGameDoc(<String, dynamic>{'state': 'nope'}), 'classic');
     });
+
+    test('vanformet STRENG-vid → classic, ikke returneret rå (formen '
+        'valideres her, ikke kun typen)', () {
+      // De øvrige tests dækker kun ikke-String vid'er (fravær/42/'nope').
+      // Fjernes selve regex-tjekket i variantIdOfGameDoc (`vid is String ?
+      // vid : 'classic'` uden _kVariantIdForm), passerer de stadig — kun
+      // denne test fanger det, fordi vid HER er en String, blot vanformet.
+      expect(
+          variantIdOfGameDoc(<String, dynamic>{
+            'state': <String, dynamic>{'vid': 'IKKE gyldigt id!'},
+          }),
+          'classic');
+      expect(
+          variantIdOfGameDoc(<String, dynamic>{
+            'state': <String, dynamic>{'vid': 'x' * 33}, // for langt
+          }),
+          'classic');
+    });
   });
 }
