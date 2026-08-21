@@ -77,12 +77,28 @@ void main() {
       return pixel;
     }
 
+    // Kanal-sammenligning med ±1/255-tolerance: render-pipelinen kan afrunde
+    // en enkelt bit (CI målte blå 0x4E for 0x4F). Båndet er stadig mutations-
+    // følsomt: klassisk grøn (0x14331F) og p25-blå (0x1B2C4F) afviger med
+    // 7-48 kanaltrin, så en revert til den hardkodede grønne er langt uden
+    // for båndet.
+    void expectPixel(Color actual, Color expected) {
+      int ch(double v) => (v * 255).round();
+      expect(ch(actual.r), closeTo(ch(expected.r), 1),
+          reason: 'rød kanal (forventede $expected, målte $actual)');
+      expect(ch(actual.g), closeTo(ch(expected.g), 1),
+          reason: 'grøn kanal (forventede $expected, målte $actual)');
+      expect(ch(actual.b), closeTo(ch(expected.b), 1),
+          reason: 'blå kanal (forventede $expected, målte $actual)');
+    }
+
     testWidgets('klassisk maler grøn; p25 maler marineblå', (tester) async {
       // Hjørne-pixlen ligger UDEN FOR den creme spilleskive — det er præcis
       // bord-baggrunden painteren fylder først.
-      expect(await cornerPixel(tester, classicVariant),
+      expectPixel(await cornerPixel(tester, classicVariant),
           const Color(0xFF14331F));
-      expect(await cornerPixel(tester, partners25), const Color(0xFF1B2C4F));
+      expectPixel(
+          await cornerPixel(tester, partners25), const Color(0xFF1B2C4F));
     });
   });
 }
