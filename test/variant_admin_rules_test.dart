@@ -10,8 +10,10 @@
 //  A3 storedOverridesFor: defensiv klampning af doc-læsning på alle niveauer.
 //  A4 payload-former: klassisk-gemmet ejer KUN 'rules'; variant-gemmet KUN
 //     'variants' — kombineret med mergeFields kan de ikke slette hinanden.
-//  A5 deckSanityWarnings: uspillelige/ødelagte sæt advares; klassisk er ren.
-//  A6 CardRules.sameConfig dækker ALLE felter inkl. jumpsBlockade (UI-sync).
+//  A5 deckSanityWarnings: uspillelige/ødelagte sæt advares; klassisk er ren;
+//     25 års sekvens FANGET i split/multi advares (kan ikke vælges i UI).
+//  A6 CardRules.sameConfig dækker ALLE felter inkl. jumpsBlockade OG 25 års
+//     fire nye felter hver for sig (UI-sync).
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/game/card_rules.dart';
@@ -171,6 +173,25 @@ void main() {
       expect(w2, hasLength(1));
       expect(w2.single, contains('blokade'));
     });
+
+    test(
+        'sekvens (frem+tilbage) FANGET i split/multi-kort advares (kan ikke '
+        'vælges brik-for-brik i spilfladen)', () {
+      // 25 år-motoren: et kort kan i teorien få BÅDE splitTotal/multi OG
+      // seqForward/seqBackward slået til fra admin. Spilfladens flertrins-
+      // flow kan ikke udtrykke sekvensen dér (samme brik skal vælges to
+      // gange) — det skal advares, ikke tabes tavst.
+      CardRules trapped = CardRules.defaults();
+      trapped = trapped.withRank(
+          Rank.seven,
+          trapped
+              .forRank(Rank.seven)
+              .copyWith(seqForward: 2, seqBackward: 5, splitTotal: 7));
+      final List<String> w = deckSanityWarnings(trapped);
+      expect(w.any((s) => s.contains('frem+tilbage')), isTrue,
+          reason:
+              'sekvens+split-kombinationen på ét kort skal give en advarsel');
+    });
   });
 
   group('A6 — sameConfig dækker alle felter (UI-sync)', () {
@@ -183,6 +204,44 @@ void main() {
           CardRuleConfig(forwardSteps: <int>[5], jumpsBlockade: true);
       expect(CardRules.sameConfig(a, b), isFalse);
       expect(CardRules.sameConfig(a, a), isTrue);
+    });
+
+    test(
+        'dækker OGSÅ 25 års nye felter (seqForward/seqBackward/multiPieces/'
+        'multiSteps) — hver for sig', () {
+      // Hver linje i sameConfig er sin EGEN vagt. Muteres én af de fire nye
+      // felt-tjek væk (fx glemmes multiSteps), bliver PRÆCIS den test rød —
+      // ikke de andre tre, som stadig sammenligner deres eget felt korrekt.
+      const CardRuleConfig base =
+          CardRuleConfig(forwardSteps: <int>[7], seqForward: 2, seqBackward: 5);
+      expect(
+          CardRules.sameConfig(
+              base, const CardRuleConfig(forwardSteps: <int>[7], seqForward: 3, seqBackward: 5)),
+          isFalse,
+          reason: 'seqForward alene skal gøre configs forskellige');
+      expect(
+          CardRules.sameConfig(
+              base, const CardRuleConfig(forwardSteps: <int>[7], seqForward: 2, seqBackward: 4)),
+          isFalse,
+          reason: 'seqBackward alene skal gøre configs forskellige');
+      const CardRuleConfig multiBase =
+          CardRuleConfig(forwardSteps: <int>[11], multiPieces: 2, multiSteps: 1);
+      expect(
+          CardRules.sameConfig(
+              multiBase,
+              const CardRuleConfig(
+                  forwardSteps: <int>[11], multiPieces: 3, multiSteps: 1)),
+          isFalse,
+          reason: 'multiPieces alene skal gøre configs forskellige');
+      expect(
+          CardRules.sameConfig(
+              multiBase,
+              const CardRuleConfig(
+                  forwardSteps: <int>[11], multiPieces: 2, multiSteps: 2)),
+          isFalse,
+          reason: 'multiSteps alene skal gøre configs forskellige');
+      expect(CardRules.sameConfig(base, base), isTrue);
+      expect(CardRules.sameConfig(multiBase, multiBase), isTrue);
     });
   });
 
