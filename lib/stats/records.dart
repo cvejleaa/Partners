@@ -69,19 +69,23 @@ List<GameRecord> recordsFromLastGame({
   }
 
   // 🔥 Flest slag i ét spil. Kræver mindst 2 for ikke at fejre trivielt.
+  // Sammenligningen er variant-scoped (aggregatet er det), så etiketten skal
+  // med — ellers læses banneret som en all-time-rekord.
   final lastMax = lastGame.maxCapturesInGame;
   final bestMax = aggregate.maxCapturesInGame;
   if (lastMax >= 2 && lastMax >= bestMax) {
     records.add(GameRecord(
       id: 'most_captures',
       emoji: '🔥',
-      message: 'Ny rekord: flest slag i ét spil ($lastMax)',
+      message: 'Ny rekord i $variantLabel: flest slag i ét spil ($lastMax)',
     ));
   }
 
   // 🏠 Flest brikker i mål i ét spil. (Aggregatet summerer over alle spil, så
   // vi kan ikke aflæse "bedste enkeltspil" derfra — vi viser kun et banner hvis
-  // spilleren fik alle 4 brikker i mål i dette spil, hvilket altid er flot.)
+  // spilleren fik alle 4 brikker i mål i dette spil, hvilket altid er flot.
+  // BEVIDST uden variant-etiket: banneret sammenligner ikke mod aggregatet —
+  // det fejrer en enkeltspils-bedrift, som er ens i alle varianter.)
   if (lastGame.homeStretchEntries >= 4) {
     records.add(GameRecord(
       id: 'all_home',

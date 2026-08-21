@@ -295,6 +295,22 @@ VariantConfig variantFromAutosave(Map<String, dynamic> raw) {
       (st is Map && st['vid'] is String) ? st['vid'] as String : null);
 }
 
+/// Chip-rækkernes fælles variant-liste: de indbyggede varianter først (fast
+/// rækkefølge), derefter EKSTRA id'er fundet i data (fx custom-varianter i
+/// byVariant-nøgler), dedupileret og sorteret. Ét sted, så profil- og
+/// site-skærmens chips ikke driver fra hinanden.
+List<String> variantIdsWithExtras(Iterable<String> extraIds) {
+  final List<String> builtins = <String>[
+    for (final VariantConfig v in kAllVariants) v.id,
+  ];
+  final List<String> extras = extraIds
+      .where((String id) => !builtins.contains(id))
+      .toSet()
+      .toList()
+    ..sort();
+  return <String>[...builtins, ...extras];
+}
+
 /// Den ENE resolver for et spils faktiske kortregler:
 /// [base] (de live/admin-regler for klassisk) + variantens overrides ovenpå.
 /// Precedens: admin-GEMTE overrides for varianten ([stored]) > variantens

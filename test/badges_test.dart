@@ -196,6 +196,10 @@ void main() {
       final records = recordsFromLastGame(
           aggregate: aggregate, lastGame: lastGame, variantLabel: 'Klassisk');
       expect(records.any((r) => r.id == 'most_captures'), isTrue);
+      // Sammenligningen er variant-scoped → etiketten skal stå i teksten
+      // (QC-fund: uden den læses banneret som en all-time-rekord).
+      expect(records.firstWhere((r) => r.id == 'most_captures').message,
+          contains('Klassisk'));
     });
 
     test('ingen rekorder for et helt almindeligt spil', () {

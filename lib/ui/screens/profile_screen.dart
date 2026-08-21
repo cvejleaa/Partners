@@ -282,14 +282,10 @@ class _AllTimeTabState extends State<_AllTimeTab> {
 
   /// Chip-listen er DATADREVET: indbyggede varianter + alle nøgler der faktisk
   /// findes i brugerens byVariant (så admin-definerede varianter dukker op af
-  /// sig selv, når de får spil — uden at røre denne skærm igen).
-  List<String> _chipVids(UserStatsDoc doc) => <String>[
-        for (final v in kAllVariants) v.id,
-        ...(doc.byVariant.keys
-            .where((k) => kAllVariants.every((v) => v.id != k))
-            .toList()
-          ..sort()),
-      ];
+  /// sig selv, når de får spil — uden at røre denne skærm igen). Selve reglen
+  /// bor i variantIdsWithExtras, delt med site-skærmen.
+  List<String> _chipVids(UserStatsDoc doc) =>
+      variantIdsWithExtras(doc.byVariant.keys);
 
   Widget _chipRow(UserStatsDoc doc) {
     return Wrap(

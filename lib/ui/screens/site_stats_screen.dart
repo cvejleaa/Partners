@@ -258,13 +258,10 @@ class _SiteStatsScreenState extends State<SiteStatsScreen> {
   /// op af sig selv). Ingen spil-antal på chips her — antallet er pr. bruger
   /// og ville ikke betyde noget på en fælles rangliste.
   Widget _variantChips() {
-    final customIds = <String>{
-      for (final d in _allStats.values) ...d.byVariant.keys,
-    }..removeAll(<String>[for (final v in kAllVariants) v.id]);
-    final vids = <String>[
-      for (final v in kAllVariants) v.id,
-      ...customIds.toList()..sort(),
-    ];
+    // Delt regel med profilens chips (variantIdsWithExtras): indbyggede
+    // varianter + custom-id'er fundet i de indlæste docs.
+    final vids = variantIdsWithExtras(
+        <String>[for (final d in _allStats.values) ...d.byVariant.keys]);
     return Wrap(
       spacing: 8,
       runSpacing: 4,
