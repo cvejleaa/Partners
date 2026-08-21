@@ -936,6 +936,12 @@ Map<String, dynamic> moveLogEntry(int seat, Move move) => <String, dynamic>{
                 'pieceId': s.pieceId,
                 'from': posToMap(s.from),
                 'to': posToMap(s.to),
+                // Kun skrevet når steppet slår/brænder — så "mens du var
+                // væk"-replayen kan fortælle modstanderen HVAD der skete
+                // (fx +2−5's to hjemslag). Gamle entries uden feltet læses
+                // som "intet slag" (bagud-kompat).
+                if (s.capturedPieceId != null) 'cap': true,
+                if (s.burnsMover) 'burn': true,
               })
           .toList(),
     };

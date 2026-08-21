@@ -156,25 +156,31 @@ const VariantConfig classicVariant = VariantConfig(
 );
 
 /// Partners 25 år (jubilæumsudgave). Strukturelt = klassisk (4 spillere, 2v2,
-/// samme bræt), så den spiller og renderer som klassisk. Forskellen ligger i
-/// kortsættet — men den fulde officielle kortliste er ikke offentliggjort
-/// (docs/partners-varianter.md markerer den [HUL]). Derfor en TILNÆRMET udgave,
-/// mærket "(forsmag)": klassisk base + det kendetegnende **Hopsakort** (5↷),
-/// der som det eneste kort må passere et blokeret fremmed startfelt. De øvrige
-/// jubilæumskort (fx det sammensatte 7/+2−5) kræver motor-mekanik, der ikke
-/// findes endnu, og er bevidst udeladt frem for at gætte.
-///
-/// Kun 5-kortet ændres (→ Hopsakort); alt andet arves fra de LIVE regler, så
-/// varianten fx beholder admin's byttekort på Knægten. Derfor et override-map
-/// frem for et helt kort-sæt — og dermed `const`.
+/// samme bræt), så den spiller og renderer som klassisk. Forskellen er
+/// kortsættet: de fem specialkort, EJER-BEKRÆFTET mod det fysiske sæt (docs/
+/// partners-varianter.md). Rang-mapping: kort-tal = rang. Bemærk at 4×1
+/// ERSTATTER det klassiske 4-kort — 25 år har bekræftet intet −4; eneste
+/// baglæns-bevægelse er 7-kortets +2−5. Resten arves fra de LIVE regler
+/// (admin kan tilpasse alt; gemte overrides vinder over dette seed).
 const VariantConfig partners25 = VariantConfig(
   id: 'p25',
-  name: 'Partners 25 år (forsmag)',
-  description: 'Tilnærmet jubilæumsudgave: som klassisk, men 5-kortet er '
-      'Hopsakortet — det må som det eneste passere et blokeret startfelt. '
-      'Den fulde jubilæumskortliste er ikke offentliggjort.',
+  name: 'Partners 25 år',
+  description: 'Jubilæumsudgavens fem specialkort — 7/+2−5, byt/9, 11/1×1, '
+      '4×1 og 5↷ — er skrevet af efter det fysiske spil. Antallet af hvert '
+      'kort er ikke talt op, så kortfordelingen er appens egen.',
   cardRuleOverrides: <Rank, CardRuleConfig>{
+    // 4×1: fire enkelttræk fordelt på flere brikker (erstatter klassisk 4).
+    Rank.four: CardRuleConfig(splitTotal: 4),
+    // 5↷ Hopsakortet: 5 frem, må passere et blokeret startfelt.
     Rank.five: CardRuleConfig(forwardSteps: <int>[5], jumpsBlockade: true),
+    // 7 ELLER +2−5: 7 frem, eller 2 frem og så 5 tilbage med samme brik.
+    Rank.seven:
+        CardRuleConfig(forwardSteps: <int>[7], seqForward: 2, seqBackward: 5),
+    // Byt ELLER 9.
+    Rank.nine: CardRuleConfig(forwardSteps: <int>[9], swap: true),
+    // 11 ELLER 1×1: 11 frem, eller to brikker 1 felt frem hver.
+    Rank.jack:
+        CardRuleConfig(forwardSteps: <int>[11], multiPieces: 2, multiSteps: 1),
   },
 );
 

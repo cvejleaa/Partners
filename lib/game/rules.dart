@@ -81,6 +81,26 @@ class Rules {
       }
     }
 
+    // 3b) Sekvens-træk (fx 25 års +2−5): samme brik frem og så tilbage —
+    //     med rigtig landing på mellemfeltet (kan slå 2 hjem på ét kort).
+    if (cfg.hasFwdThenBack) {
+      for (final Player a in activePool) {
+        for (final Piece p in a.pieces) {
+          if (p.position is! TrackPosition) continue;
+          final Move? m = _tryFwdThenBack(
+              state, a, p, cfg.seqForward!, cfg.seqBackward!, card);
+          if (m != null) moves.add(m);
+        }
+      }
+    }
+
+    // 3c) Multi-brik-træk (fx 25 års 1×1): præcis N brikker, S felter hver.
+    //     Puljen (egne + makkers i endgame) håndteres internt som i splitten.
+    if (cfg.hasMultiForward) {
+      moves.addAll(_multiForwardMoves(
+          state, player, card, cfg.multiPieces!, cfg.multiSteps!));
+    }
+
     // 4) Split (7'eren): _splitMoves har allerede både egne og makker-brikker
     //    i sin pulje internt (med den klassiske regel "makker-brikker kun når
     //    egne er låst i hjemstrækket"). Når alle egne er i hjemstrækket
@@ -209,29 +229,10 @@ class Rules {
   ) {
     final PiecePosition pos = piece.position;
     if (pos is! TrackPosition) return null;
-    // Baglæns: ALLE UD-felter (egne som fremmede) springes over uden at tælle —
-    // UD er ikke et tællende ringfelt (regler.md §6), så man kan hverken lande
-    // på eller "bruge" et UD-felt ved baglæns-bevægelse. Et besat FREMMED UD
-    // spærrer passage; ens EGET UD spærrer aldrig en selv — ens egen brik på
-    // eget UD-felt er en mur for modstandere, ikke for ejeren.
-    final int len = geometry.trackLength;
-    int idx = pos.index;
-    int remaining = steps;
-    while (remaining > 0) {
-      final int next = (idx - 1 + len) % len;
-      final int? udOwner = _entryOwner(next);
-      if (udOwner != null) {
-        if (udOwner != piece.ownerIndex &&
-            state.piecesAt(TrackPosition(next)).isNotEmpty) {
-          return null;
-        }
-        idx = next;
-        continue;
-      }
-      idx = next;
-      remaining--;
-    }
-    final TrackPosition target = TrackPosition(idx);
+    final int? endIdx =
+        _reverseIndexFrom(state, piece.ownerIndex, pos.index, steps);
+    if (endIdx == null) return null;
+    final TrackPosition target = TrackPosition(endIdx);
     final _Landing landing = _landing(state, piece.ownerIndex, target);
     if (!landing.legal) return null;
     return Move(
@@ -246,6 +247,187 @@ class Rules {
         ),
       ],
     );
+  }
+
+  /// Ren baglæns-geometri fra ring-indeks [startIndex]: gå [steps] tællende
+  /// felter mod uret. Returnerer slut-indekset, eller null hvis et besat
+  /// FREMMED UD spærrer passagen. UD-felter (egne som fremmede) springes over
+  /// uden at tælle — UD er ikke et tællende ringfelt (regler.md §6) — og eget
+  /// UD spærrer aldrig ejeren. Delt af _tryReverse og sekvens-trækket
+  /// (_tryFwdThenBack), så baglæns-reglen kun findes ét sted.
+  int? _reverseIndexFrom(
+      GameState state, int ownerIndex, int startIndex, int steps) {
+    final int len = geometry.trackLength;
+    int idx = startIndex;
+    int remaining = steps;
+    while (remaining > 0) {
+      final int next = (idx - 1 + len) % len;
+      final int? udOwner = _entryOwner(next);
+      if (udOwner != null) {
+        if (udOwner != ownerIndex &&
+            state.piecesAt(TrackPosition(next)).isNotEmpty) {
+          return null;
+        }
+        idx = next;
+        continue;
+      }
+      idx = next;
+      remaining--;
+    }
+    return idx;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sekvens-træk (25 års "7 ELLER +2−5"): samme brik frem og så tilbage
+  // ---------------------------------------------------------------------------
+
+  /// Fortolkning (navngivet valg, jf. docs/regler.md): mellem-skridtet er en
+  /// RIGTIG landing — en enlig brik dér slås hjem (det er dét, der giver "2
+  /// brikker hjem på ét kort"). En mellem-landing der ville BRÆNDE flytteren
+  /// (dobbelt) gør sekvensen ULOVLIG (brikken ville være hjemme og kan ikke
+  /// fortsætte) — trækket tilbydes ikke. Mellem-skridtet må ikke ende i
+  /// hjemstrækket (man kan ikke bakke i/ud af målcirkler), og en brik der
+  /// allerede står i hjemstrækket kan slet ikke bruge sekvensen. Baglæns-delen
+  /// respekterer blokaden som −4 (intet hop).
+  ///
+  /// Deterministisk pr. brik — ingen sim nødvendig: mellemfeltet kan aldrig
+  /// være et UD-felt (fremmede springes over, eget drejer i hjemstræk), den
+  /// slåede brik står PÅ mellemfeltet (bag baglæns-stien, spærrer aldrig), og
+  /// slutfeltet er aldrig mellemfeltet (back >= 1).
+  Move? _tryFwdThenBack(GameState state, Player player, Piece piece, int fwd,
+      int back, PlayingCard card) {
+    if (fwd < 1 || back < 1) return null;
+    if (piece.position is! TrackPosition) return null;
+    final PiecePosition? mid = _advanceFrom(state, player, piece, fwd);
+    if (mid is! TrackPosition) return null; // blokeret ELLER hjemstræk → nej
+    final _Landing midLanding = _landing(state, player.index, mid);
+    if (!midLanding.legal || midLanding.burnsMover) return null;
+    final int? endIdx = _reverseIndexFrom(state, player.index, mid.index, back);
+    if (endIdx == null) return null;
+    final TrackPosition end = TrackPosition(endIdx);
+    final _Landing endLanding = _landing(state, player.index, end);
+    if (!endLanding.legal) return null;
+    return Move(
+      card: card,
+      steps: <MoveStep>[
+        MoveStep(
+          pieceId: piece.id,
+          from: piece.position,
+          to: mid,
+          capturedPieceId: midLanding.capturedId,
+        ),
+        MoveStep(
+          pieceId: piece.id,
+          from: mid,
+          to: end,
+          capturedPieceId: endLanding.capturedId,
+          burnsMover: endLanding.burnsMover,
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Multi-brik-træk (25 års "11 ELLER 1×1"): præcis N brikker, S felter hver
+  // ---------------------------------------------------------------------------
+
+  /// PRÆCIS [pieces] FORSKELLIGE brikker rykker hver [steps] frem, anvendt
+  /// SEKVENTIELT (brik B må lande på det felt brik A netop forlod, og As slag
+  /// gælder før Bs skridt). Pulje som splitten: egne brikker i spil; makkers
+  /// når alle egne er låst i hjemstrækket (evalueret undervejs i sim'en).
+  /// Vinder-undtagelsen spejles fra 7×1: låser et delskridt holdets sidste
+  /// brik i hus, gælder trækket med færre brikker. Dedup som splitten
+  /// (rækkefølge-uafhængig på slutpositioner).
+  Iterable<Move> _multiForwardMoves(GameState state, Player player,
+      PlayingCard card, int pieces, int steps) sync* {
+    if (pieces < 2 || steps < 1) return;
+    final Player partner =
+        state.players[state.variant.partnerFor(player.index)];
+    final Map<String, Move> results = <String, Move>{};
+    _searchMulti(_shallowClone(state), player, partner, card, steps, pieces,
+        <String>{}, <MoveStep>[], results);
+    yield* results.values;
+  }
+
+  /// Rekursiv multi-søgning. Kloner sim pr. gren (billigt for N=2; klampes i
+  /// admin) i stedet for apply/undo — så delings-/undo-fejl er umulige.
+  void _searchMulti(
+    GameState sim,
+    Player player,
+    Player partner,
+    PlayingCard card,
+    int stepsEach,
+    int remainingPieces,
+    Set<String> used,
+    List<MoveStep> path,
+    Map<String, Move> results,
+  ) {
+    if (path.isNotEmpty) {
+      if (remainingPieces == 0) {
+        _recordSplit(path, card, results);
+        return;
+      }
+      // Vinder-undtagelsen (spejlet fra §9): færre brikker er nok hvis holdet
+      // har vundet.
+      if (sim.teamHasWon(sim.variant.teamOf(player.index))) {
+        _recordSplit(path, card, results);
+        return;
+      }
+    }
+    if (remainingPieces == 0) return;
+
+    final bool allOwnLocked = sim.players[player.index].pieces
+        .every((Piece p) => p.position is HomeStretchPosition);
+    final List<Piece> candidates = <Piece>[
+      ...sim.players[player.index].pieces
+          .where((Piece p) => p.position is! StartPosition),
+      if (allOwnLocked)
+        ...sim.players[partner.index].pieces
+            .where((Piece p) => p.position is! StartPosition),
+    ];
+    for (final Piece cand in candidates) {
+      if (used.contains(cand.id)) continue;
+      final Player mover = sim.players[cand.ownerIndex];
+      final PiecePosition? to = _advanceFrom(sim, mover, cand, stepsEach);
+      if (to == null) continue;
+      String? capturedId;
+      bool burns = false;
+      if (to is TrackPosition) {
+        final _Landing landing = _landing(sim, cand.ownerIndex, to);
+        if (!landing.legal) continue;
+        capturedId = landing.capturedId;
+        burns = landing.burnsMover;
+      }
+      // Anvend på en KLON, så forgreningen aldrig skal rulles tilbage.
+      final GameState next = _shallowClone(sim);
+      final Piece nextPiece = next.pieceById(cand.id);
+      final PiecePosition fromPos = nextPiece.position;
+      if (burns) {
+        nextPiece.position = StartPosition(
+            nextPiece.ownerIndex, _firstFreeStartSlot(next, nextPiece.ownerIndex));
+        nextPiece.hasLeftStart = false;
+      } else {
+        if (capturedId != null) {
+          final Piece capturedPiece = next.pieceById(capturedId);
+          capturedPiece.position = StartPosition(capturedPiece.ownerIndex,
+              _firstFreeStartSlot(next, capturedPiece.ownerIndex));
+          capturedPiece.hasLeftStart = false;
+        }
+        nextPiece.position = to;
+      }
+      path.add(MoveStep(
+        pieceId: cand.id,
+        from: fromPos,
+        to: to,
+        capturedPieceId: capturedId,
+        burnsMover: burns,
+      ));
+      used.add(cand.id);
+      _searchMulti(next, player, partner, card, stepsEach, remainingPieces - 1,
+          used, path, results);
+      used.remove(cand.id);
+      path.removeLast();
+    }
   }
 
   /// Geometrisk fremad-position. Returnerer null hvis trækket ikke er muligt.

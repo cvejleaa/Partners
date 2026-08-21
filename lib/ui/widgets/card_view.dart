@@ -64,6 +64,10 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
   final List<String> extraChips = <String>[
     if (c.swap) 'Byt to brikker',
     if (c.jumpsBlockade && c.forwardSteps.isNotEmpty) '↷ Hopper over blokade',
+    // Sekvens/multi vises med samme ordlyd som i valg-arket og admin, så
+    // spilleren møder det samme sprog alle steder.
+    if (c.hasFwdThenBack) '${c.seqForward} frem → ${c.seqBackward} tilbage',
+    if (c.hasMultiForward) '${c.multiSteps} frem × ${c.multiPieces} brikker',
   ];
   final bool hasForward = c.forwardSteps.isNotEmpty;
   final bool hasBackward = c.backwardSteps != null;

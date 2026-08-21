@@ -225,6 +225,34 @@ ikke findes — og er derfor ulovligt.
 
 ---
 
+## 15. Variant-mekanikker (25 år) 🟢 DATA + 🔧 KODE
+
+Tre kort-evner findes til varianterne (sættes pr. kort i admin; klassisk har
+ingen af dem):
+
+- **Hop (5↷, `jumpsBlockade`)**: må passere et blokeret fremmed startfelt —
+  KUN på fremad-skridt.
+- **Sekvens (+2−5, `seqForward`/`seqBackward`)**: SAMME brik rykker frem og
+  derefter tilbage. NAVNGIVNE FORTOLKNINGSVALG (ejer-bekræftet kort, men
+  detailregler ikke dokumenteret på kortet):
+  - Mellem-skridtet er en RIGTIG landing: en enlig brik dér slås hjem — det er
+    dét, der kan give "2 brikker hjem på ét kort".
+  - En mellem-landing på en dobbelt (der ville brænde flytteren) gør hele
+    sekvensen ULOVLIG — trækket tilbydes ikke. (Valgt frem for "lovligt men
+    brænder", som ingen ville vælge og kun ville være en fælde i valg-arket.
+    Bemærk asymmetrien mod 7'eren, hvor brænd midt i en split ER lovligt.)
+  - Mellem-skridtet må ikke ende i hjemstrækket, og en brik i hjemstrækket kan
+    ikke bruge sekvensen (man kan ikke bakke i/ud af målcirkler, jf. §11).
+  - Baglæns-delen respekterer blokaden som −4 (§6) — intet hop.
+- **Multi (1×1, `multiPieces`/`multiSteps`)**: PRÆCIS N forskellige brikker
+  rykker hver S frem, anvendt sekventielt (brik B må lande på brik As forladte
+  felt). Færre end N brikker i spil → muligheden findes ikke. Puljen følger
+  splittens regel (§9/§12), inkl. vinder-undtagelsen.
+- 🔧 KODE: `lib/game/rules.dart` (`_tryFwdThenBack`, `_multiForwardMoves`),
+  `lib/game/card_rules.dart`.
+
+---
+
 ## Sådan ændrer du en regel
 
 1. **Kort-funktion** (afsnit 4 / 10): Gå til **Admin-skærmen** i app'en og ret

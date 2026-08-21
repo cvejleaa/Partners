@@ -71,10 +71,14 @@ void main() {
     });
   });
 
-  group('T3 — p25 overrider KUN 5-kortet; resten arves fra basen', () {
-    test('præcis ét override (5→Hopsakort); urørt rang = base', () {
-      // Kun 5-kortet står i override-mappet — resten kommer fra de live regler.
-      expect(partners25.cardRuleOverrides!.keys.toList(), <Rank>[Rank.five]);
+  group('T3 — p25 overrider KUN de fem specialkort; resten arves fra basen',
+      () {
+    test('seedet er de fem bekræftede rangs; urørt rang = base', () {
+      // Kun de fem specialkort står i override-mappet — resten kommer fra de
+      // live regler. (Selve kort-indholdet bevises i M5,
+      // variant_25aar_mekanikker_test.dart.)
+      expect(partners25.cardRuleOverrides!.keys.toSet(),
+          <Rank>{Rank.four, Rank.five, Rank.seven, Rank.nine, Rank.jack});
       final CardRuleConfig five = partners25.cardRuleOverrides![Rank.five]!;
       expect(five.jumpsBlockade, isTrue, reason: '5 skal kunne hoppe');
       expect(five.forwardSteps, <int>[5]);

@@ -79,6 +79,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   String? _swapFirstPiece;
   final List<MoveStep> _splitPath = <MoveStep>[];
 
+  /// Hybrid-kort (byt + bevægelse, fx 25 års "Byt ELLER 9"): true når
+  /// spilleren har valgt BYT-tilstanden for det valgte kort.
+  bool _hybridSwapMode = false;
+
   // Lokal farve-rotation: sat i build() ud fra brugerens ønske-farve, brugt af
   // board + paneler. Rent visuelt for denne enhed.
   int _colorOffset = 0;
@@ -645,10 +649,19 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       label = _splitPath.isEmpty
           ? 'Vælg første brik ($rem træk tilbage)'
           : '$rem træk tilbage — vælg næste brik eller bekræft';
+    } else if (_isMultiPieceCard(state, card)) {
+      // Multi-brik-kort (fx 1×1): tæl BRIKKER, ikke felter — "11 træk
+      // tilbage" ville være nonsens her.
+      final cfg = state.cardRules.forRank(card.rank!);
+      final int n = cfg.multiPieces ?? 2;
+      final int st = cfg.multiSteps ?? 1;
+      label = _splitPath.isEmpty
+          ? 'Vælg en brik (gult = lovligt træk)'
+          : 'Vælg brik ${_splitPath.length + 1} af $n ($st frem hver)';
     } else {
       label = 'Vælg en brik (gult = lovligt træk)';
     }
-    final bool isSplit = card != null && _isSplitCard(state, card);
+    final bool isSplit = card != null && _isMultiPieceCard(state, card);
     final bool canCommit = isSplit && _firstFullyMatching() != null;
     return Wrap(
       alignment: WrapAlignment.center,
@@ -762,9 +775,84 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       _selectedCard = c;
       _candidateMoves = moves;
       _swapFirstPiece = null;
+      _hybridSwapMode = false;
       _splitPath.clear();
     });
+    // Hybrid-kort (25 års "Byt ELLER 9"): kortet har BÅDE byt og bevægelse.
+    // Uden et eksplicit valg ville byt-parrene forurene det generiske flow
+    // (modstander-brikker highlightet, byt beskrevet som geometri). Spejl
+    // kortets "ELLER": spørg om tilstand med det samme.
+    if (!c.isExit) {
+      final cfg = state.cardRules.forRank(c.rank!);
+      if (cfg.swap && !_isSwapCard(state, c)) {
+        final bool hasSwaps = moves.any(_isSwapMove);
+        final bool hasOthers = moves.any((Move m) => !_isSwapMove(m));
+        if (hasSwaps && hasOthers) {
+          _chooseHybridMode(state, c);
+        } else if (hasSwaps) {
+          setState(() => _hybridSwapMode = true);
+        }
+      }
+    }
   }
+
+  /// Positiv genkendelse af et byt: to steps, forskellige brikker, der bytter
+  /// plads (A→Bs felt og B→As felt). Bruges til at adskille byt fra sekvens-/
+  /// multi-/split-træk — aldrig "2 steps = byt".
+  bool _isSwapMove(Move m) {
+    if (m.steps.length != 2) return false;
+    final MoveStep a = m.steps[0];
+    final MoveStep b = m.steps[1];
+    if (a.pieceId == b.pieceId) return false;
+    return _posKey(a.to) == _posKey(b.from) && _posKey(b.to) == _posKey(a.from);
+  }
+
+  Future<void> _chooseHybridMode(GameState state, PlayingCard c) async {
+    final bool? swapMode = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _grabber(),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Text('Hvad vil du bruge kortet til?',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.arrow_forward),
+              title: const Text('Flyt en brik',
+                  style: TextStyle(fontSize: 16, color: Colors.black87)),
+              onTap: () => Navigator.of(ctx).pop(false),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.swap_horiz),
+              title: const Text('Byt to brikker',
+                  style: TextStyle(fontSize: 16, color: Colors.black87)),
+              onTap: () => Navigator.of(ctx).pop(true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || _selectedCard != c) return;
+    setState(() => _hybridSwapMode = swapMode ?? false);
+  }
+
+  /// Er byt-flowet aktivt for det valgte kort? Rene byt-kort altid; hybrid-
+  /// kort kun når spilleren har valgt byt-tilstanden.
+  bool _swapFlowActive(GameState state, PlayingCard c) =>
+      _isSwapCard(state, c) || _hybridSwapMode;
 
   bool _isSwapCard(GameState state, PlayingCard c) {
     if (c.isExit) return false;
@@ -782,17 +870,30 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     return cfg.splitTotal != null;
   }
 
+  /// Kort hvis træk vælges brik-for-brik ad splittens flertrins-flow: split
+  /// (7×1/4×1) OG multi-brik (1×1). Bruges til ROUTING; _isSplitCard bruges
+  /// fortsat til tælle-teksten.
+  bool _isMultiPieceCard(GameState state, PlayingCard c) {
+    if (c.isExit) return false;
+    final cfg = state.cardRules.forRank(c.rank!);
+    return cfg.splitTotal != null || cfg.hasMultiForward;
+  }
+
   Set<String> _highlightSet(GameState state) {
     final card = _selectedCard;
-    if (card != null && _isSwapCard(state, card)) {
+    if (card != null && _swapFlowActive(state, card)) {
+      // Kun BYT-parrene (positivt genkendt) — på et hybrid-kort må 9-frem-
+      // trækkene ikke blande sig i byt-highlighten.
+      final List<Move> swaps =
+          _candidateMoves.where(_isSwapMove).toList();
       if (_swapFirstPiece == null) {
         return <String>{
-          for (final m in _candidateMoves)
+          for (final m in swaps)
             for (final s in m.steps) s.pieceId,
         };
       }
       final set = <String>{_swapFirstPiece!};
-      for (final m in _candidateMoves) {
+      for (final m in swaps) {
         final ids = m.steps.map((s) => s.pieceId).toList();
         if (ids.contains(_swapFirstPiece)) {
           set.addAll(ids.where((id) => id != _swapFirstPiece));
@@ -800,7 +901,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       }
       return set;
     }
-    if (card != null && _isSplitCard(state, card)) {
+    if (card != null && _isMultiPieceCard(state, card)) {
       // Højlight ALLE brikker der kan vælges som næste delskridt — uanset
       // hvor i m.steps de står. Brikker der allerede er valgt udelukkes.
       final Set<String> alreadyChosen = <String>{
@@ -813,13 +914,17 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             if (!alreadyChosen.contains(s.pieceId)) s.pieceId,
       };
     }
-    return <String>{for (final m in _candidateMoves) m.steps.first.pieceId};
+    return <String>{
+      for (final m in _candidateMoves)
+        if (!_isSwapMove(m)) m.steps.first.pieceId,
+    };
   }
 
   /// Et move matcher hvis hver (pieceId, destination) i _splitPath findes
-  /// SOMEWHERE i m.steps — rækkefølgen i UI er fri.
+  /// SOMEWHERE i m.steps — rækkefølgen i UI er fri. Byt-par (positivt
+  /// genkendt) hører aldrig til i dette flow, uanset admin-kombination.
   List<Move> _splitMatchingMoves() {
-    return _candidateMoves.where((Move m) {
+    return _candidateMoves.where((Move m) => !_isSwapMove(m)).where((Move m) {
       if (m.steps.length < _splitPath.length) return false;
       for (final MoveStep p in _splitPath) {
         final bool found = m.steps.any((MoveStep s) =>
@@ -906,16 +1011,19 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   void _handlePieceTap(GameState state, String pieceId) {
     if (state.currentPlayerIndex != _mySeat) return;
     if (_selectedCard == null) return;
-    if (_isSwapCard(state, _selectedCard!)) {
+    if (_swapFlowActive(state, _selectedCard!)) {
       _handleSwapTap(state, pieceId);
       return;
     }
-    if (_isSplitCard(state, _selectedCard!)) {
+    if (_isMultiPieceCard(state, _selectedCard!)) {
       _handleSplitTap(state, pieceId);
       return;
     }
+    // Byt-par (hybrid-kortets anden tilstand) hører ikke hjemme i det
+    // generiske flow — de vælges via byt-tilstanden.
     final List<Move> matching = _candidateMoves
-        .where((Move m) => m.steps.first.pieceId == pieceId)
+        .where((Move m) =>
+            !_isSwapMove(m) && m.steps.first.pieceId == pieceId)
         .toList();
     if (matching.isEmpty) return;
     if (matching.length == 1) {
@@ -1051,9 +1159,12 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   }
 
   void _handleSwapTap(GameState state, String pieceId) {
+    // Kun de positivt genkendte byt-par — på et hybrid-kort må et 9-frem-træk
+    // aldrig kunne "findes" som byt.
+    final List<Move> swaps = _candidateMoves.where(_isSwapMove).toList();
     if (_swapFirstPiece == null) {
-      final participates = _candidateMoves
-          .any((m) => m.steps.any((s) => s.pieceId == pieceId));
+      final participates =
+          swaps.any((m) => m.steps.any((s) => s.pieceId == pieceId));
       if (participates) setState(() => _swapFirstPiece = pieceId);
       return;
     }
@@ -1062,7 +1173,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       return;
     }
     Move? found;
-    for (final m in _candidateMoves) {
+    for (final m in swaps) {
       final ids = m.steps.map((s) => s.pieceId).toSet();
       if (ids.contains(_swapFirstPiece) && ids.contains(pieceId)) {
         found = m;
@@ -1164,12 +1275,42 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
   String _describeMove(GameState state, Move m) {
     if (m.exitsStart) return 'Gå ud af start';
-    if (m.steps.length == 1) return _describeStep(state, m.steps.first);
+    if (m.steps.length == 1) {
+      return _describeStep(state, m.steps.first) +
+          _captureNote(state, m.steps.first);
+    }
+    if (_isSwapMove(m)) {
+      final a = state.pieceById(m.steps[0].pieceId);
+      final b = state.pieceById(m.steps[1].pieceId);
+      return 'Byt ${state.players[a.ownerIndex].name}-brikken med '
+          '${state.players[b.ownerIndex].name}-brikken';
+    }
+    final bool samePiece =
+        m.steps.every((MoveStep s) => s.pieceId == m.steps.first.pieceId);
+    if (samePiece) {
+      // Sekvens-træk (fx +2−5): RÆKKEFØLGEN er pointen — sortér ikke, og
+      // nævn slagene, for de er grunden til at vælge sekvensen frem for
+      // det lige træk.
+      return m.steps
+          .map((MoveStep s) =>
+              _describeStep(state, s) + _captureNote(state, s))
+          .join(', så ');
+    }
     final List<String> parts = m.steps
-        .map((s) => _describeStep(state, s))
+        .map((s) => _describeStep(state, s) + _captureNote(state, s))
         .toList()
       ..sort((a, b) => b.compareTo(a));
     return parts.join(' + ');
+  }
+
+  /// " — slår Gul hjem" / " — brænder (egen brik hjem)" når steppet har en
+  /// konsekvens; ellers tom. Konsekvensen skal stå i valg-arket — den er
+  /// usynlig på brættet, indtil trækket er gjort.
+  String _captureNote(GameState state, MoveStep s) {
+    if (s.burnsMover) return ' — brænder (egen brik hjem)';
+    if (s.capturedPieceId == null) return '';
+    final Piece captured = state.pieceById(s.capturedPieceId!);
+    return ' — slår ${state.players[captured.ownerIndex].name} hjem';
   }
 
   String _describeStep(GameState state, MoveStep s) {

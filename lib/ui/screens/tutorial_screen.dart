@@ -417,6 +417,16 @@ class _CardsPage extends StatelessWidget {
       parts.add('${cfg.splitTotal} træk delt over flere af dine brikker');
     }
     if (cfg.swap) parts.add('byt to brikker');
+    if (cfg.jumpsBlockade && cfg.forwardSteps.isNotEmpty) {
+      parts.add('må hoppe over en blokade');
+    }
+    if (cfg.hasFwdThenBack) {
+      parts.add('${cfg.seqForward} frem og så ${cfg.seqBackward} tilbage med '
+          'samme brik');
+    }
+    if (cfg.hasMultiForward) {
+      parts.add('${cfg.multiSteps} frem med ${cfg.multiPieces} brikker');
+    }
     if (parts.isEmpty) return 'Ingen funktion.';
     final String body = parts.length == 1
         ? parts.first

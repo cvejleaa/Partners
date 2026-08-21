@@ -109,8 +109,8 @@ class AdminScreen extends ConsumerWidget {
                 final String msg = err.isEmpty && vErr.isEmpty
                     ? (vStored
                         ? 'Gemt (klassisk + 25 år)'
-                        : 'Gemt (klassisk) · 25 år følger forsmagen (intet '
-                            'at gemme)')
+                        : 'Gemt (klassisk) · 25 år følger de indbyggede '
+                            'specialkort (intet at gemme)')
                     : <String>[
                         if (err.isNotEmpty) 'Klassisk: $err',
                         if (vErr.isNotEmpty) '25 år: $vErr',
@@ -132,9 +132,9 @@ class AdminScreen extends ConsumerWidget {
                   title: const Text('Nulstil kortregler?'),
                   content: const Text(
                       'Klassisk sættes til standardreglerne. Partners 25 år '
-                      'mister dine tilpasninger og går tilbage til forsmagen '
-                      '(kun Hopsakortet på 5-kortet). Dette kan ikke '
-                      'fortrydes.'),
+                      'mister dine tilpasninger og går tilbage til de fem '
+                      'indbyggede specialkort (4×1, 5↷, 7/+2−5, byt/9, '
+                      '11/1×1). Dette kan ikke fortrydes.'),
                   actions: <Widget>[
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -151,7 +151,7 @@ class AdminScreen extends ConsumerWidget {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                     content:
-                        Text('Nulstillet: klassisk = standard, 25 år = forsmag')));
+                        Text('Nulstillet: klassisk = standard, 25 år = de fem specialkort')));
               }
             },
             icon: const Icon(Icons.restore, color: Colors.white),
@@ -214,7 +214,7 @@ class AdminScreen extends ConsumerWidget {
                       ref.watch(variantCardRulesLoadSourceProvider);
                   return Text(
                     '25 år-regler: ${vSource.isEmpty ? 'henter…' : vSource} '
-                    '(seed = forsmagen, firestore = dine gemte, prefs = '
+                    '(seed = de indbyggede specialkort, firestore = dine gemte, prefs = '
                     'lokal kopi)',
                     style: const TextStyle(fontSize: 12),
                   );
@@ -525,6 +525,8 @@ String _configSummary(CardRuleConfig c) {
   if (c.splitTotal != null) parts.add('split ${c.splitTotal}');
   if (c.swap) parts.add('byt');
   if (c.jumpsBlockade) parts.add('hop');
+  if (c.hasFwdThenBack) parts.add('${c.seqForward}frem+${c.seqBackward}tilb');
+  if (c.hasMultiForward) parts.add('${c.multiSteps}frem×${c.multiPieces}brik');
   return parts.isEmpty ? 'ingen funktion' : parts.join(' · ');
 }
 
@@ -665,10 +667,16 @@ class _ConfigEditorState extends State<_ConfigEditor> {
   late bool _splitOn;
   late bool _swap;
   late bool _jump;
+  late bool _seqOn;
+  late bool _multiOn;
 
   late TextEditingController _forwardCtrl;
   late TextEditingController _backwardCtrl;
   late TextEditingController _splitCtrl;
+  late TextEditingController _seqFwdCtrl;
+  late TextEditingController _seqBackCtrl;
+  late TextEditingController _multiPiecesCtrl;
+  late TextEditingController _multiStepsCtrl;
 
   /// Senest committede config — så vores EGEN værdi, der kommer retur gennem
   /// provideren, ikke re-synker felterne. Uden denne vagt låser frem-feltet
@@ -685,6 +693,10 @@ class _ConfigEditorState extends State<_ConfigEditor> {
     _forwardCtrl = TextEditingController();
     _backwardCtrl = TextEditingController();
     _splitCtrl = TextEditingController();
+    _seqFwdCtrl = TextEditingController();
+    _seqBackCtrl = TextEditingController();
+    _multiPiecesCtrl = TextEditingController();
+    _multiStepsCtrl = TextEditingController();
     _syncFromConfig(widget.config);
   }
 
@@ -711,9 +723,15 @@ class _ConfigEditorState extends State<_ConfigEditor> {
     _splitOn = c.splitTotal != null;
     _swap = c.swap;
     _jump = c.jumpsBlockade;
+    _seqOn = c.hasFwdThenBack;
+    _multiOn = c.hasMultiForward;
     _forwardCtrl.text = c.forwardSteps.join(', ');
     _backwardCtrl.text = (c.backwardSteps ?? 4).toString();
     _splitCtrl.text = (c.splitTotal ?? 7).toString();
+    _seqFwdCtrl.text = (c.seqForward ?? 2).toString();
+    _seqBackCtrl.text = (c.seqBackward ?? 5).toString();
+    _multiPiecesCtrl.text = (c.multiPieces ?? 2).toString();
+    _multiStepsCtrl.text = (c.multiSteps ?? 1).toString();
   }
 
   @override
@@ -721,6 +739,10 @@ class _ConfigEditorState extends State<_ConfigEditor> {
     _forwardCtrl.dispose();
     _backwardCtrl.dispose();
     _splitCtrl.dispose();
+    _seqFwdCtrl.dispose();
+    _seqBackCtrl.dispose();
+    _multiPiecesCtrl.dispose();
+    _multiStepsCtrl.dispose();
     super.dispose();
   }
 
@@ -746,6 +768,21 @@ class _ConfigEditorState extends State<_ConfigEditor> {
       clearSplit: !_splitOn,
       swap: _swap,
       jumpsBlockade: _jump,
+      // Klampet: sekvens kræver mindst 1 frem og 1 tilbage; multi kræver
+      // mindst 2 brikker og 1 felt (ellers er kortet virkningsløst/dublet).
+      seqForward:
+          _seqOn ? (int.tryParse(_seqFwdCtrl.text.trim()) ?? 2).clamp(1, 20) : null,
+      seqBackward: _seqOn
+          ? (int.tryParse(_seqBackCtrl.text.trim()) ?? 5).clamp(1, 20)
+          : null,
+      clearSeq: !_seqOn,
+      multiPieces: _multiOn
+          ? (int.tryParse(_multiPiecesCtrl.text.trim()) ?? 2).clamp(2, 8)
+          : null,
+      multiSteps: _multiOn
+          ? (int.tryParse(_multiStepsCtrl.text.trim()) ?? 1).clamp(1, 20)
+          : null,
+      clearMulti: !_multiOn,
     );
     _lastCommitted = cfg;
     widget.onChanged(cfg);
@@ -831,6 +868,81 @@ class _ConfigEditorState extends State<_ConfigEditor> {
             _commit();
           },
         ),
+        _togglePair(
+          title: 'Frem + tilbage (fx +2−5)',
+          subtitle: 'Samme brik: frem med rigtig landing, så tilbage',
+          on: _seqOn,
+          onChanged: (bool v) {
+            setState(() => _seqOn = v);
+            _commit();
+          },
+          firstCtrl: _seqFwdCtrl,
+          firstHint: 'frem',
+          secondCtrl: _seqBackCtrl,
+          secondHint: 'tilbage',
+        ),
+        _togglePair(
+          title: 'Flere brikker frem (fx 1×1)',
+          subtitle: 'Præcis N brikker rykker hver S felter frem',
+          on: _multiOn,
+          onChanged: (bool v) {
+            setState(() => _multiOn = v);
+            _commit();
+          },
+          firstCtrl: _multiPiecesCtrl,
+          firstHint: 'brikker',
+          secondCtrl: _multiStepsCtrl,
+          secondHint: 'felter',
+        ),
+      ],
+    );
+  }
+
+  /// Toggle med TO talfelter (fx frem/tilbage eller brikker/felter).
+  Widget _togglePair({
+    required String title,
+    required String subtitle,
+    required bool on,
+    required ValueChanged<bool> onChanged,
+    required TextEditingController firstCtrl,
+    required String firstHint,
+    required TextEditingController secondCtrl,
+    required String secondHint,
+  }) {
+    Widget numField(TextEditingController ctrl, String hint) => SizedBox(
+          width: 64,
+          child: TextField(
+            controller: ctrl,
+            enabled: on,
+            keyboardType: TextInputType.number,
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.digitsOnly
+            ],
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: hint,
+              helperText: hint,
+              helperStyle: const TextStyle(fontSize: 9),
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (_) => _commit(),
+          ),
+        );
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(title),
+            subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
+            value: on,
+            onChanged: onChanged,
+          ),
+        ),
+        numField(firstCtrl, firstHint),
+        const SizedBox(width: 6),
+        numField(secondCtrl, secondHint),
       ],
     );
   }
@@ -881,7 +993,7 @@ class _ConfigEditorState extends State<_ConfigEditor> {
 }
 
 /// Header-sektion for 25 år-kolonnen: admins eget navn/beskrivelse (så
-/// "(forsmag)" kan afløses når det fysiske sæt er afskrevet), "kopiér
+/// den indbyggede tekst kan afløses), "kopiér
 /// klassisk"-grebet (fuldt uafhængigt snapshot i ét tryk), afvigelses-tælleren
 /// og sanity-advarsler for BEGGE regelsæt. Advarsler, aldrig spærringer —
 /// admin er autoritet.
@@ -931,7 +1043,7 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
   void _commitMeta() {
     // UÆNDRET = ingen skrivning. Ellers ville et klik ind og ud af feltet
     // gøre kode-seedet til "admins gemte valg" (stored=true) og fryse det i
-    // databasen — hvorefter en senere kode-ændring af forsmaget ikke slår
+    // databasen — hvorefter en senere kode-ændring af seedet ikke slår
     // igennem.
     if (_nameCtrl.text == _syncedName && _descCtrl.text == _syncedDesc) return;
     _syncedName = _nameCtrl.text;
@@ -985,13 +1097,13 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
             ),
             const SizedBox(height: 8),
             // Navn/beskrivelse: vises i variant-vælgeren og online-lobbyen.
-            // Tomt felt = variantens indbyggede tekst ("(forsmag)"-forbeholdet).
+            // Tomt felt = variantens indbyggede tekst.
             TextField(
               controller: _nameCtrl,
               decoration: const InputDecoration(
                 isDense: true,
                 labelText: 'Navn i variant-vælgeren',
-                hintText: 'Partners 25 år (forsmag)',
+                hintText: 'Partners 25 år',
                 helperText:
                     'Tomt = indbygget navn. Har du afskrevet det fysiske sæt, '
                     'så skriv fx "Partners 25 år".',

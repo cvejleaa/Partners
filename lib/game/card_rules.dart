@@ -12,6 +12,10 @@ class CardRuleConfig {
     this.splitTotal,
     this.swap = false,
     this.jumpsBlockade = false,
+    this.seqForward,
+    this.seqBackward,
+    this.multiPieces,
+    this.multiSteps,
   });
 
   /// Kan rykke en brik ud af start (til eget ud-felt).
@@ -36,6 +40,27 @@ class CardRuleConfig {
   /// fremad-skridt (ikke baglæns/split).
   final bool jumpsBlockade;
 
+  /// Sekvens-træk (25 års "7 ELLER +2−5"): SAMME brik rykker [seqForward] frem
+  /// (rigtig landing — enlig modstander slås hjem) og derefter [seqBackward]
+  /// tilbage. Begge skal være sat for at gælde — se [hasFwdThenBack]. To
+  /// separate int-felter (ikke en liste), så sameConfig/copyWith aldrig kan
+  /// snuble i reference-sammenligning.
+  final int? seqForward;
+  final int? seqBackward;
+
+  /// Multi-brik-træk (25 års "11 ELLER 1×1"): PRÆCIS [multiPieces] forskellige
+  /// brikker rykker hver [multiSteps] frem. Begge skal være sat — se
+  /// [hasMultiForward].
+  final int? multiPieces;
+  final int? multiSteps;
+
+  /// Positiv tilstedeværelse (én vagt, brugt af motor, kort-face, admin og
+  /// tutorial — så ingen af dem opfinder sin egen halve udgave af tjekket).
+  bool get hasFwdThenBack => seqForward != null && seqBackward != null;
+  bool get hasMultiForward =>
+      multiPieces != null && multiPieces! >= 2 && multiSteps != null &&
+      multiSteps! >= 1;
+
   CardRuleConfig copyWith({
     bool? exitStart,
     List<int>? forwardSteps,
@@ -45,6 +70,12 @@ class CardRuleConfig {
     bool clearSplit = false,
     bool? swap,
     bool? jumpsBlockade,
+    int? seqForward,
+    int? seqBackward,
+    bool clearSeq = false,
+    int? multiPieces,
+    int? multiSteps,
+    bool clearMulti = false,
   }) {
     return CardRuleConfig(
       exitStart: exitStart ?? this.exitStart,
@@ -53,6 +84,10 @@ class CardRuleConfig {
       splitTotal: clearSplit ? null : (splitTotal ?? this.splitTotal),
       swap: swap ?? this.swap,
       jumpsBlockade: jumpsBlockade ?? this.jumpsBlockade,
+      seqForward: clearSeq ? null : (seqForward ?? this.seqForward),
+      seqBackward: clearSeq ? null : (seqBackward ?? this.seqBackward),
+      multiPieces: clearMulti ? null : (multiPieces ?? this.multiPieces),
+      multiSteps: clearMulti ? null : (multiSteps ?? this.multiSteps),
     );
   }
 
@@ -62,9 +97,13 @@ class CardRuleConfig {
         if (backwardSteps != null) 'backwardSteps': backwardSteps,
         if (splitTotal != null) 'splitTotal': splitTotal,
         'swap': swap,
-        // Kun skrevet når sat, så gamle/klassiske docs forbliver uændrede og
-        // et manglende felt læses som false (bagud-kompat).
+        // Nye felter skrives kun når sat, så gamle/klassiske docs forbliver
+        // uændrede og et manglende felt læses som fravær (bagud-kompat).
         if (jumpsBlockade) 'jumpsBlockade': jumpsBlockade,
+        if (seqForward != null) 'seqForward': seqForward,
+        if (seqBackward != null) 'seqBackward': seqBackward,
+        if (multiPieces != null) 'multiPieces': multiPieces,
+        if (multiSteps != null) 'multiSteps': multiSteps,
       };
 
   factory CardRuleConfig.fromJson(Map<String, dynamic> json) {
@@ -77,6 +116,10 @@ class CardRuleConfig {
       splitTotal: json['splitTotal'] as int?,
       swap: json['swap'] as bool? ?? false,
       jumpsBlockade: json['jumpsBlockade'] as bool? ?? false,
+      seqForward: json['seqForward'] as int?,
+      seqBackward: json['seqBackward'] as int?,
+      multiPieces: json['multiPieces'] as int?,
+      multiSteps: json['multiSteps'] as int?,
     );
   }
 }
@@ -145,6 +188,10 @@ class CardRules {
     if (a.jumpsBlockade != b.jumpsBlockade) return false;
     if (a.backwardSteps != b.backwardSteps) return false;
     if (a.splitTotal != b.splitTotal) return false;
+    if (a.seqForward != b.seqForward) return false;
+    if (a.seqBackward != b.seqBackward) return false;
+    if (a.multiPieces != b.multiPieces) return false;
+    if (a.multiSteps != b.multiSteps) return false;
     if (a.forwardSteps.length != b.forwardSteps.length) return false;
     for (int i = 0; i < a.forwardSteps.length; i++) {
       if (a.forwardSteps[i] != b.forwardSteps[i]) return false;
@@ -227,6 +274,20 @@ List<String> deckSanityWarnings(CardRules rules) {
   if (hopWithoutForward > 0) {
     warnings.add('$hopWithoutForward kort har hop slået til uden fremad-skridt '
         '— hop virker kun på fremad-bevægelse og har ingen effekt dér.');
+  }
+  // Spilfladen vælger flertrins-kort brik-for-brik; et kort med BÅDE
+  // split/multi OG frem+tilbage-sekvens kan ikke udtrykke sekvensen dér
+  // (samme brik skal vælges to gange). Advar frem for at spærre.
+  int seqTrapped = 0;
+  for (final Rank r in Rank.values) {
+    final CardRuleConfig c = rules.forRank(r);
+    if (c.hasFwdThenBack && (c.splitTotal != null || c.hasMultiForward)) {
+      seqTrapped++;
+    }
+  }
+  if (seqTrapped > 0) {
+    warnings.add('$seqTrapped kort kombinerer frem+tilbage med split/flere '
+        'brikker — frem+tilbage kan ikke vælges i spilfladen på sådan et kort.');
   }
   return warnings;
 }

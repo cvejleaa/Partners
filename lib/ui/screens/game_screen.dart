@@ -108,13 +108,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         move.steps.any((MoveStep s) => s.capturedPieceId != null);
     if (captured) {
       feedback.capture();
-    } else if (move.steps.length >= 2 && move.card.rank != null) {
-      // Et byt har præcis 2 steps; brug det som heuristik for swap-feedback.
-      final cfg =
-          ref.read(gameProvider).cardRules.forRank(move.card.rank!);
-      if (cfg.swap &&
-          cfg.forwardSteps.isEmpty &&
-          cfg.backwardSteps == null) {
+    } else if (move.steps.length == 2 && move.card.rank != null) {
+      // Byt genkendes POSITIVT på formen (A→Bs felt, B→As felt) — ikke på
+      // "2 steps", for sekvens-træk (+2−5), 1×1 og en delt 7'er har også 2.
+      final MoveStep s0 = move.steps[0];
+      final MoveStep s1 = move.steps[1];
+      final bool isSwap = s0.pieceId != s1.pieceId &&
+          s0.to == s1.from &&
+          s1.to == s0.from;
+      if (isSwap) {
         feedback.swap();
       } else {
         feedback.move();
