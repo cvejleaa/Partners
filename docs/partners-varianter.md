@@ -353,6 +353,9 @@ spillere i 2 hold á 2, alder 8+, spilletid 30-45 min. Indhold: spilleplade,
 | 4×1 | 4 enkelttræk fordelt på flere brikker — samme mekanik som klassisk 7×1, blot 4 |
 | 5↷ | 5 frem, springer over blokeret startfelt (Hopsakortet, fra Partners+/Duo) |
 
+- **Bekræftet (ejer):** der er IKKE længere et −4/÷4-kort i 25 år — 4×1
+  erstatter det klassiske 4-kort. Baglæns-bevægelse findes i 25 år kun som
+  −5-delen af "7 ELLER +2−5".
 - **[HUL — reduceret]** Antal pr. korttype og den fulde liste af ALMINDELIGE
   kort er stadig ikke talt op; specialkortene ovenfor er bekræftet. 2♥♥ er
   fortsat ubekræftet.
