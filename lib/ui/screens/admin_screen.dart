@@ -1088,11 +1088,16 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
   }
 
   Future<void> _newVariantDialog() async {
+    // Gem den AKTUELLE variants u-committede felter, før fokus flyttes —
+    // samme symmetri som vælger-dropdownets onChanged (QC-fund).
+    _commitMeta();
     final nameCtrl = TextEditingController();
     final labelCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     String themeId = kVariantThemes.first.id;
-    final String? error = await showDialog<String?>(
+    // Dialogen returnerer det NYE variant-id ved succes; en fejl vises som
+    // SnackBar INDE i dialogen (den forbliver åben) og popper aldrig.
+    final String? createdId = await showDialog<String?>(
       context: context,
       builder: (BuildContext ctx) => StatefulBuilder(
         builder: (BuildContext ctx, StateSetter setDlg) => AlertDialog(
@@ -1194,9 +1199,9 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
         ),
       ),
     );
-    if (error != null && mounted) {
+    if (createdId != null && mounted) {
       // Ny variant valgt med det samme — det er dén admin vil redigere nu.
-      ref.read(selectedAdminVariantIdProvider.notifier).state = error;
+      ref.read(selectedAdminVariantIdProvider.notifier).state = createdId;
     }
   }
 

@@ -461,9 +461,11 @@ class VariantCardRulesController extends StateNotifier<VariantsAdminState> {
 
   Future<void> retrySave() async {
     _saveTimer?.cancel();
-    // "Gem nu" skal skrive ALT admin har i hånden, ikke kun det u-flushede:
-    // markér alle kendte entries som dirty først.
-    _dirty.addAll(state.entries.keys);
+    // "Gem nu" skriver KUN de reelt urørte/fejlede entries (_dirty): et
+    // fejlet gem efterlader sine id'er i _dirty, så intet kan gå tabt — og
+    // vi re-pusher ikke uberørte varianter (som ville kunne clobbre en
+    // nyere skrivning fra samme admins anden fane/enhed med en ældre lokal
+    // tilstand — QC-fund).
     await _save();
   }
 

@@ -719,6 +719,12 @@ class OnlineService {
   /// for startGameFromLobby (QC-fund). Vanformet id, eller ukendt id uden
   /// entry, klampes til klassisk, så doc'et aldrig får en variant der ikke
   /// kan resolves. startGameFromLobby læser feltet defensivt.
+  ///
+  /// NAVNGIVET HUL: kopien opdateres kun her (ved variant-VALG). Redigerer
+  /// admin kortreglerne for en variant, der ALLEREDE er valgt i en åben
+  /// lobby, slår ændringen ikke igennem i dét spil, før værten genvælger
+  /// varianten (eller lobbyen genoprettes) — samme snapshot-semantik som
+  /// klassisk cardRules, der også kopieres ved oprettelsen.
   Future<void> setVariant(String code, String variantId,
       {Map<String, dynamic>? entry}) async {
     final bool builtin =

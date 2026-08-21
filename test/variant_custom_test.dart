@@ -196,6 +196,28 @@ void main() {
       expect(v.shortLabel, 'cv-ukendt'); // ærligt: id, aldrig "Klassisk"
     });
 
+    test('tekst-felter fra doc-kopien KAPPES (medlems-skrevet data)', () {
+      // Kopien i et spil-doc kan skrives af ethvert medlem udenom admin-
+      // UI'ets maxLength — materialiseringen er forsvarslinjen. Grænserne er
+      // 2× UI-grænserne (navn 36, mærke 20) og 300 for beskrivelsen; testen
+      // bruger 500 tegn, så en fjernet kapning (fuld længde) bliver rød.
+      final Map<String, dynamic> hostile = <String, dynamic>{
+        'cv-lang': <String, dynamic>{
+          'rules': <String, dynamic>{},
+          'name': 'N' * 500,
+          'label': 'L' * 500,
+          'description': 'D' * 500,
+          'custom': true,
+        },
+      };
+      final VariantConfig v = variantFromRaw('cv-lang', hostile);
+      expect(v.name.length, 2 * kMaxCustomNameLength);
+      expect(v.shortLabel.length, 2 * kMaxCustomLabelLength);
+      // infoText = kappet beskrivelse (300) + forbeholdet.
+      expect(v.infoText.length,
+          300 + '\n\n'.length + kCustomVariantDisclaimer.length);
+    });
+
     test('vanformet id / skæv rawdata → klassisk', () {
       expect(variantFromRaw('IKKE gyldigt!', raw).id, 'classic');
       expect(variantFromRaw('cv-familie', 42).id, 'cv-familie');
@@ -214,11 +236,49 @@ void main() {
           isEmpty);
     });
 
+    test(
+        'customVariantIdsFrom: et fjendtligt custom:true-entry på et '
+        'INDBYGGET id (fx p25) må ikke give dobbelt-visning', () {
+      // Samme fjendtlige fixture som 'p25' i [raw] ovenfor (custom:true på
+      // en builtin) — uden den positive builtin-udelukkelse i
+      // customVariantIdsFrom ville 'p25' optræde i BÅDE kAllVariants OG
+      // customVariantIdsFrom-listen, og selectableVariantsFrom ville vise
+      // 25 år to gange i vælgeren.
+      expect(customVariantIdsFrom(raw).contains('p25'), isFalse);
+      expect(customVariantIdsFrom(raw, includeArchived: true).contains('p25'),
+          isFalse);
+    });
+
     test('selectableVariantsFrom: builtins først, så ikke-arkiverede customs',
         () {
       final List<VariantConfig> list = selectableVariantsFrom(raw);
       expect(list.map((v) => v.id).toList(),
           <String>['classic', 'p25', 'cv-familie']);
+    });
+
+    test(
+        'TM-fund: variantDisplayName/-Description kapper OGSÅ — læsestien '
+        'via _metaString må ikke omgå 855cd90-hærdningen', () {
+      // _metaString bruges med spil-DOC'ETS cardRulesVariants-kopi (lobby-
+      // badgen, "Mine spil", dropdown-teksterne), som ethvert indlogget
+      // medlem kan skrive. Før rettelsen genlæste den feltet RÅT (5000 tegn
+      // ville nå AlertDialog-titlen); nu kappes navn til 2×UI-grænsen og
+      // beskrivelse til 300.
+      final Map<String, dynamic> raw2 = <String, dynamic>{
+        'cv-x': <String, dynamic>{
+          'rules': <String, dynamic>{},
+          'name': 'A' * 5000,
+          'description': 'B' * 5000,
+          'custom': true,
+        },
+      };
+      final VariantConfig v = variantFromRaw('cv-x', raw2);
+      expect(v.name.length, 2 * kMaxCustomNameLength,
+          reason: 'variantFromRaw selv er hærdet');
+      expect(variantDisplayName(v, raw2).length,
+          lessThanOrEqualTo(2 * kMaxCustomNameLength));
+      expect(variantDisplayDescription(v, raw2)!.length,
+          lessThanOrEqualTo(300));
     });
   });
 

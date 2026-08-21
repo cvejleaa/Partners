@@ -583,5 +583,11 @@ String? _metaString(dynamic variantsRaw, String id, String key) {
   final dynamic entry = variantsRaw[id];
   if (entry is! Map) return null;
   final dynamic value = entry[key];
-  return value is String ? value : null;
+  if (value is! String) return null;
+  // Kap ALTID (TM-fund): denne læsesti bruges også med spil-DOC'ETS
+  // cardRulesVariants-kopi, som ethvert indlogget medlem kan skrive — uden
+  // kapning omgik lobby-badgen/dialogerne hele 855cd90-hærdningen i
+  // variantFromRaw. Samme grænser: navn 2× UI-grænsen, beskrivelse 300.
+  final int max = key == 'name' ? 2 * kMaxCustomNameLength : 300;
+  return value.length > max ? value.substring(0, max) : value;
 }

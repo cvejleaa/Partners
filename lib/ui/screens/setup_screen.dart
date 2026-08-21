@@ -118,46 +118,61 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             const SizedBox(height: 16),
             // Variant FØRST: "hvad spiller vi" bestemmer bræt og kort. Dropdown
             // (ikke SegmentedButton), så den kan rumme flere kommende varianter.
-            Row(
-              children: <Widget>[
-                VariantBadge(
-                    variant:
-                        _variantFrom(ref.watch(selectableVariantsProvider)),
-                    compact: true),
-                const SizedBox(width: 8),
-                const Text('Spil:'),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    value: _variantId,
-                    items: <DropdownMenuItem<String>>[
-                      // Indbyggede + admins egne (ikke-arkiverede) varianter.
-                      for (final VariantConfig v
-                          in ref.watch(selectableVariantsProvider))
-                        DropdownMenuItem<String>(
-                            value: v.id,
-                            child: Text(_displayName(v),
-                                overflow: TextOverflow.ellipsis)),
+            // Listen/varianten/beskrivelsen beregnes ÉN gang pr. build
+            // (QC-fund: fire watch-kald og dobbeltberegning før).
+            Builder(builder: (BuildContext context) {
+              final List<VariantConfig> variants =
+                  ref.watch(selectableVariantsProvider);
+              final VariantConfig current = _variantFrom(variants);
+              final String? desc = _displayDescription(current);
+              // Arkiveres den valgte custom mens skærmen er åben, ryger den
+              // ud af listen — dropdown-value skal så falde til klassisk
+              // (samme fallback som _variantFrom bruger for reglerne).
+              final String dropdownValue =
+                  variants.any((VariantConfig v) => v.id == _variantId)
+                      ? _variantId
+                      : classicVariant.id;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      VariantBadge(variant: current, compact: true),
+                      const SizedBox(width: 8),
+                      const Text('Spil:'),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: dropdownValue,
+                          items: <DropdownMenuItem<String>>[
+                            // Indbyggede + admins egne (ikke-arkiverede).
+                            for (final VariantConfig v in variants)
+                              DropdownMenuItem<String>(
+                                  value: v.id,
+                                  child: Text(_displayName(v),
+                                      overflow: TextOverflow.ellipsis)),
+                          ],
+                          onChanged: (String? id) {
+                            if (id != null) {
+                              setState(() => _variantId = id);
+                            }
+                          },
+                        ),
+                      ),
                     ],
-                    onChanged: (String? id) {
-                      if (id != null) setState(() => _variantId = id);
-                    },
                   ),
-                ),
-              ],
-            ),
-            if (_displayDescription(
-                    _variantFrom(ref.watch(selectableVariantsProvider))) !=
-                null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2, bottom: 6),
-                child: Text(
-                  _displayDescription(
-                      _variantFrom(ref.watch(selectableVariantsProvider)))!,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
+                  if (desc != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, bottom: 6),
+                      child: Text(
+                        desc,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                ],
+              );
+            }),
             const SizedBox(height: 12),
             RadioGroup<int>(
               groupValue: _humanSeat,

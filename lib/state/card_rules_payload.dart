@@ -40,7 +40,10 @@ Map<String, dynamic> variantEntryJson({
     };
 
 /// Variant-gemmets felter: hele variantens under-map under variants.{id}.
-/// Bevidst UDEN 'rules' (klassisk).
+/// Bevidst UDEN 'rules' (klassisk). BEMÆRK: produktions-controlleren bygger
+/// i dag multi-entry-payloads direkte via [variantEntryJson] (én pr. dirty
+/// id); denne én-variant-form bevares som den KANONISKE kontrakt-form, som
+/// merge-testene (A4 + emulator-testen i rules.test.mjs) låser.
 Map<String, dynamic> variantSavePayload(
   String variantId, {
   required Map<String, dynamic> rulesJson,

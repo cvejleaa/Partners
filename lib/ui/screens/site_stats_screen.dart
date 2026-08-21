@@ -261,9 +261,16 @@ class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
   /// og ville ikke betyde noget på en fælles rangliste.
   Widget _variantChips() {
     // Delt regel med profilens chips (variantIdsWithExtras): indbyggede
-    // varianter + custom-id'er fundet i de indlæste docs.
-    final vids = variantIdsWithExtras(
-        <String>[for (final d in _allStats.values) ...d.byVariant.keys]);
+    // varianter + custom-id'er fundet i de indlæste docs. Custom-varianters
+    // navn/tema opløses fra config-doc'et (controlleren læser det for alle
+    // brugere, ikke kun admin) — raw-mappet bygges ÉN gang pr. build, ikke
+    // pr. chip-felt (QC-fund).
+    final dynamic raw = ref.watch(variantCardRulesProvider).toRawJson();
+    final List<VariantConfig> chips = <VariantConfig>[
+      for (final vid in variantIdsWithExtras(
+          <String>[for (final d in _allStats.values) ...d.byVariant.keys]))
+        variantFromRaw(vid, raw),
+    ];
     return Wrap(
       spacing: 8,
       runSpacing: 4,
@@ -273,21 +280,15 @@ class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
           selected: _vid == null,
           onSelected: (_) => setState(() => _vid = null),
         ),
-        for (final vid in vids)
+        for (final v in chips)
           FilterChip(
-            // Custom-varianters navn/tema fra config-doc'et (controlleren
-            // læser det for alle brugere, ikke kun admin).
-            label: Text(variantFromRaw(
-                    vid, ref.watch(variantCardRulesProvider).toRawJson())
-                .shortLabel),
-            selected: _vid == vid,
-            selectedColor: variantFromRaw(
-                    vid, ref.watch(variantCardRulesProvider).toRawJson())
-                .badgeColor,
-            checkmarkColor: _vid == vid ? Colors.white : null,
+            label: Text(v.shortLabel),
+            selected: _vid == v.id,
+            selectedColor: v.badgeColor,
+            checkmarkColor: _vid == v.id ? Colors.white : null,
             labelStyle:
-                _vid == vid ? const TextStyle(color: Colors.white) : null,
-            onSelected: (_) => setState(() => _vid = vid),
+                _vid == v.id ? const TextStyle(color: Colors.white) : null,
+            onSelected: (_) => setState(() => _vid = v.id),
           ),
       ],
     );
