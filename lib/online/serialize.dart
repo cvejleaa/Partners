@@ -120,7 +120,7 @@ GameState gameStateFromMap(Map<String, dynamic> m) {
   // kender varianten, og en klamp her ville overskrive 'vid' med 'classic'
   // i doc'et — og dermed forgifte statistik-attributionen permanent.
   final VariantConfig variant =
-      variantForState(m['vid'] is String ? m['vid'] as String : null);
+      variantFromId(m['vid'] is String ? m['vid'] as String : null);
   return GameState(
     players: (m['pl'] as List)
         .map((e) => playerFromMap(Map<String, dynamic>.from(e as Map)))

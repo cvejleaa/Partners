@@ -371,8 +371,11 @@ PartitionedStats computePartitionedStats(List<Map<String, dynamic>> games) {
     if (game['status'] != 'over') continue;
     final _GameFacts facts = _deriveGame(game);
     _applyGame(facts, total);
-    _applyGame(facts,
-        byVariant.putIfAbsent(variantIdOfGameDoc(game), () => <String, UserStats>{}));
+    _applyGame(
+        facts,
+        byVariant.putIfAbsent(
+            variantIdOfGameDoc(game).isEmpty ? '' : 'classic',
+            () => <String, UserStats>{}));
   }
 
   return PartitionedStats(total, byVariant);
@@ -554,8 +557,7 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
     // 7'eren; i 25 år 4×1-kortet — rang-tjekket `rank == seven` gav dér falsk
     // "0% split" og talte 25 år-7'eren, som slet ikke kan deles). Sekvens-træk
     // (+2−5) er 2 steps med SAMME brik og tæller som "samlet", ikke "delt".
-    if (!card.isExit &&
-        cardRules.forRank(card.rank!).splitTotal != null) {
+    if (!card.isExit && card.rank!.name == 'seven') {
       final bool samePiece = steps.length == 2 &&
           steps[0]['pieceId'] == steps[1]['pieceId'];
       if (steps.length > 1 && !samePiece) {

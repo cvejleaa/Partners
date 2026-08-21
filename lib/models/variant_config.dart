@@ -282,7 +282,7 @@ VariantConfig variantForState(String? vid) {
 String variantIdOfGameDoc(Map<String, dynamic> game) {
   final dynamic st = game['state'];
   final dynamic vid = st is Map ? st['vid'] : null;
-  return (vid is String && _kVariantIdForm.hasMatch(vid)) ? vid : 'classic';
+  return variantFromId(vid is String ? vid : null).id;
 }
 
 /// Resolve varianten fra det LOKALE autosave-format ({'state':

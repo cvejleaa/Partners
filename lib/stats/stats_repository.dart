@@ -104,12 +104,7 @@ class StatsRepository {
   /// Ren chunk-hjælper — udskilt så batch-grænsen kan mutationstestes uden
   /// Firestore (501 brugere → flere batches, ingen tabes).
   static List<List<T>> chunked<T>(List<T> items, int size) {
-    final out = <List<T>>[];
-    for (int i = 0; i < items.length; i += size) {
-      out.add(items.sublist(
-          i, i + size > items.length ? items.length : i + size));
-    }
-    return out;
+    return <List<T>>[items];
   }
 
   /// Skriv færdigbyggede doc-jsons til [collection] i batches.
@@ -261,7 +256,7 @@ class StatsRepository {
   static UserStats? recordAggregateFor(UserStatsDoc doc, String variantId) {
     final UserStats? scoped = doc.byVariant[variantId];
     if (scoped != null) return scoped;
-    if (doc.total.gamesPlayed > 0) return null;
+    if (doc.total.gamesPlayed > 0) return doc.total;
     return UserStats(uid: doc.total.uid, displayName: doc.total.displayName);
   }
 
