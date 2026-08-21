@@ -123,19 +123,21 @@ void main() {
     });
   });
 
-  group('F3 — variant-skift alene udløser gen-mal (_visualSig)', () {
-    testWidgets('samme key: klassisk → p25 skifter pixel-farven',
-        (tester) async {
-      // SAMME key for begge pump: andet pump er et REBUILD af samme
-      // RenderObject, hvor _BoardPainter.shouldRepaint afgør gen-malingen.
-      // Klassisk/p25 har identisk geometri og brik-antal, så gen-malingen
-      // sker KUN fordi state.variant.id indgår i _visualSig — fjernes den,
-      // står den gamle grønne pixel tilbage → rød.
-      const Key key = ValueKey<String>('theme-board');
-      _expectPixel(await _pumpAndReadCorner(tester, key, classicVariant),
-          const Color(0xFF14331F));
-      _expectPixel(await _pumpAndReadCorner(tester, key, partners25),
-          const Color(0xFF1B2C4F));
+  group('F3 — variant.id indgår i painterens _visualSig', () {
+    test('klassisk- og p25-sig AFVIGER (ellers ingen repaint ved skift)', () {
+      // Klassisk og p25 er IDENTISKE på geometri, brik-antal, positioner og
+      // spillerfarver — de to signaturer kan derfor KUN afvige via
+      // state.variant.id. Fjernes id-linjen fra _computeVisualSig, bliver de
+      // to strenge ens → rød. (Direkte sig-test frem for repaint-integration:
+      // et samme-key-mutationsforsøg i CI viste at test-miljøet gen-maler
+      // uanset shouldRepaint, så integrationen kan ikke isolere linjen.)
+      final String classicSig =
+          BoardView.debugVisualSig(makeState(variant: classicVariant));
+      final String p25Sig =
+          BoardView.debugVisualSig(makeState(variant: partners25));
+      expect(classicSig, isNot(p25Sig));
+      // Og sig'en er stabil for samme variant (ingen støj i låsen).
+      expect(BoardView.debugVisualSig(makeState(variant: partners25)), p25Sig);
     });
   });
 }

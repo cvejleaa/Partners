@@ -107,6 +107,16 @@ class BoardView extends StatelessWidget {
   /// rendering-geometrien for N spillere (den private painter kan ellers ikke
   /// nås udefra). Samme kilde som både tegning og tap-detektion.
   @visibleForTesting
+  /// KUN TIL TEST: painterens visuelle signatur for [state]. Eksponeret så
+  /// testen kan låse at variant.id indgår (klassisk/p25 er identiske på
+  /// geometri/brikker/farver, så to ens sig'er ville betyde at et variant-
+  /// skift ikke udløser repaint). Samme mønster som [debugPieceCenters] —
+  /// dansk privathed er library-scoped, så en test kan ikke nå
+  /// _BoardPainter._computeVisualSig direkte.
+  @visibleForTesting
+  static String debugVisualSig(GameState state) =>
+      _BoardPainter._computeVisualSig(state);
+
   static Map<String, Offset> debugPieceCenters(
       GameState state, double dim, double rotation,
       {double scale = 1.0}) {
