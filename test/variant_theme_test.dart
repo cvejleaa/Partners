@@ -7,6 +7,7 @@
 // der ruller painteren tilbage til den hardkodede grønne, holder F1 grøn men
 // gør F2 rød).
 
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
