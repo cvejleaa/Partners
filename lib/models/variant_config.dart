@@ -64,7 +64,9 @@ class VariantConfig {
     this.cardRuleOverrides,
     this.tableColor = const Color(0xFF0E2A1A),
     this.feltColor = const Color(0xFF14331F),
-    this.badgeColor = const Color(0xFF4CAF50),
+    // Husets grønne (bruges også af "din tur"-chippen): hvid 13px-tekst har
+    // 5,1:1 — 0xFF4CAF50 havde kun 2,8:1 og fejlede som informationsbærer.
+    this.badgeColor = const Color(0xFF2E7D32),
   });
 
   /// Stabil identitet (gemmes i spil-dokumentet, se serialisering).
@@ -129,6 +131,13 @@ class VariantConfig {
   /// Falder tilbage til navnet for fremtidige varianter uden kort form.
   String get shortLabel =>
       id == 'classic' ? 'Klassisk' : (id == 'p25' ? '25 år' : name);
+
+  /// Tekst til badge-info-dialogen. Domænetekst bor HER (ikke i widgets):
+  /// beskrivelsen når den findes, ellers klassisk-forklaringen.
+  String get infoText =>
+      description ??
+      'Den klassiske Partners-udgave: 4 spillere, 2 hold med diagonale '
+          'makkere, 4 brikker hver.';
 
   /// Samlet antal felter på ringen: segmenter × (UD-felt + nummererede felter).
   /// Klassisk: 4 × (1 + 14) = 60. Partners+: 6 × (1 + 13) = 84.

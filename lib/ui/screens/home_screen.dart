@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
+import '../../models/variant_config.dart';
+import '../widgets/variant_badge.dart';
 import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
 import '../../utils/avatars.dart';
@@ -235,8 +237,23 @@ class _ResumeButton extends ConsumerWidget {
                 ref.invalidate(savedGameProvider);
               },
               icon: const Icon(Icons.play_circle),
-              label: Text('Fortsæt spil (hånd #${saved.handNumber})',
-                  style: const TextStyle(fontSize: 18)),
+              label: Row(mainAxisSize: MainAxisSize.min, children: <Widget>[
+                // Variant-badgen følger med det gemte spil ("samme sted hver
+                // gang") — vid læses defensivt af det rå save.
+                VariantBadge(
+                  variant: variantFromId(saved.raw['vid'] is String
+                      ? saved.raw['vid'] as String
+                      : null),
+                  compact: true,
+                  interactive: false,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text('Fortsæt spil (hånd #${saved.handNumber})',
+                      style: const TextStyle(fontSize: 18),
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ]),
             ),
           ),
           const SizedBox(width: 8),

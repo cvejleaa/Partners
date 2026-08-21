@@ -577,8 +577,13 @@ class OnlineService {
     }
 
     // Variant (defensivt; ukendt → klassisk) + resolvet navn — læses HER,
-    // hvor doc'et er: GameSummary er det eneste liste-laget ser.
-    final VariantConfig variant = variantFromDoc(d);
+    // hvor doc'et er: GameSummary er det eneste liste-laget ser. Efter start
+    // er STATE'ns 'vid' autoriteten (doc-feltet kan i princippet ændres af et
+    // medlem midt i spillet uden at røre brættet) — foretræk den.
+    final VariantConfig variant =
+        (status == 'playing' && state is Map && state['vid'] is String)
+            ? variantFromId(state['vid'] as String)
+            : variantFromDoc(d);
     return GameSummary(
       id,
       d['hostName'] as String? ?? '?',

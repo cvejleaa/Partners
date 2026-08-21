@@ -546,7 +546,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      color: _state.variant.feltColor,
+      color: state.variant.feltColor,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.start,
@@ -613,7 +613,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      color: _state.variant.feltColor,
+      color: state.variant.feltColor,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.start,

@@ -4,14 +4,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/variant_config.dart';
-import '../widgets/variant_badge.dart';
-
 import '../../app.dart';
+import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../services/feedback_service.dart';
 import '../../stats/records.dart';
 import '../../stats/stats_repository.dart';
+import '../widgets/variant_badge.dart';
 
 class WinScreen extends ConsumerStatefulWidget {
   const WinScreen({
@@ -121,7 +120,9 @@ class _WinScreenState extends ConsumerState<WinScreen>
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0E2A1A),
+      // Variantens bordfarve når kendt — så bræt-billedet og skærmen matcher.
+      backgroundColor:
+          widget.variant?.tableColor ?? const Color(0xFF0E2A1A),
       body: Stack(
         children: <Widget>[
           // Konfetti bag indholdet.

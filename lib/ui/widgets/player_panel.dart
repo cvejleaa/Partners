@@ -118,15 +118,16 @@ class PlayerPanel extends StatelessWidget {
     // Starterens panel får en MØRK baggrund i stedet for spillerens (evt.
     // gyldne) farve, så den gyldne ramme ikke drukner i baggrunden. Farve-
     // identiteten bevares via prikken ved navnet + den centrale starter-chip.
-    // Øvrige paneler: spillerens farve komponeret på en NEUTRAL mørk bund
-    // (ikke direkte på bordfarven) — ellers forsvinder farven når den ligner
-    // bordet (før: grøn spiller ~1,4:1 på grøn flade; med variant-blå ville
-    // det ramme den blå spiller).
+    // Øvrige paneler: spillerens farve komponeret på en UGENNEMSIGTIG neutral
+    // mørk bund — panelets kulør er dermed UAFHÆNGIG af bordfarven (samme
+    // udseende på grøn og marineblå flade), i stedet for at bordet slog
+    // igennem et gennemsigtigt fyld og åd farven, når spiller- og bordfarve
+    // lignede hinanden (grøn på grøn / blå på blå).
     final Color panelFill = isStarter
         ? Colors.black.withValues(alpha: 0.42)
         : Color.alphaBlend(
             dotColor.withValues(alpha: isCurrent ? 0.55 : 0.28),
-            Colors.black.withValues(alpha: 0.35),
+            const Color(0xFF16181C),
           );
 
     final Widget box = Container(

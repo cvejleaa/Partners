@@ -10,8 +10,8 @@ import '../../models/variant_config.dart';
 import '../../online/friends_service.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
-import '../widgets/variant_badge.dart';
 import '../../utils/palette.dart';
+import '../widgets/variant_badge.dart';
 import 'online_game_screen.dart';
 
 // ---------------------------------------------------------------------------
@@ -249,7 +249,12 @@ class OnlineHomeScreen extends ConsumerWidget {
         // samtidig, så det er her man "kender forskel på dem".
         title: Row(children: <Widget>[
           VariantBadge(
-              variant: variantFromId(g.variantId), compact: true),
+            variant: variantFromId(g.variantId),
+            compact: true,
+            // Hele rækken åbner spillet — badgen må ikke være en dead zone.
+            interactive: false,
+            displayName: g.variantLabel.isEmpty ? null : g.variantLabel,
+          ),
           const SizedBox(width: 6),
           Flexible(
             child: Text('Spil ${g.code}  ·  vært: ${g.hostName}',
@@ -539,7 +544,12 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                 // værten kan ændre den (afgør bræt/kort for alle).
                 Row(
                   children: <Widget>[
-                    VariantBadge(variant: variant, compact: true),
+                    VariantBadge(
+                      variant: variant,
+                      compact: true,
+                      displayName:
+                          variantDisplayName(variant, variantsRaw),
+                    ),
                     const SizedBox(width: 8),
                     const Text('Spil:'),
                     const SizedBox(width: 12),

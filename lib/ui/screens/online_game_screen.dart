@@ -9,10 +9,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../game/ai/ai_player.dart';
 import '../../game/progress.dart';
 import '../../models/game_state.dart';
-import '../../models/variant_config.dart';
 import '../../models/move.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
+import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../online/serialize.dart';
 import '../../state/display_config.dart';
@@ -241,8 +241,14 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     // load blinker fladen derfor grøn→blå for et 25 år-spil; navngivet fravalg
     // (en initialVariantId-param gennem begge navigationssteder er ikke det værd).
     final Map<String, dynamic>? rawDoc = snap.valueOrNull?.data();
-    final VariantConfig variant =
-        rawDoc == null ? classicVariant : variantFromDoc(rawDoc);
+    // Efter start er state'ns 'vid' autoriteten (matcher brættet); før start
+    // gælder lobby-feltet. Defensivt hele vejen — loading/skævt → klassisk.
+    final dynamic rawState = rawDoc?['state'];
+    final VariantConfig variant = rawDoc == null
+        ? classicVariant
+        : (rawState is Map && rawState['vid'] is String)
+            ? variantFromId(rawState['vid'] as String)
+            : variantFromDoc(rawDoc);
     return Scaffold(
       backgroundColor: variant.tableColor,
       appBar: AppBar(

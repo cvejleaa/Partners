@@ -17,6 +17,8 @@ class VariantBadge extends StatelessWidget {
     super.key,
     required this.variant,
     this.compact = false,
+    this.interactive = true,
+    this.displayName,
   });
 
   final VariantConfig variant;
@@ -24,43 +26,51 @@ class VariantBadge extends StatelessWidget {
   /// Kompakt (AppBar/liste-række): mindre skrift/padding.
   final bool compact;
 
+  /// Slå tap fra hvor badgen sidder OVEN PÅ en primær handling (fx "Mine
+  /// spil"-rækken, hvor hele rækken åbner spillet) — en dialog midt i den
+  /// handling ville være en dead zone.
+  final bool interactive;
+
+  /// Resolvet navn (admins evt. eget, fx fra doc'ets cardRulesVariants-kopi)
+  /// til tooltip/dialog. Chip-teksten er ALTID [VariantConfig.shortLabel] —
+  /// kort, fast bredde. null = variantens kode-navn.
+  final String? displayName;
+
   @override
   Widget build(BuildContext context) {
-    final chip = Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: compact ? 7 : 10, vertical: compact ? 3 : 5),
-      decoration: BoxDecoration(
-        color: variant.badgeColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        variant.shortLabel,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: compact ? 11 : 13,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
+    // Egen Material med chippens farve: garanterer Material-forælder uanset
+    // placering, og gør ink-splashet synligt PÅ chippen (et splash på
+    // materialet under en uigennemsigtig chip ses aldrig).
+    final Widget chip = Material(
+      color: variant.badgeColor,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: interactive ? () => _showInfo(context) : null,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+              horizontal: compact ? 7 : 10, vertical: compact ? 3 : 5),
+          child: Text(
+            variant.shortLabel,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: compact ? 11 : 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.3,
+            ),
+          ),
         ),
       ),
     );
-    return Tooltip(
-      message: variant.name,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: () => _showInfo(context),
-        child: chip,
-      ),
-    );
+    return Tooltip(message: displayName ?? variant.name, child: chip);
   }
 
   void _showInfo(BuildContext context) {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(variant.name),
-        content: Text(variant.description ??
-            'Den klassiske Partners-udgave: 4 spillere, 2 hold med diagonale '
-                'makkere, 4 brikker hver.'),
+        title: Text(displayName ?? variant.name),
+        content: Text(variant.infoText),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(ctx),
