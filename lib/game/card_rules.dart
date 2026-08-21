@@ -56,7 +56,12 @@ class CardRuleConfig {
 
   /// Positiv tilstedeværelse (én vagt, brugt af motor, kort-face, admin og
   /// tutorial — så ingen af dem opfinder sin egen halve udgave af tjekket).
-  bool get hasFwdThenBack => seqForward != null && seqBackward != null;
+  /// Begge kræver GYLDIGE værdier (>= 1 / >= 2) — så et skævt Firestore-doc
+  /// (fx seqForward: 0) hverken kan få kortet til at LOVE en evne motoren
+  /// ikke giver, eller omvendt.
+  bool get hasFwdThenBack =>
+      seqForward != null && seqForward! >= 1 &&
+      seqBackward != null && seqBackward! >= 1;
   bool get hasMultiForward =>
       multiPieces != null && multiPieces! >= 2 && multiSteps != null &&
       multiSteps! >= 1;
@@ -139,10 +144,11 @@ class CardRules {
     return CardRules(next);
   }
 
-  /// Anvend et sæt rang-overrides oven på DISSE regler. Bruges af varianter, der
-  /// kun ændrer nogle få kort (fx 25 år: 5-kortet → Hopsakort) og skal arve
-  /// resten fra de LIVE/admin-konfigurerede regler frem for at fryse et helt
-  /// sæt (så fx admin's byttekort på Knægten bevares i varianten).
+  /// Anvend et sæt rang-overrides oven på DISSE regler. Bruges af varianter,
+  /// der kun ændrer nogle rangs og arver resten fra de LIVE/admin-regler.
+  /// BEMÆRK: en rang der ER i override-mappet erstattes HELT — fx overskriver
+  /// 25 års Knægt (11/1×1) et evt. admin-byt på den klassiske Knægt; i 25 år
+  /// ligger byttet på 9'eren.
   CardRules withOverrides(Map<Rank, CardRuleConfig> overrides) {
     if (overrides.isEmpty) return this;
     final next = Map<Rank, CardRuleConfig>.from(byRank);
@@ -247,6 +253,7 @@ List<String> deckSanityWarnings(CardRules rules) {
   final List<String> warnings = <String>[];
   int hopCount = 0;
   int hopWithoutForward = 0;
+  int seqTrapped = 0;
   bool anyExit = false;
   bool anyForward = false;
   for (final Rank r in Rank.values) {
@@ -257,8 +264,18 @@ List<String> deckSanityWarnings(CardRules rules) {
       // flaget virkningsløst (og ville lyve på kortet, hvis chippen viste det).
       if (c.forwardSteps.isEmpty) hopWithoutForward++;
     }
+    // Spilfladen vælger flertrins-kort brik-for-brik; et kort med BÅDE
+    // split/multi OG frem+tilbage-sekvens kan ikke udtrykke sekvensen dér.
+    if (c.hasFwdThenBack && (c.splitTotal != null || c.hasMultiForward)) {
+      seqTrapped++;
+    }
     if (c.exitStart) anyExit = true;
-    if (c.forwardSteps.isNotEmpty || c.splitTotal != null) anyForward = true;
+    if (c.forwardSteps.isNotEmpty ||
+        c.splitTotal != null ||
+        c.hasMultiForward ||
+        c.hasFwdThenBack) {
+      anyForward = true;
+    }
   }
   if (!anyExit) {
     warnings.add('Ingen kort kan sætte en brik ud — spillet kan ikke komme i '
@@ -274,16 +291,6 @@ List<String> deckSanityWarnings(CardRules rules) {
   if (hopWithoutForward > 0) {
     warnings.add('$hopWithoutForward kort har hop slået til uden fremad-skridt '
         '— hop virker kun på fremad-bevægelse og har ingen effekt dér.');
-  }
-  // Spilfladen vælger flertrins-kort brik-for-brik; et kort med BÅDE
-  // split/multi OG frem+tilbage-sekvens kan ikke udtrykke sekvensen dér
-  // (samme brik skal vælges to gange). Advar frem for at spærre.
-  int seqTrapped = 0;
-  for (final Rank r in Rank.values) {
-    final CardRuleConfig c = rules.forRank(r);
-    if (c.hasFwdThenBack && (c.splitTotal != null || c.hasMultiForward)) {
-      seqTrapped++;
-    }
   }
   if (seqTrapped > 0) {
     warnings.add('$seqTrapped kort kombinerer frem+tilbage med split/flere '

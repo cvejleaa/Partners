@@ -1,4 +1,4 @@
-// Varianter fase 3: Partners 25 år (forsmag) + Hopsakort-mekanikken (5↷).
+// Varianter fase 3+: Partners 25 år + Hopsakort-mekanikken (5↷).
 //
 // Beviser:
 //  T1 registret indeholder p25 og resolver korrekt.
@@ -116,20 +116,27 @@ void main() {
     });
   });
 
-  group('T6 — varianten ARVER basens overrides (fx admin-byttekort på Knægt)', () {
-    test('effectiveCardRules bevarer basens Knægt-swap OG tilføjer Hopsakortet',
-        () {
-      // De LIVE regler: admin har gjort Knægten til byttekort (det kort der
-      // ellers ville være 11 frem). Varianten må ikke tabe det.
+  group('T6 — varianten ARVER basens overrides for rangs UDEN FOR seedet', () {
+    test(
+        'effectiveCardRules bevarer basens Dame-tilpasning OG lægger seedet '
+        'ovenpå', () {
+      // De LIVE regler: admin har gjort Damen til byttekort. Damen er IKKE i
+      // p25-seedet, så varianten skal ARVE den. (Knægten er derimod i seedet
+      // (11/1×1) og OVERSKRIVES bevidst — byttet ligger i 25 år på 9'eren; se
+      // withOverrides-doc'en i card_rules.dart.)
       final CardRules live = CardRules.defaults()
-          .withRank(Rank.jack, const CardRuleConfig(swap: true));
+          .withRank(Rank.queen, const CardRuleConfig(swap: true));
       final CardRules resolved = effectiveCardRules(partners25, live);
-      // Byttekortet fra basen bevares...
-      expect(resolved.forRank(Rank.jack).swap, isTrue,
-          reason: '25 år må ikke tavst tabe basens byttekort');
-      // ...OG Hopsakortet lægges ovenpå. Muteres kompositionen til at bygge fra
-      // defaults() frem for basen, taber Knægt-swap → denne assertion rød.
+      // Basens tilpasning uden for seedet bevares...
+      expect(resolved.forRank(Rank.queen).swap, isTrue,
+          reason: '25 år må ikke tavst tabe basens tilpasninger uden for '
+              'seedet');
+      // ...OG seedet lægges ovenpå. Muteres kompositionen til at bygge fra
+      // defaults() frem for basen, taber Dame-swap → denne assertion rød.
       expect(resolved.forRank(Rank.five).jumpsBlockade, isTrue);
+      // Og seed-rangs erstattes HELT: Knægten er 11/1×1, ikke basens version.
+      expect(resolved.forRank(Rank.jack).hasMultiForward, isTrue);
+      expect(resolved.forRank(Rank.jack).swap, isFalse);
     });
   });
 

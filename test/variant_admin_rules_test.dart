@@ -194,6 +194,35 @@ void main() {
     });
   });
 
+  group('A5b — nye mekanik-vagter', () {
+    test('hasFwdThenBack kræver >= 1/>= 1 (skævt doc kan ikke få kortet til '
+        'at lyve)', () {
+      // Et Firestore-doc med seqForward: 0 må hverken vise chip/tutorial-tekst
+      // eller nå motoren — én vagt i getteren.
+      expect(
+          const CardRuleConfig(seqForward: 0, seqBackward: 5).hasFwdThenBack,
+          isFalse);
+      expect(
+          const CardRuleConfig(seqForward: 2, seqBackward: 0).hasFwdThenBack,
+          isFalse);
+      expect(
+          const CardRuleConfig(seqForward: 2, seqBackward: 5).hasFwdThenBack,
+          isTrue);
+    });
+
+    test('anyForward kender multi/sekvens (ingen falsk "ingen kort kan '
+        'flytte frem")', () {
+      // Al fremad-bevægelse ligger i et multi-kort — det er et spilbart sæt.
+      final CardRules rules = CardRules(<Rank, CardRuleConfig>{
+        Rank.ace: const CardRuleConfig(exitStart: true),
+        Rank.jack: const CardRuleConfig(multiPieces: 2, multiSteps: 1),
+      });
+      final List<String> w = deckSanityWarnings(rules);
+      expect(w.where((x) => x.contains('flytte frem')), isEmpty,
+          reason: 'multi ER fremad-bevægelse');
+    });
+  });
+
   group('A6 — sameConfig dækker alle felter (UI-sync)', () {
     test('to configs der KUN afviger på jumpsBlockade er IKKE ens', () {
       // Muteres sameConfig til at glemme jumpsBlockade (som den gamle

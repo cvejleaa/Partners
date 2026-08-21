@@ -41,3 +41,17 @@ class Move {
   /// Sand hvis dette træk er "gå ud af start" (Es eller Konge).
   final bool exitsStart;
 }
+
+/// Positiv genkendelse af et BYT: to steps, forskellige brikker, der bytter
+/// plads (A→Bs felt og B→As felt). ÉN vagt for Move-objekter — brugt af
+/// spilfladens routing og lyd-feedback — så reglen ikke findes i kopier, der
+/// kan drive fra hinanden. (Log-map-udgaven bor i serialize.dart:
+/// isSwapLogSteps.) Aldrig "2 steps = byt": sekvens-træk (+2−5), 1×1 og en
+/// delt 7'er har også 2 steps.
+bool isSwapMove(Move m) {
+  if (m.steps.length != 2) return false;
+  final MoveStep a = m.steps[0];
+  final MoveStep b = m.steps[1];
+  if (a.pieceId == b.pieceId) return false;
+  return a.to == b.from && b.to == a.from;
+}

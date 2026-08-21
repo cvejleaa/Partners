@@ -434,13 +434,20 @@ void _accumulateGame(
         .toList();
 
     if (!card.isExit && card.rank == Rank.seven) {
-      if (steps.length > 1) {
+      // Sekvens-træk (+2−5 i 25 år) er 2 steps med SAMME brik — det er ikke en
+      // delt 7'er. Rang-tjekket alene ville fejltælle i varianter.
+      final bool samePiece = steps.length == 2 &&
+          steps[0]['pieceId'] == steps[1]['pieceId'];
+      if (steps.length > 1 && !samePiece) {
         split7Count[seat] = (split7Count[seat] ?? 0) + 1;
       } else {
         solid7Count[seat] = (solid7Count[seat] ?? 0) + 1;
       }
     }
-    if (!card.isExit && card.rank == Rank.jack && steps.length == 2) {
+    // Byt tælles på FORMEN (A↔B), ikke på rangen: i 25 år ligger byttet på
+    // 9'eren, og Knægtens 1×1 har også 2 steps — rang-tjekket talte forkert i
+    // begge retninger.
+    if (!card.isExit && isSwapLogSteps(steps)) {
       swapCount[seat] = (swapCount[seat] ?? 0) + 1;
     }
     // Yndlingsåbner: kort spillet til at gå ud af start.

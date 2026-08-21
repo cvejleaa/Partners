@@ -108,6 +108,25 @@ ReplayResult replayGame({
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
 
+    // Et BYT (positivt genkendt på A↔B-formen) flytter to brikker uden slag —
+    // den generiske slag-udledning nedenfor ville ellers læse det som "slag +
+    // ud af start" (step 2 flytter den netop-hjemslåede brik ud igen).
+    if (isSwapLogSteps(steps)) {
+      final a = state.allPieces
+          .firstWhere((p) => p.id == steps[0]['pieceId'] as String);
+      final b = state.allPieces
+          .firstWhere((p) => p.id == steps[1]['pieceId'] as String);
+      a.position = posFromMap(Map<String, dynamic>.from(steps[0]['to'] as Map));
+      b.position = posFromMap(Map<String, dynamic>.from(steps[1]['to'] as Map));
+      events.add(ReplayEvent(
+        player: player,
+        kind: ReplayKind.move,
+        card: card,
+        captured: const <String>[],
+      ));
+      continue;
+    }
+
     // Detektér capture pr. step: hvis target-feltet havde en modstanderbrik
     // FØR vi flytter, registrér det.
     final captured = <String>[];

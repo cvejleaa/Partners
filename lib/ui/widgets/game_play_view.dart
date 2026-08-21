@@ -83,6 +83,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// spilleren har valgt BYT-tilstanden for det valgte kort.
   bool _hybridSwapMode = false;
 
+  /// Memo for canPlay (se _buildPlayArea).
+  String? _canPlayKey;
+  bool _canPlayMemo = false;
+
   // Lokal farve-rotation: sat i build() ud fra brugerens ønske-farve, brugt af
   // board + paneler. Rent visuelt for denne enhed.
   int _colorOffset = 0;
@@ -153,6 +157,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       _selectedCard = null;
       _candidateMoves = <Move>[];
       _swapFirstPiece = null;
+      _hybridSwapMode = false;
       _splitPath.clear();
     }
     if (phaseOrTurnChanged) {
@@ -586,8 +591,23 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   Widget _buildPlayArea(GameState state, Player me, {required bool fill}) {
     final bool myTurn = state.currentPlayerIndex == me.index;
     final rules = Rules(state.geometry);
-    final bool canPlay = myTurn &&
-        me.hand.any((c) => rules.legalMoves(state, me, c).isNotEmpty);
+    // canPlay kører hele move-generatoren for hånden — memoiseret pr.
+    // (hånd, tur, brætrunde), for build() kaldes ~30×/s under animationer,
+    // og brættet kan ikke ændre sig inden for samme (tur, håndstørrelse).
+    final String canPlayKey =
+        '${state.handNumber}|${state.currentPlayerIndex}|${me.hand.length}';
+    final bool canPlay;
+    if (myTurn) {
+      if (_canPlayKey != canPlayKey) {
+        _canPlayKey = canPlayKey;
+        _canPlayMemo =
+            me.hand.any((c) => rules.legalMoves(state, me, c).isNotEmpty);
+      }
+      canPlay = _canPlayMemo;
+    } else {
+      _canPlayKey = null;
+      canPlay = false;
+    }
     String? overrideStatus = widget.bottomStatusOverride;
 
     return Container(
@@ -658,11 +678,24 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       label = _splitPath.isEmpty
           ? 'Vælg en brik (gult = lovligt træk)'
           : 'Vælg brik ${_splitPath.length + 1} af $n ($st frem hver)';
+    } else if (_swapFlowActive(state, card)) {
+      label = _swapFirstPiece == null
+          ? 'Byt: vælg den første af to brikker'
+          : 'Byt: vælg brikken der byttes med';
+    } else if (!card.isExit && state.cardRules.forRank(card.rank!).swap) {
+      // Hybrid-kort i FLYT-tilstand: sig tilstanden, så den ikke er usynlig.
+      label = 'Flyt: vælg en brik (gult = lovligt træk)';
     } else {
       label = 'Vælg en brik (gult = lovligt træk)';
     }
-    final bool isSplit = card != null && _isMultiPieceCard(state, card);
-    final bool canCommit = isSplit && _firstFullyMatching() != null;
+    // Hybrid-kort (byt + bevægelse): giv en synlig vej til at skifte tilstand
+    // — ellers er gen-tap på kortet den eneste (usynlige) vej tilbage.
+    final bool isHybrid = card != null &&
+        !card.isExit &&
+        state.cardRules.forRank(card.rank!).swap &&
+        !_isSwapCard(state, card);
+    final bool isMultiStep = card != null && _isMultiPieceCard(state, card);
+    final bool canCommit = isMultiStep && _firstFullyMatching() != null;
     return Wrap(
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -671,7 +704,16 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       children: <Widget>[
         Text(label,
             style: const TextStyle(color: Colors.white, fontSize: 13)),
-        if (isSplit && _splitPath.isNotEmpty) ...<Widget>[
+        if (isHybrid)
+          TextButton(
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                foregroundColor: Colors.amber),
+            onPressed: () => _chooseHybridMode(card),
+            child: const Text('Skift'),
+          ),
+        if (isMultiStep && _splitPath.isNotEmpty) ...<Widget>[
           if (canCommit)
             FilledButton(
               style: FilledButton.styleFrom(
@@ -788,7 +830,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         final bool hasSwaps = moves.any(_isSwapMove);
         final bool hasOthers = moves.any((Move m) => !_isSwapMove(m));
         if (hasSwaps && hasOthers) {
-          _chooseHybridMode(state, c);
+          _chooseHybridMode(c);
         } else if (hasSwaps) {
           setState(() => _hybridSwapMode = true);
         }
@@ -796,18 +838,12 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     }
   }
 
-  /// Positiv genkendelse af et byt: to steps, forskellige brikker, der bytter
-  /// plads (A→Bs felt og B→As felt). Bruges til at adskille byt fra sekvens-/
-  /// multi-/split-træk — aldrig "2 steps = byt".
-  bool _isSwapMove(Move m) {
-    if (m.steps.length != 2) return false;
-    final MoveStep a = m.steps[0];
-    final MoveStep b = m.steps[1];
-    if (a.pieceId == b.pieceId) return false;
-    return _posKey(a.to) == _posKey(b.from) && _posKey(b.to) == _posKey(a.from);
-  }
+  /// Positiv byt-genkendelse — delegerer til den ENE delte vagt i
+  /// models/move.dart (isSwapMove), så UI-routing, lyd og stats aldrig driver
+  /// fra hinanden.
+  bool _isSwapMove(Move m) => isSwapMove(m);
 
-  Future<void> _chooseHybridMode(GameState state, PlayingCard c) async {
+  Future<void> _chooseHybridMode(PlayingCard c) async {
     final bool? swapMode = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.white,
@@ -857,10 +893,15 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   bool _isSwapCard(GameState state, PlayingCard c) {
     if (c.isExit) return false;
     final cfg = state.cardRules.forRank(c.rank!);
+    // RENT byt-kort = ingen andre evner. Uden multi/sekvens-tjekkene ville
+    // et admin-kort med byt+multi låse multi-trækkene ude (byt-flowet ville
+    // altid være aktivt, og tilstands-arket aldrig vist).
     return cfg.swap &&
         cfg.forwardSteps.isEmpty &&
         cfg.backwardSteps == null &&
         cfg.splitTotal == null &&
+        !cfg.hasMultiForward &&
+        !cfg.hasFwdThenBack &&
         !cfg.exitStart;
   }
 
@@ -1056,7 +1097,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     } else {
       chosen = await _chooseSplitStep(state, byKey.values.toList());
     }
-    if (chosen == null) return;
+    if (chosen == null || !mounted) return;
 
     setState(() => _splitPath.add(chosen!));
 
@@ -1137,9 +1178,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
                   itemBuilder: (_, int i) {
                     final s = options[i];
                     final int d = _stepDistance(state, s);
-                    final String label = s.to is HomeStretchPosition
-                        ? '$d ind i hjemstrækket (slot ${(s.to as HomeStretchPosition).slot + 1})'
-                        : '$d frem';
+                    final String label = (s.to is HomeStretchPosition
+                            ? '$d ind i hjemstrækket (slot ${(s.to as HomeStretchPosition).slot + 1})'
+                            : '$d frem') +
+                        _captureNote(state, s);
                     return ListTile(
                       title: Text(label,
                           style: const TextStyle(
@@ -1216,6 +1258,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         ],
       ),
     );
+    if (!mounted) return;
     setState(() => _swapFirstPiece = null);
     if (ok == true) widget.onApplyMove(_mySeat, move);
   }
@@ -1270,7 +1313,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         ),
       ),
     );
-    if (chosen != null) widget.onApplyMove(_mySeat, chosen);
+    if (chosen != null && mounted) widget.onApplyMove(_mySeat, chosen);
   }
 
   String _describeMove(GameState state, Move m) {
@@ -1319,11 +1362,26 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     if (from is StartPosition && to is TrackPosition) return 'ud af start';
     if (to is HomeStretchPosition) return 'hjem (felt ${to.slot + 1})';
     if (from is TrackPosition && to is TrackPosition) {
+      // Tæl TÆLLENDE felter (UD-felter springes over, §6) i begge retninger —
+      // et rå indeks-delta ville vise fx "-6" for et 5-tilbage der krydser
+      // et UD-felt.
       final int len = state.geometry.trackLength;
-      final int fwd = (to.index - from.index + len) % len;
-      final int back = (from.index - to.index + len) % len;
-      if (fwd == 0) return 'bliv stå';
-      return fwd <= back ? '$fwd frem' : '-$back (baglæns)';
+      final int q = len ~/ 4;
+      int count(int fromIdx, int toIdx, int dir) {
+        int idx = fromIdx;
+        int c = 0;
+        while (idx != toIdx && c <= len) {
+          idx = (idx + dir + len) % len;
+          if (idx % q == 0) continue; // UD-felt: tæller ikke
+          c++;
+          if (idx == toIdx) break;
+        }
+        return c;
+      }
+      if (from.index == to.index) return 'bliv stå';
+      final int fwd = count(from.index, to.index, 1);
+      final int back = count(from.index, to.index, -1);
+      return fwd <= back ? '$fwd frem' : '$back tilbage';
     }
     return 'træk';
   }

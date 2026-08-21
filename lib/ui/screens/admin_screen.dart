@@ -777,7 +777,7 @@ class _ConfigEditorState extends State<_ConfigEditor> {
           : null,
       clearSeq: !_seqOn,
       multiPieces: _multiOn
-          ? (int.tryParse(_multiPiecesCtrl.text.trim()) ?? 2).clamp(2, 8)
+          ? (int.tryParse(_multiPiecesCtrl.text.trim()) ?? 2).clamp(2, 4)
           : null,
       multiSteps: _multiOn
           ? (int.tryParse(_multiStepsCtrl.text.trim()) ?? 1).clamp(1, 20)

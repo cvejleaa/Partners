@@ -83,10 +83,10 @@ class Rules {
 
     // 3b) Sekvens-træk (fx 25 års +2−5): samme brik frem og så tilbage —
     //     med rigtig landing på mellemfeltet (kan slå 2 hjem på ét kort).
+    //     ÉN vagt: _tryFwdThenBack afviser selv brikker uden for banen.
     if (cfg.hasFwdThenBack) {
       for (final Player a in activePool) {
         for (final Piece p in a.pieces) {
-          if (p.position is! TrackPosition) continue;
           final Move? m = _tryFwdThenBack(
               state, a, p, cfg.seqForward!, cfg.seqBackward!, card);
           if (m != null) moves.add(m);
@@ -304,6 +304,10 @@ class Rules {
     if (!midLanding.legal || midLanding.burnsMover) return null;
     final int? endIdx = _reverseIndexFrom(state, player.index, mid.index, back);
     if (endIdx == null) return null;
+    // Beviset "slutfeltet er aldrig mellemfeltet" skal stå i KODEN, ikke i
+    // admin-klampningen: et skævt doc med back >= ringlængden ville ellers
+    // give end == mid og samme brik "slået to gange".
+    if (endIdx == mid.index) return null;
     final TrackPosition end = TrackPosition(endIdx);
     final _Landing endLanding = _landing(state, player.index, end);
     if (!endLanding.legal) return null;
@@ -340,7 +344,10 @@ class Rules {
   /// (rækkefølge-uafhængig på slutpositioner).
   Iterable<Move> _multiForwardMoves(GameState state, Player player,
       PlayingCard card, int pieces, int steps) sync* {
-    if (pieces < 2 || steps < 1) return;
+    // Loft på 4 brikker: klon-pr-gren-søgningen er permutationsbaseret, og
+    // N>4 (kun muligt i endgame med makker-pulje) ville eksplodere. Admin
+    // klamper til 2..4; et skævt doc klampes her.
+    if (pieces < 2 || pieces > 4 || steps < 1) return;
     final Player partner =
         state.players[state.variant.partnerFor(player.index)];
     final Map<String, Move> results = <String, Move>{};

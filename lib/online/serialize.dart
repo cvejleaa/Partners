@@ -197,35 +197,53 @@ bool isRecentDuplicateMove(List log, Map<String, dynamic> entry,
 /// widget-afhængighed — så den kan unit-testes direkte uden en widget-pumpe
 /// (se test/serialize_test.dart).
 String describeReplayStep(Map<String, dynamic> m) {
-  final steps = (m['steps'] as List?) ?? const <dynamic>[];
-  if (steps.isEmpty) return 'sad over';
+  final List<dynamic> raw = (m['steps'] as List?) ?? const <dynamic>[];
+  if (raw.isEmpty) return 'sad over';
+  final List<Map<String, dynamic>> steps = raw
+      .map((e) => Map<String, dynamic>.from(e as Map))
+      .toList();
   // Byt genkendes POSITIVT (A→Bs felt og B→As felt) — ikke på "2 steps", for
   // både sekvens-træk (+2−5), 1×1 og en delt 7'er har også 2 steps.
   if (steps.length == 2) {
-    final s0 = Map<String, dynamic>.from(steps[0] as Map);
-    final s1 = Map<String, dynamic>.from(steps[1] as Map);
-    final bool isSwap = s0['pieceId'] != s1['pieceId'] &&
-        _samePosMap(s0['to'], s1['from']) &&
-        _samePosMap(s1['to'], s0['from']);
-    if (isSwap) return 'byttede to brikker';
+    if (isSwapLogSteps(steps)) return 'byttede to brikker';
+    final s0 = steps[0];
+    final s1 = steps[1];
     final bool samePiece = s0['pieceId'] == s1['pieceId'];
-    final int captures = <Map<String, dynamic>>[s0, s1]
-        .where((st) => st['cap'] == true)
-        .length;
-    final String suffix = captures == 0
-        ? ''
-        : captures == 1
-            ? ' — slog en brik hjem'
-            : ' — slog 2 brikker hjem';
+    final int captures =
+        steps.where((st) => st['cap'] == true).length;
+    final bool burned = steps.any((st) => st['burn'] == true);
+    final String suffix = burned
+        ? ' — brændte sin egen brik hjem'
+        : captures == 0
+            ? ''
+            : captures == 1
+                ? ' — slog en brik hjem'
+                : ' — slog 2 brikker hjem';
     return samePiece
         ? 'rykkede frem og tilbage med samme brik$suffix'
         : 'flyttede to brikker$suffix';
   }
-  final s = Map<String, dynamic>.from(steps.first as Map);
+  // Flere end 2 steps = en delt 7'er/4×1.
+  if (steps.length > 2) {
+    return 'delte kortet over ${steps.length} brikker';
+  }
+  final Map<String, dynamic> s = steps.first;
   final to = posFromMap(Map<String, dynamic>.from(s['to'] as Map));
   if (to is HomeStretchPosition) return 'rykkede en brik i hjemstrækket';
   if (to is TrackPosition) return 'rykkede en brik til felt ${to.index}';
   return 'flyttede en brik';
+}
+
+/// Positiv byt-genkendelse på SERIALISEREDE log-steps (map-form): to steps,
+/// forskellige brikker, A→Bs felt og B→As felt. ÉN vagt for log/stats-siden
+/// (replay-tekst, stats-tælling, replay-motor) — Move-objekt-udgaven bor i
+/// models/move.dart (isSwapMove).
+bool isSwapLogSteps(List<Map<String, dynamic>> steps) {
+  if (steps.length != 2) return false;
+  final Map<String, dynamic> s0 = steps[0];
+  final Map<String, dynamic> s1 = steps[1];
+  if (s0['pieceId'] == s1['pieceId']) return false;
+  return _samePosMap(s0['to'], s1['from']) && _samePosMap(s1['to'], s0['from']);
 }
 
 /// Sammenlign to serialiserede positioner (maps) værdi-for-værdi.
