@@ -123,8 +123,8 @@ GameState gameStateFromMap(Map<String, dynamic> m, {dynamic variantsRaw}) {
   // cardRulesVariants-kopi eller config-doc'ets variants-map) er valgfri og
   // giver custom-varianter navn/tema; uden den er udseendet klassisk, men
   // id'et stadig intakt.
-  final VariantConfig variant = variantFromRaw(
-      m['vid'] is String ? m['vid'] as String : null, variantsRaw);
+  final VariantConfig variant =
+      variantFromId(m['vid'] is String ? m['vid'] as String : null);
   return GameState(
     players: (m['pl'] as List)
         .map((e) => playerFromMap(Map<String, dynamic>.from(e as Map)))

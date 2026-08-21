@@ -34,7 +34,6 @@ Map<String, dynamic> variantEntryJson({
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
       if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
-      if (theme != null && theme.trim().isNotEmpty) 'theme': theme.trim(),
       if (custom) 'custom': true,
       if (archived) 'archived': true,
     };

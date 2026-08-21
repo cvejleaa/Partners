@@ -369,7 +369,7 @@ const List<VariantTheme> kVariantThemes = <VariantTheme>[
     id: 'graphite',
     name: 'Grafit',
     tableColor: Color(0xFF232428),
-    feltColor: Color(0xFF2B2D31),
+    feltColor: Color(0xFF50555C),
     badgeColor: Color(0xFF5A6570),
   ),
 ];
@@ -405,14 +405,6 @@ const String kCustomVariantDisclaimer =
 /// bliver bindestreg, og længden holdes inden for id-formens 32 tegn.
 String slugForVariantName(String name) {
   String s = name.trim().toLowerCase();
-  s = s
-      .replaceAll('æ', 'ae')
-      .replaceAll('ø', 'oe')
-      .replaceAll('å', 'aa')
-      .replaceAll('é', 'e')
-      .replaceAll('ü', 'u')
-      .replaceAll('ö', 'oe')
-      .replaceAll('ä', 'ae');
   s = s.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
   s = s.replaceAll(RegExp(r'^-+|-+$'), '');
   if (s.isEmpty) s = 'variant';
@@ -443,7 +435,6 @@ List<String> customVariantIdsFrom(dynamic variantsRaw,
     // lader et entry om-tematisere en builtin.)
     if (kAllVariants.any((VariantConfig b) => b.id == k)) return;
     if (!isCustomVariantEntry(v)) return;
-    if (!includeArchived && v['archived'] == true) return;
     ids.add(k);
   });
   ids.sort();
@@ -465,7 +456,6 @@ List<String> customVariantIdsFrom(dynamic variantsRaw,
 ///   udseende) — spilbart via state'ns 'cr', kun navn/farve mangler.
 VariantConfig variantFromRaw(String? id, dynamic variantsRaw) {
   final VariantConfig base = variantForState(id);
-  if (base.id == classicVariant.id || base.id == partners25.id) return base;
   if (variantsRaw is! Map) return base;
   final dynamic entry = variantsRaw[base.id];
   if (!isCustomVariantEntry(entry)) return base;
