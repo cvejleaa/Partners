@@ -14,7 +14,9 @@
 //      tæller UD med → slut 59 → rød.
 //  M4  multi: præcis 2 brikker à 1 felt; sekventiel landing; dedup af de to
 //      rækkefølger; kun 1 brik i spil → ingen multi (11 frem består);
-//      2 i spil men én blokeret → ingen multi; vinder-undtagelsen.
+//      2 i spil men én blokeret → ingen multi; brænd på FØRSTE brik sender
+//      KUN flytteren hjem (ingen modstander slås) og forstyrrer ikke den
+//      anden brik i samme træk; vinder-undtagelsen.
 //  M5  seedet = de fem bekræftede specialkort.
 //  M6  serialisering: nye nøgler kun når sat; klassisk uændret.
 
@@ -297,6 +299,63 @@ void main() {
       final List<Move> moves =
           Rules(st.geometry).legalMoves(st, st.players[0], jackC);
       expect(moves.where(isMulti), isEmpty);
+    });
+
+    test(
+        'brænd på FØRSTE brik i multi: mover slås selv hjem, modstander '
+        'uberørt (den anden brik lander uforstyrret)', () {
+      // A (p0.0) på 20: +1 → 21, hvor modstanderen (spiller 1) står DOBBELT
+      // → A brænder (slås selv hjem), INGEN modstander slås. B (p0.1) på 25:
+      // +1 → 26 (tomt). Sekventiel simulering (klon-pr-gren) skal håndtere
+      // brænd på FØRSTE brik uden at forstyrre B's efterfølgende skridt.
+      final GameState st = makeState(
+        cardRules: p25,
+        hands: <List<PlayingCard>>[
+          <PlayingCard>[jackC],
+          <PlayingCard>[],
+          <PlayingCard>[],
+          <PlayingCard>[],
+        ],
+        piecePositions: <List<PiecePosition>>[
+          startRow(0, replace: <PiecePosition>[
+            const TrackPosition(20),
+            const TrackPosition(25),
+          ]),
+          startRow(1, replace: <PiecePosition>[
+            const TrackPosition(21),
+            const TrackPosition(21), // dobbelt — brænder A, ikke slag
+          ]),
+          startRow(2),
+          startRow(3),
+        ],
+      );
+      final List<Move> multis = Rules(st.geometry)
+          .legalMoves(st, st.players[0], jackC)
+          .where(isMulti)
+          .toList();
+      expect(multis, hasLength(1),
+          reason: 'de to rækkefølger dedup\'es til ét træk, som splitten');
+      final Move move = multis.single;
+      final MoveStep aStep =
+          move.steps.singleWhere((s) => s.pieceId == 'p0.0');
+      final MoveStep bStep =
+          move.steps.singleWhere((s) => s.pieceId == 'p0.1');
+      expect(aStep.burnsMover, isTrue,
+          reason: 'landing på modstander-DOBBELT brænder flytteren');
+      expect(aStep.capturedPieceId, isNull,
+          reason: 'brænd slår ALDRIG en modstander — kun flytteren selv');
+      expect(bStep.burnsMover, isFalse);
+      expect(bStep.capturedPieceId, isNull);
+
+      final GameEngine engine = GameEngine(state: st);
+      engine.applyMove(0, move);
+      expect(st.pieceById('p0.0').position, isA<StartPosition>(),
+          reason: 'A blev sendt hjem af sit eget brænd');
+      expect(st.pieceById('p0.1').position, const TrackPosition(26),
+          reason: 'B\'s skridt må ikke forstyrres af As brænd i samme træk');
+      expect(st.pieceById('p1.0').position, const TrackPosition(21),
+          reason: 'modstanderens DOBBELT er UBERØRT — brænd slår intet');
+      expect(st.pieceById('p1.1').position, const TrackPosition(21));
     });
 
     test('vinder-undtagelsen: ét skridt der låser holdets sidste brik gælder',

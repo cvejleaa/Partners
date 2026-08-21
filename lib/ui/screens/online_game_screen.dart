@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/ai/ai_player.dart';
 import '../../game/progress.dart';
-import '../../models/board.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
 import '../../models/player.dart';
@@ -470,7 +469,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     final PlayingCard? card = m['card'] == null
         ? null
         : cardFromMap(Map<String, dynamic>.from(m['card'] as Map));
-    final desc = _describeReplayStep(m);
+    final desc = describeReplayStep(m);
     return Positioned.fill(
       child: Container(
         color: Colors.black.withValues(alpha: 0.7),
@@ -524,47 +523,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     );
   }
 
-  String _describeReplayStep(Map<String, dynamic> m) {
-    final steps = (m['steps'] as List?) ?? const <dynamic>[];
-    if (steps.isEmpty) return 'sad over';
-    // Byt genkendes POSITIVT (A→Bs felt og B→As felt) — ikke på "2 steps",
-    // for både sekvens-træk (+2−5), 1×1 og en delt 7'er har også 2 steps.
-    if (steps.length == 2) {
-      final s0 = Map<String, dynamic>.from(steps[0] as Map);
-      final s1 = Map<String, dynamic>.from(steps[1] as Map);
-      final bool isSwap = s0['pieceId'] != s1['pieceId'] &&
-          _samePos(s0['to'], s1['from']) &&
-          _samePos(s1['to'], s0['from']);
-      if (isSwap) return 'byttede to brikker';
-      final bool samePiece = s0['pieceId'] == s1['pieceId'];
-      final int captures = <Map<String, dynamic>>[s0, s1]
-          .where((st) => st['cap'] == true)
-          .length;
-      final String suffix = captures == 0
-          ? ''
-          : captures == 1
-              ? ' — slog en brik hjem'
-              : ' — slog 2 brikker hjem';
-      return samePiece
-          ? 'rykkede frem og tilbage med samme brik$suffix'
-          : 'flyttede to brikker$suffix';
-    }
-    final s = Map<String, dynamic>.from(steps.first as Map);
-    final to = posFromMap(Map<String, dynamic>.from(s['to'] as Map));
-    if (to is HomeStretchPosition) return 'rykkede en brik i hjemstrækket';
-    if (to is TrackPosition) return 'rykkede en brik til felt ${to.index}';
-    return 'flyttede en brik';
-  }
-
-  /// Sammenlign to serialiserede positioner (maps) værdi-for-værdi.
-  bool _samePos(dynamic a, dynamic b) {
-    if (a is! Map || b is! Map) return false;
-    if (a.length != b.length) return false;
-    for (final key in a.keys) {
-      if (a[key] != b[key]) return false;
-    }
-    return true;
-  }
+  // _describeReplayStep flyttet til online/serialize.dart som en ren,
+  // top-level funktion (describeReplayStep) — så replay-teksten kan
+  // unit-testes direkte uden en widget-pumpe (se test/serialize_test.dart).
 
   Map<int, PlayingCard> _parseLog(List log) {
     final out = <int, PlayingCard>{};
