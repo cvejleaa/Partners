@@ -156,6 +156,47 @@ void main() {
       expect(find.text('4'), findsOneWidget);
     });
 
+    testWidgets('"frem" skrives IKKE på kortet (sort tal = frem); '
+        '"tilbage" vises fortsat', (tester) async {
+      // Brugerens fund: ordet stod på hvert eneste flyt-kort og var støj.
+      await tester.pumpWidget(host(PlayingCard(Rank.six, Suit.hearts),
+          CardRules.defaults(), 48, UniqueKey()));
+      expect(find.text('frem'), findsNothing);
+      // Tilbage-kort: rødt tal + ordet (sjældent nok til at ordet bærer).
+      final CardRules backRules = CardRules.defaults()
+          .withRank(Rank.six, const CardRuleConfig(backwardSteps: 6));
+      await tester.pumpWidget(host(PlayingCard(Rank.six, Suit.hearts),
+          backRules, 48, UniqueKey()));
+      expect(find.text('tilbage'), findsOneWidget);
+      // Tooltip-teksten BEHOLDER ordet (opslags-sproget er uændret).
+      expect(
+          cardFunctionSummary(
+              PlayingCard(Rank.six, Suit.hearts), CardRules.defaults()),
+          contains('frem'));
+    });
+
+    testWidgets('glyf-only-kort (ren byt) renderer glyffet STORT — ikke i '
+        'token-rækkens størrelse', (tester) async {
+      // Brugerens fund på legenden: byt-glyffet druknede. Hero-størrelsen er
+      // 0,42×bredden (48 → 20,2 px); token-rækkens er (48×0,24)=11,5 px.
+      // Båndet ≥19 udelukker altså den GAMLE (række-)størrelse.
+      Size swapPaintSize() => tester
+          .widget<CustomPaint>(find.byWidgetPredicate((w) =>
+              w is CustomPaint && w.painter is SwapGlyphPainter))
+          .size;
+      final CardRules swapOnly = CardRules.defaults()
+          .withRank(Rank.jack, const CardRuleConfig(swap: true));
+      await tester.pumpWidget(host(
+          PlayingCard(Rank.jack, Suit.hearts), swapOnly, 48, UniqueKey()));
+      expect(swapPaintSize().height, greaterThanOrEqualTo(19.0));
+      // På et kort MED tal (9/⇄) er glyffet fortsat i række-størrelse.
+      final CardRules nineSwap = CardRules.defaults().withRank(Rank.nine,
+          const CardRuleConfig(forwardSteps: <int>[9], swap: true));
+      await tester.pumpWidget(host(
+          PlayingCard(Rank.nine, Suit.hearts), nineSwap, 48, UniqueKey()));
+      expect(swapPaintSize().height, lessThan(12.0));
+    });
+
     // ---- Blæk-tests: maleren MALES faktisk, og forskellige mekanikker
     // maler FORSKELLIGT. Sammenligninger (ikke absolutte koordinater), så
     // layout-justeringer ikke vælter dem — og kortenes skygge går ud mod

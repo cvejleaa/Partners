@@ -416,6 +416,13 @@ class CardView extends StatelessWidget {
     // bærer altid den fulde liste. De indbyggede sæt rammer aldrig loftet.
     final int maxTokens = f.startChip ? 1 : 2;
     final List<CardGlyph> rowGlyphs = allRow.take(maxTokens).toList();
+    // Glyf-ONLY-kort (fx ren byt): første glyf renderes som HOVEDELEMENT i
+    // tal-størrelse — i token-rækkens størrelse druknede det (brugerens fund
+    // på legenden). Resten (om nogen) bliver i rækken.
+    final bool heroGlyph =
+        f.icon == null && f.bigNumber == null && rowGlyphs.isNotEmpty;
+    final List<CardGlyph> tailGlyphs =
+        heroGlyph ? rowGlyphs.skip(1).toList() : rowGlyphs;
     // FittedBox(scaleDown) sikrer at tal + tokens ALTID skaleres ned til den
     // plads Expanded giver — så en hjerte-chip nedenunder aldrig overlappes.
     return Center(
@@ -431,7 +438,9 @@ class CardView extends StatelessWidget {
                       fontSize: width * 0.5,
                       color: f.accent,
                       height: 1.0)),
-            if (f.bigNumber != null)
+            if (heroGlyph)
+              _glyphWidget(rowGlyphs.first, heroSize: true)
+            else if (f.bigNumber != null)
               inlineX1
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
@@ -450,7 +459,11 @@ class CardView extends StatelessWidget {
                       ],
                     )
                   : _bigNumber(f, dual),
-            if (f.unit != null)
+            // "frem" er default-retningen (sort tal) og skrives IKKE på
+            // kortet (brugerens fund: støj på hvert eneste kort) — men
+            // bevares i tooltip/legend-teksten. "tilbage" og beskrivelser
+            // ("Ud af start", "Sæt en brik ud") vises fortsat.
+            if (f.unit != null && f.unit != 'frem')
               Text(
                 f.unit!,
                 style: TextStyle(
@@ -459,7 +472,7 @@ class CardView extends StatelessWidget {
                   color: _cInkFwd,
                 ),
               ),
-            if (rowGlyphs.isNotEmpty)
+            if (tailGlyphs.isNotEmpty)
               Padding(
                 padding: EdgeInsets.only(top: width * 0.04),
                 // Tokens på ÉN række (aldrig stakket): de er smalle, så de
@@ -468,9 +481,9 @@ class CardView extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    for (int i = 0; i < rowGlyphs.length; i++) ...<Widget>[
+                    for (int i = 0; i < tailGlyphs.length; i++) ...<Widget>[
                       if (i > 0) SizedBox(width: width * 0.08),
-                      _glyphWidget(rowGlyphs[i]),
+                      _glyphWidget(tailGlyphs[i]),
                     ],
                   ],
                 ),
@@ -484,8 +497,11 @@ class CardView extends StatelessWidget {
   /// Én mekanik-token. Tal-bærende tokens er komprimeret TYPOGRAFI
   /// (`+2−5`, `1→ ×2`) — fem tegn kan stå ved 12-13 px hvor en sætning ikke
   /// kan. Kun de tal-frie (byt, hop) er tegnede vektor-glyffer.
-  Widget _glyphWidget(CardGlyph g) {
-    final double h = (width * 0.24).clamp(11.0, 22.0);
+  /// [heroSize]: glyffet er kortets hovedindhold (glyf-only-kort) og får
+  /// tal-størrelse (0,42×bredden) i stedet for token-rækkens 0,24.
+  Widget _glyphWidget(CardGlyph g, {bool heroSize = false}) {
+    final double h =
+        heroSize ? width * 0.42 : (width * 0.24).clamp(11.0, 22.0);
     switch (g.type) {
       case CardGlyphType.seq:
         // "+2−5": rækkefølgen (frem SÅ tilbage, samme brik) — aldrig to
