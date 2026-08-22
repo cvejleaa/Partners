@@ -56,11 +56,7 @@ class CardGlyph {
   /// (describeCardFace), og med forwardSteps er der altid et tal på kortet;
   /// grenen står klar til en fremtidig regel-form frem for at være en
   /// overset test-lakune (QC-fund).
-  String? get heroWord => switch (type) {
-        CardGlyphType.swap => 'byt',
-        CardGlyphType.jump => 'hop',
-        _ => null,
-      };
+  String? get heroWord => null;
 
   /// Kompakt hjørne-token til thumbnails (<40 px) — dér hvor tekst er
   /// kategorisk umulig, og hvor "hvorfor rykkede hans brik baglæns?" opstår.
@@ -563,10 +559,10 @@ class CardView extends StatelessWidget {
         return Text.rich(
           TextSpan(children: <InlineSpan>[
             TextSpan(
-                text: '${g.b}× ',
-                style: const TextStyle(color: _cSpecial)),
+                text: '${g.a}→ ', style: const TextStyle(color: _cInkFwd)),
             TextSpan(
-                text: '${g.a}→', style: const TextStyle(color: _cInkFwd)),
+                text: '×${g.b}',
+                style: const TextStyle(color: _cSpecial)),
           ]),
           style: TextStyle(
             fontSize: h,
