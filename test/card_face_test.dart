@@ -175,6 +175,18 @@ void main() {
           contains('frem'));
     });
 
+    testWidgets('"tilbage"-ordet er RØDT på rene tilbage-kort (følger tallet)',
+        (tester) async {
+      // QC-fund: ordet er kortets eneste retningsord og må ikke modsige
+      // tallets farve. Rødt = 0xFFC62828 (samme _cInkBack som tallet).
+      final CardRules backRules = CardRules.defaults()
+          .withRank(Rank.six, const CardRuleConfig(backwardSteps: 6));
+      await tester.pumpWidget(host(PlayingCard(Rank.six, Suit.hearts),
+          backRules, 48, UniqueKey()));
+      final Text word = tester.widget<Text>(find.text('tilbage'));
+      expect(word.style!.color, const Color(0xFFC62828));
+    });
+
     testWidgets('glyf-only-kort (ren byt) renderer glyffet STORT — ikke i '
         'token-rækkens størrelse', (tester) async {
       // Brugerens fund på legenden: byt-glyffet druknede. Hero-størrelsen er

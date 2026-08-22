@@ -418,7 +418,11 @@ class CardView extends StatelessWidget {
     final List<CardGlyph> rowGlyphs = allRow.take(maxTokens).toList();
     // Glyf-ONLY-kort (fx ren byt): første glyf renderes som HOVEDELEMENT i
     // tal-størrelse — i token-rækkens størrelse druknede det (brugerens fund
-    // på legenden). Resten (om nogen) bliver i rækken.
+    // på legenden). Resten (om nogen) bliver i rækken. INVARIANT (i dag
+    // implicit i describeCardFace): startChip sættes kun i grene der også
+    // sætter bigNumber, så hero + ♥-chip (maxTokens=1) kan ikke mødes og
+    // tabe glyf nr. 2 — sætter en fremtidig gren startChip uden tal, skal
+    // dette gentænkes.
     final bool heroGlyph =
         f.icon == null && f.bigNumber == null && rowGlyphs.isNotEmpty;
     final List<CardGlyph> tailGlyphs =
@@ -469,7 +473,10 @@ class CardView extends StatelessWidget {
                 style: TextStyle(
                   fontSize: (width * 0.17).clamp(9.0, 18.0),
                   fontWeight: FontWeight.w700,
-                  color: _cInkFwd,
+                  // "tilbage" er nu kortets ENESTE retningsord — det skal
+                  // følge tallets farve (rødt på rene tilbage-kort), ikke
+                  // modsige den (QC-fund).
+                  color: f.canBackward && !f.canForward ? _cInkBack : _cInkFwd,
                 ),
               ),
             if (tailGlyphs.isNotEmpty)
