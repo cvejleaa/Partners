@@ -425,7 +425,9 @@ class _CardsPage extends StatelessWidget {
           'samme brik');
     }
     if (cfg.hasMultiForward) {
-      parts.add('${cfg.multiSteps} frem med ${cfg.multiPieces} brikker');
+      // Samme ordstilling som kortets token/legend ("2× 1 frem") — spilleren
+      // må ikke møde to formuleringer af samme mekanik (QC-fund).
+      parts.add('${cfg.multiPieces}× ${cfg.multiSteps} frem');
     }
     if (parts.isEmpty) return 'Ingen funktion.';
     final String body = parts.length == 1

@@ -51,7 +51,11 @@ class CardGlyph {
 
   /// Ét-ords etiket under HERO-glyffet (glyf-only-kort): tegningen bærer
   /// mekanikken, ordet bekræfter den (brugerens ønske på klassisk-11'eren:
-  /// "ordet byt må gerne være med"). null = intet ord.
+  /// "ordet byt må gerne være med"). null = intet ord. NB: 'hop' kan i dag
+  /// ikke opstå som hero — jump-glyffet kræver forwardSteps
+  /// (describeCardFace), og med forwardSteps er der altid et tal på kortet;
+  /// grenen står klar til en fremtidig regel-form frem for at være en
+  /// overset test-lakune (QC-fund).
   String? get heroWord => switch (type) {
         CardGlyphType.swap => 'byt',
         CardGlyphType.jump => 'hop',
