@@ -467,7 +467,7 @@ class CardView extends StatelessWidget {
             // kortet (brugerens fund: støj på hvert eneste kort) — men
             // bevares i tooltip/legend-teksten. "tilbage" og beskrivelser
             // ("Ud af start", "Sæt en brik ud") vises fortsat.
-            if (f.unit != null && f.unit != 'frem')
+            if (f.unit != null)
               Text(
                 f.unit!,
                 style: TextStyle(
@@ -476,7 +476,7 @@ class CardView extends StatelessWidget {
                   // "tilbage" er nu kortets ENESTE retningsord — det skal
                   // følge tallets farve (rødt på rene tilbage-kort), ikke
                   // modsige den (QC-fund).
-                  color: f.canBackward && !f.canForward ? _cInkBack : _cInkFwd,
+                  color: _cInkFwd,
                 ),
               ),
             if (tailGlyphs.isNotEmpty)
@@ -507,8 +507,7 @@ class CardView extends StatelessWidget {
   /// [heroSize]: glyffet er kortets hovedindhold (glyf-only-kort) og får
   /// tal-størrelse (0,42×bredden) i stedet for token-rækkens 0,24.
   Widget _glyphWidget(CardGlyph g, {bool heroSize = false}) {
-    final double h =
-        heroSize ? width * 0.42 : (width * 0.24).clamp(11.0, 22.0);
+    final double h = (width * 0.24).clamp(11.0, 22.0);
     switch (g.type) {
       case CardGlyphType.seq:
         // "+2−5": rækkefølgen (frem SÅ tilbage, samme brik) — aldrig to
