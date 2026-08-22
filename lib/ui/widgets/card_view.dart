@@ -108,7 +108,7 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
   // — ellers ville kortet love en evne, der ingen effekt har.
   final List<CardGlyph> glyphs = <CardGlyph>[
     if (c.hasFwdThenBack)
-      CardGlyph(CardGlyphType.seq, a: c.seqForward!, b: c.seqBackward!),
+      CardGlyph(CardGlyphType.seq, a: c.seqBackward!, b: c.seqForward!),
     if (c.swap) const CardGlyph(CardGlyphType.swap),
     if (c.hasMultiForward)
       CardGlyph(CardGlyphType.multi, a: c.multiSteps!, b: c.multiPieces!),
