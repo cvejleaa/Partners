@@ -556,13 +556,16 @@ class CardView extends StatelessWidget {
       case CardGlyphType.multi:
         // "2× 1→" — antal brikker FØRST (guld), så skridtet med pil (samme
         // ordstilling som label-teksten "2× 1 frem").
+        // MUTATION A (test-manager, må ikke merges): gammel ordstilling
+        // '1→ ×2' genindsat — den nye 'multi-tokenen siger "2× 1→"'-test
+        // (test/card_face_test.dart) skal blive RØD af dette.
         return Text.rich(
           TextSpan(children: <InlineSpan>[
             TextSpan(
-                text: '${g.b}× ',
-                style: const TextStyle(color: _cSpecial)),
+                text: '${g.a}→ ', style: const TextStyle(color: _cInkFwd)),
             TextSpan(
-                text: '${g.a}→', style: const TextStyle(color: _cInkFwd)),
+                text: '×${g.b}',
+                style: const TextStyle(color: _cSpecial)),
           ]),
           style: TextStyle(
             fontSize: h,
