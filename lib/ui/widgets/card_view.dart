@@ -49,14 +49,11 @@ class CardGlyph {
         CardGlyphType.dirBoth => 'frem eller tilbage',
       };
 
-  /// Ét-ords etiket under HERO-glyffet (glyf-only-kort): tegningen bærer
-  /// mekanikken, ordet bekræfter den (brugerens ønske på klassisk-11'eren:
-  /// "ordet byt må gerne være med"). null = intet ord.
-  String? get heroWord => switch (type) {
-        CardGlyphType.swap => 'byt',
-        CardGlyphType.jump => 'hop',
-        _ => null,
-      };
+  // MUTATION B (test-manager, må ikke merges): heroWord fjernet — testen
+  // 'hero-glyffet bærer sit ord: "byt" under det store ⇄' (test/
+  // card_face_test.dart) skal blive RØD, fordi find.text('byt') ikke
+  // længere finder noget.
+  String? get heroWord => null;
 
   /// Kompakt hjørne-token til thumbnails (<40 px) — dér hvor tekst er
   /// kategorisk umulig, og hvor "hvorfor rykkede hans brik baglæns?" opstår.
