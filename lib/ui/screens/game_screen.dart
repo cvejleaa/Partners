@@ -16,6 +16,7 @@ import '../../models/playing_card.dart';
 import '../../services/feedback_service.dart';
 import '../../state/display_config.dart';
 import '../widgets/card_counter_panel.dart';
+import '../widgets/card_legend_sheet.dart';
 import '../widgets/game_play_view.dart';
 import '../widgets/variant_badge.dart';
 import 'setup_screen.dart';
@@ -207,6 +208,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ),
         ]),
         actions: <Widget>[
+          // Legenden for kortenes token-sprog — bygget af spillets OPLØSTE
+          // regler, så varianter viser deres egne kort.
+          IconButton(
+            tooltip: 'Kortene i dette spil',
+            icon: const Icon(Icons.style),
+            onPressed: () => showCardLegendSheet(context, state.cardRules),
+          ),
           IconButton(
             tooltip: _showCardCounter
                 ? 'Skjul kort-tæller'

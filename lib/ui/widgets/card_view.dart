@@ -9,9 +9,59 @@ const Color _cStart = Color(0xFF2F7D34); // ud af start
 const Color _cSpecial = Color(0xFFB7791F); // 7 / byt
 const Color _cExit = Color(0xFFC62828); // UD-kort
 
-/// Hvad et kort viser — udledt fra de aktuelle regler (ikke hardkodet, så
-/// admin-ændringer slår igennem). Ingen pile, ingen kulør, ingen A/K/Q/J: kun
-/// hvad kortet gør i spillet. "Ud af start" markeres med et hjerte.
+/// Retningsfarver — SAMME sprog som brættet/loggen: sort = frem, rød =
+/// tilbage. Retningen bæres primært af TEGNET (pil/fortegn), farven er kun
+/// forstærkning (rød ≈ sort ved protanopi).
+const Color _cInkFwd = Color(0xFF1F2933);
+const Color _cInkBack = Color(0xFFC62828);
+
+/// Én mekanik-token på kortet. Kortenes sprog er de FYSISKE korts notation
+/// (stort tal + operator-token: `4×1`, `5↷`, `+2−5`, `⇄`), ikke tegnede
+/// illustrationer — to af de oplagte tegninger ville lyve om reglerne
+/// (split KAN spilles med én brik; en blokade er ÉN brik på sit UD-felt).
+/// Kun de TAL-FRIE mekanikker (byt, hop) tegnes som vektor-glyffer.
+///
+/// Listen er den ENE kilde: tooltip, maler og tests læser alle [CardFace.
+/// glyphs] — så en mutation i valget ikke kan overleve med grøn suite.
+enum CardGlyphType { splitX1, seq, multi, swap, jump, dirBoth }
+
+class CardGlyph {
+  const CardGlyph(this.type, {this.a = 0, this.b = 0});
+
+  final CardGlyphType type;
+
+  /// Tal-parametre: seq = (frem, tilbage); multi = (skridt, brikker).
+  final int a;
+  final int b;
+
+  /// Fuld tekst til tooltip/legend — samme ordlyd som valg-arket og admin,
+  /// så spilleren møder det samme sprog alle steder.
+  String get label => switch (type) {
+        CardGlyphType.splitX1 => 'del over dine brikker',
+        // a == 0: rent "eller N tilbage"-alternativ (intet frem-led).
+        CardGlyphType.seq =>
+          a > 0 ? '$a frem → $b tilbage' : 'eller $b tilbage',
+        CardGlyphType.multi => '$a frem × $b brikker',
+        CardGlyphType.swap => 'byt to brikker',
+        CardGlyphType.jump => 'hopper over blokade',
+        CardGlyphType.dirBoth => 'frem eller tilbage',
+      };
+
+  /// Kompakt hjørne-token til thumbnails (<40 px) — dér hvor tekst er
+  /// kategorisk umulig, og hvor "hvorfor rykkede hans brik baglæns?" opstår.
+  String get cornerToken => switch (type) {
+        CardGlyphType.splitX1 => '×1',
+        CardGlyphType.seq => '±',
+        CardGlyphType.multi => '×$b',
+        CardGlyphType.swap => '⇄',
+        CardGlyphType.jump => '↷',
+        CardGlyphType.dirBoth => '±',
+      };
+}
+
+/// Hvad et kort viser — udledt fra de aktuelle OPLØSTE regler (ikke
+/// hardkodet, så admin-ændringer og varianter slår igennem). Ingen kulør,
+/// ingen A/K/Q/J: kun hvad kortet gør. "Ud af start" markeres med et hjerte.
 class CardFace {
   const CardFace({
     required this.eyebrow,
@@ -19,9 +69,8 @@ class CardFace {
     this.bigNumber,
     this.icon,
     this.unit,
-    this.sub,
     this.startChip = false,
-    this.extraChips = const <String>[],
+    this.glyphs = const <CardGlyph>[],
     this.canForward = false,
     this.canBackward = false,
   });
@@ -29,15 +78,12 @@ class CardFace {
   final String eyebrow;
   final Color accent;
   final String? bigNumber; // fx "4", "1 / 11", "13", "7"
-  final String? icon; // emoji når der ikke er et tal (UD, byt)
-  final String? unit; // fx "frem"
-  final String? sub; // fx "frem eller tilbage"
+  final String? icon; // '♥' for UD/rent startkort
+  final String? unit; // "frem"/"tilbage" — ét ord, læseligt ned til 9 px
   final bool startChip; // vis "♥ Ud af start"
 
-  /// Ekstra evne-chips (fx "Byt to brikker", "↷ Hopper over blokade") — liste,
-  /// så et kort med FLERE ekstra evner viser dem alle (ikke farve alene:
-  /// ikon+tekst, så det også kan aflæses farveblindt og i tooltippen).
-  final List<String> extraChips;
+  /// Mekanik-tokens i prioriteret rækkefølge (én kilde — se [CardGlyph]).
+  final List<CardGlyph> glyphs;
 
   /// Retning — styrer tallets farve: kun tilbage = rødt, kun frem = sort,
   /// begge = delt sort/rødt.
@@ -51,23 +97,23 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
       eyebrow: 'Ud-kort',
       accent: _cExit,
       icon: '♥',
-      sub: 'Sæt en brik ud',
+      unit: 'Sæt en brik ud',
     );
   }
   final CardRuleConfig c = rules.forRank(card.rank!);
-  // Ekstra evner vises som chips — HOP skal kunne ses på kortet, ellers ligner
-  // et Hopsakort et almindeligt talkort, og modstanderen forstår ikke hvorfor
-  // blokaden blev passeret. Samme ordlyd som i admin ("hop"). Hop gælder KUN
-  // fremad-skridt i motoren (rules.dart), så chippen vises kun når kortet
-  // faktisk HAR fremad-skridt — ellers ville kortet love en evne, der ingen
-  // effekt har.
-  final List<String> extraChips = <String>[
-    if (c.swap) 'Byt to brikker',
-    if (c.jumpsBlockade && c.forwardSteps.isNotEmpty) '↷ Hopper over blokade',
-    // Sekvens/multi vises med samme ordlyd som i valg-arket og admin, så
-    // spilleren møder det samme sprog alle steder.
-    if (c.hasFwdThenBack) '${c.seqForward} frem → ${c.seqBackward} tilbage',
-    if (c.hasMultiForward) '${c.multiSteps} frem × ${c.multiPieces} brikker',
+  // Mekanik-tokens — HOP skal kunne ses på kortet, ellers ligner et
+  // Hopsakort et almindeligt talkort, og modstanderen forstår ikke hvorfor
+  // blokaden blev passeret. Hop gælder KUN fremad-skridt i motoren
+  // (rules.dart), så tokenen vises kun når kortet faktisk HAR fremad-skridt
+  // — ellers ville kortet love en evne, der ingen effekt har.
+  final List<CardGlyph> glyphs = <CardGlyph>[
+    if (c.hasFwdThenBack)
+      CardGlyph(CardGlyphType.seq, a: c.seqForward!, b: c.seqBackward!),
+    if (c.swap) const CardGlyph(CardGlyphType.swap),
+    if (c.hasMultiForward)
+      CardGlyph(CardGlyphType.multi, a: c.multiSteps!, b: c.multiPieces!),
+    if (c.jumpsBlockade && c.forwardSteps.isNotEmpty)
+      const CardGlyph(CardGlyphType.jump),
   ];
   final bool hasForward = c.forwardSteps.isNotEmpty;
   final bool hasBackward = c.backwardSteps != null;
@@ -77,33 +123,37 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
       c.forwardSteps.length == 1 &&
       c.forwardSteps.first == c.backwardSteps;
 
-  // 7'er / split.
+  // Split (klassisk 7'er, 25 år-4×1): tallet + ×1-tokenen er ÉT udtryk
+  // ("N enkelttræk") — de fysiske korts egen notation. Uden ×1 ville fx
+  // 25 år-firen være tvetydig mod et klassisk 4-kort.
   if (c.splitTotal != null) {
     return CardFace(
       eyebrow: 'Special',
       accent: _cSpecial,
       bigNumber: '${c.splitTotal}',
-      sub: 'del over dine brikker',
       startChip: c.exitStart,
-      extraChips: extraChips,
+      glyphs: <CardGlyph>[
+        const CardGlyph(CardGlyphType.splitX1),
+        ...glyphs,
+      ],
+      canForward: true,
     );
   }
 
-  // Kort med bevægelse (frem og/eller tilbage). Teksten følger den AKTUELLE
+  // Kort med bevægelse (frem og/eller tilbage). Følger den AKTUELLE
   // konfiguration — ikke hardkodet.
   if (hasForward || hasBackward) {
-    // Beregn stort tal + retningstekst ud fra hvad kortet faktisk kan.
-    final String bigNumber =
-        hasForward ? forwardText : '${c.backwardSteps}';
+    final String bigNumber = hasForward ? forwardText : '${c.backwardSteps}';
     String? unit;
-    String? sub;
+    final List<CardGlyph> dirGlyphs = <CardGlyph>[];
     if (sameFwdBack) {
-      // Fx 4: samme antal frem eller tilbage.
-      sub = 'frem eller tilbage';
+      // Fx klassisk 4: samme antal frem eller tilbage — dobbeltpil-token i
+      // stedet for 8 px-sætningen "frem eller tilbage".
+      dirGlyphs.add(const CardGlyph(CardGlyphType.dirBoth));
     } else if (hasForward && hasBackward) {
-      // Forskellige tal frem/tilbage.
       unit = 'frem';
-      sub = 'eller ${c.backwardSteps} tilbage';
+      // Forskellige tal frem/tilbage: tilbage-tallet som rødt −token.
+      dirGlyphs.add(CardGlyph(CardGlyphType.seq, a: 0, b: c.backwardSteps!));
     } else if (hasForward) {
       unit = 'frem';
     } else {
@@ -115,9 +165,8 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
       accent: c.exitStart ? _cStart : _cMove,
       bigNumber: bigNumber,
       unit: unit,
-      sub: sub,
       startChip: c.exitStart,
-      extraChips: extraChips,
+      glyphs: <CardGlyph>[...dirGlyphs, ...glyphs],
       canForward: hasForward,
       canBackward: hasBackward,
     );
@@ -129,22 +178,36 @@ CardFace describeCardFace(PlayingCard card, CardRules rules) {
       eyebrow: 'Start',
       accent: _cStart,
       icon: '♥',
-      sub: 'Ud af start',
-      extraChips: extraChips,
+      unit: 'Ud af start',
+      glyphs: glyphs,
     );
   }
 
-  // Ren byt (fx en Knægt sat til byt).
+  // Ren byt (fx en Knægt sat til byt) — ⇄-glyffet ER indholdet.
   if (c.swap) {
-    return const CardFace(
+    return CardFace(
       eyebrow: 'Special',
       accent: _cSpecial,
-      icon: '🔁',
-      sub: 'byt to brikker',
+      glyphs: glyphs,
     );
   }
 
-  return const CardFace(eyebrow: '—', accent: _cMove, sub: 'ingen effekt');
+  return const CardFace(eyebrow: '—', accent: _cMove, unit: 'ingen effekt');
+}
+
+/// Kortets fulde funktion i ORD — bruges af tooltip (hold nede/hover) og af
+/// "Kortene i dette spil"-legenden. Bygget af SAMME glyf-liste som maleren
+/// ([CardFace.glyphs]), så tekst og grafik ikke kan drive fra hinanden.
+String cardFunctionSummary(PlayingCard card, CardRules rules) {
+  final CardFace f = describeCardFace(card, rules);
+  final StringBuffer b = StringBuffer(f.eyebrow);
+  if (f.bigNumber != null) b.write(' ${f.bigNumber}');
+  if (f.unit != null) b.write(' ${f.unit}');
+  if (f.startChip) b.write(' · ♥ Ud af start');
+  for (final CardGlyph g in f.glyphs) {
+    b.write(' · ${g.label}');
+  }
+  return b.toString();
 }
 
 class CardView extends StatelessWidget {
@@ -165,20 +228,7 @@ class CardView extends StatelessWidget {
   final VoidCallback? onTap;
   final double width;
 
-  /// Kort tekst-opsummering af hvad kortet gør — bruges som tooltip (hold nede/
-  /// hover), så man ALTID kan se kortets funktion, selv når kortet vises småt.
-  String _functionSummary() {
-    final CardFace f = describeCardFace(card, rules);
-    final StringBuffer b = StringBuffer(f.eyebrow);
-    if (f.bigNumber != null) b.write(' ${f.bigNumber}');
-    if (f.unit != null) b.write(' ${f.unit}');
-    if (f.sub != null) b.write(' — ${f.sub}');
-    if (f.startChip) b.write(' · ♥ Ud af start');
-    for (final String chip in f.extraChips) {
-      b.write(' · $chip');
-    }
-    return b.toString();
-  }
+  String _functionSummary() => cardFunctionSummary(card, rules);
 
   @override
   Widget build(BuildContext context) {
@@ -211,8 +261,8 @@ class CardView extends StatelessWidget {
       ),
     );
     // Kun for face-up-kort: hold nede (eller hover) viser en tooltip med
-    // kortets funktion, så man altid kan se hvad kortet kan — også når det
-    // vises småt på en lille skærm.
+    // kortets fulde funktion i ORD — opslagsvejen for token-sproget (plus
+    // "Kortene"-arket i spil-topbaren).
     if (!faceUp) return cardWidget;
     return Tooltip(
       message: _functionSummary(),
@@ -238,12 +288,14 @@ class CardView extends StatelessWidget {
   Widget _buildFace() {
     final CardFace f = describeCardFace(card, rules);
     final double band = (width * 0.06).clamp(3.0, 7.0);
-    // Meget små kort (fx "sidst spillede"-thumbnail i spiller-panelet, ~32 px)
-    // har ikke plads til eyebrow/chips — vis en kompakt udgave: bånd +
-    // det store tal eller ikon i typens farve. Grænsen holdes lav (40 px), så
-    // hånd-kort så vidt muligt viser den fulde funktion.
+    // Meget små kort (fx "sidst spillede"-thumbnail i spiller-panelet,
+    // ~32 px): bånd + tal + mekanik-token i hjørnet. Tokenen er den største
+    // grafik-gevinst pr. pixel — det er her man spørger "hvorfor rykkede
+    // hans brik baglæns/forbi blokaden?".
     if (width < 40) {
       final String glyph = f.bigNumber ?? f.icon ?? '·';
+      final String? corner =
+          f.glyphs.isNotEmpty ? f.glyphs.first.cornerToken : null;
       return Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -257,29 +309,51 @@ class CardView extends StatelessWidget {
           children: <Widget>[
             Container(height: band, color: f.accent),
             Expanded(
-              child: Center(
-                child: f.bigNumber != null
-                    ? _bigNumber(f, f.bigNumber!.contains('/'))
-                    : Text(
-                        glyph,
-                        textAlign: TextAlign.center,
+              child: Stack(
+                children: <Widget>[
+                  Center(
+                    child: f.bigNumber != null
+                        ? _bigNumber(f, f.bigNumber!.contains('/'))
+                        : Text(
+                            glyph,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: glyph.contains('/')
+                                  ? width * 0.34
+                                  : width * 0.52,
+                              fontWeight: FontWeight.w800,
+                              height: 0.95,
+                              color: f.icon != null
+                                  ? f.accent
+                                  : _cInkFwd,
+                            ),
+                          ),
+                  ),
+                  if (corner != null)
+                    Positioned(
+                      right: 2,
+                      bottom: 1,
+                      child: Text(
+                        corner,
                         style: TextStyle(
-                          fontSize: glyph.contains('/')
-                              ? width * 0.34
-                              : width * 0.52,
+                          fontSize: (width * 0.30).clamp(8.0, 12.0),
                           fontWeight: FontWeight.w800,
-                          height: 0.95,
-                          color: f.icon != null
-                              ? f.accent
-                              : const Color(0xFF1F2933),
+                          color: _cSpecial,
+                          height: 1.0,
                         ),
                       ),
+                    ),
+                ],
               ),
             ),
           ],
         ),
       );
     }
+    // Eyebrow ("SPECIAL"/"FLYT") skæres på smalle kort: ved 48 px er den
+    // clamped til 7 px — under den grænse brugeren kaldte ulæselig — og
+    // båndfarven siger allerede typen. Pladsen går til token-rækken.
+    final bool showEyebrow = width >= 56;
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -296,25 +370,22 @@ class CardView extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(
-                  horizontal: width * 0.09, vertical: width * 0.07),
+                  horizontal: width * 0.07, vertical: width * 0.06),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
-                  Text(
-                    f.eyebrow.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: (width * 0.135).clamp(7.0, 13.0),
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                      color: f.accent,
+                  if (showEyebrow)
+                    Text(
+                      f.eyebrow.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: (width * 0.135).clamp(7.0, 13.0),
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                        color: f.accent,
+                      ),
                     ),
-                  ),
                   Expanded(child: _center(f)),
                   if (f.startChip) _startChip(),
-                  for (int i = 0; i < f.extraChips.length; i++) ...<Widget>[
-                    if (f.startChip || i > 0) SizedBox(height: width * 0.04),
-                    _chip(f.extraChips[i], _cSpecial),
-                  ],
                 ],
               ),
             ),
@@ -326,9 +397,15 @@ class CardView extends StatelessWidget {
 
   Widget _center(CardFace f) {
     final bool dual = f.bigNumber != null && f.bigNumber!.contains('/');
-    // FittedBox(scaleDown) sikrer at tal + tekst ALTID skaleres ned til den
-    // plads Expanded giver — så en hjerte-/byt-chip nedenunder aldrig
-    // overlappes, uanset korthøjde.
+    // Split-tokenen (×1) står INLINE efter tallet — "4×1" er ét udtryk.
+    final bool inlineX1 =
+        f.glyphs.isNotEmpty && f.glyphs.first.type == CardGlyphType.splitX1;
+    final List<CardGlyph> rowGlyphs = <CardGlyph>[
+      for (final CardGlyph g in f.glyphs)
+        if (g.type != CardGlyphType.splitX1) g,
+    ];
+    // FittedBox(scaleDown) sikrer at tal + tokens ALTID skaleres ned til den
+    // plads Expanded giver — så en hjerte-chip nedenunder aldrig overlappes.
     return Center(
       child: FittedBox(
         fit: BoxFit.scaleDown,
@@ -342,27 +419,48 @@ class CardView extends StatelessWidget {
                       fontSize: width * 0.5,
                       color: f.accent,
                       height: 1.0)),
-            if (f.bigNumber != null) _bigNumber(f, dual),
+            if (f.bigNumber != null)
+              inlineX1
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        _bigNumber(f, dual),
+                        Text(
+                          '×1',
+                          style: TextStyle(
+                            fontSize: width * 0.26,
+                            fontWeight: FontWeight.w800,
+                            color: _cSpecial,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
+                    )
+                  : _bigNumber(f, dual),
             if (f.unit != null)
               Text(
                 f.unit!,
                 style: TextStyle(
                   fontSize: (width * 0.17).clamp(9.0, 18.0),
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1F2933),
+                  color: _cInkFwd,
                 ),
               ),
-            if (f.sub != null)
+            if (rowGlyphs.isNotEmpty)
               Padding(
-                padding: EdgeInsets.only(top: width * 0.03),
-                child: Text(
-                  f.sub!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: (width * 0.14).clamp(8.0, 15.0),
-                    height: 1.2,
-                    color: const Color(0xFF5B6670),
-                  ),
+                padding: EdgeInsets.only(top: width * 0.04),
+                // Tokens på ÉN række (aldrig stakket): de er smalle, så de
+                // kan være STORE i stedet for mange. Ved 2+ bærer tooltippen
+                // den fulde forklaring.
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    for (int i = 0; i < rowGlyphs.length; i++) ...<Widget>[
+                      if (i > 0) SizedBox(width: width * 0.08),
+                      _glyphWidget(rowGlyphs[i]),
+                    ],
+                  ],
                 ),
               ),
           ],
@@ -371,13 +469,79 @@ class CardView extends StatelessWidget {
     );
   }
 
+  /// Én mekanik-token. Tal-bærende tokens er komprimeret TYPOGRAFI
+  /// (`+2−5`, `1→ ×2`) — fem tegn kan stå ved 12-13 px hvor en sætning ikke
+  /// kan. Kun de tal-frie (byt, hop) er tegnede vektor-glyffer.
+  Widget _glyphWidget(CardGlyph g) {
+    final double h = (width * 0.24).clamp(11.0, 22.0);
+    switch (g.type) {
+      case CardGlyphType.seq:
+        // "+2−5": rækkefølgen (frem SÅ tilbage, samme brik) — aldrig to
+        // fritstående pile, der ville læses som et VALG. a==0 (rent
+        // "eller N tilbage"-kort) viser kun −b.
+        return Text.rich(
+          TextSpan(children: <InlineSpan>[
+            if (g.a > 0)
+              TextSpan(
+                  text: '+${g.a}',
+                  style: const TextStyle(color: _cInkFwd)),
+            TextSpan(
+                text: '−${g.b}',
+                style: const TextStyle(color: _cInkBack)),
+          ]),
+          style: TextStyle(
+            fontSize: h,
+            fontWeight: FontWeight.w800,
+            height: 1.0,
+          ),
+        );
+      case CardGlyphType.multi:
+        // "1→ ×2··" — skridt + pil, antal brikker som ×N med brik-prikker.
+        return Text.rich(
+          TextSpan(children: <InlineSpan>[
+            TextSpan(
+                text: '${g.a}→', style: const TextStyle(color: _cInkFwd)),
+            TextSpan(
+                text: ' ×${g.b}',
+                style: const TextStyle(color: _cSpecial)),
+          ]),
+          style: TextStyle(
+            fontSize: h,
+            fontWeight: FontWeight.w800,
+            height: 1.0,
+          ),
+        );
+      case CardGlyphType.swap:
+        return CustomPaint(
+          size: Size(h * 1.9, h),
+          painter: SwapGlyphPainter(),
+        );
+      case CardGlyphType.jump:
+        return CustomPaint(
+          size: Size(h * 1.7, h),
+          painter: JumpGlyphPainter(),
+        );
+      case CardGlyphType.dirBoth:
+        return CustomPaint(
+          size: Size(h * 1.9, h * 0.7),
+          painter: DirBothGlyphPainter(),
+        );
+      case CardGlyphType.splitX1:
+        // Renderes inline efter tallet (se _center) — her som fallback.
+        return Text('×1',
+            style: TextStyle(
+                fontSize: h,
+                fontWeight: FontWeight.w800,
+                color: _cSpecial,
+                height: 1.0));
+    }
+  }
+
   /// Det store tal, farvet efter retning:
   ///  - kun frem → sort
   ///  - kun tilbage → rødt
   ///  - begge → delt sort (venstre) / rødt (højre)
   Widget _bigNumber(CardFace f, bool dual) {
-    const Color black = Color(0xFF1F2933);
-    const Color red = Color(0xFFC62828);
     final TextStyle style = TextStyle(
       fontSize: dual ? width * 0.34 : width * 0.52,
       fontWeight: FontWeight.w800,
@@ -385,19 +549,20 @@ class CardView extends StatelessWidget {
       letterSpacing: -0.5,
       color: Colors.white, // males af ShaderMask nedenfor
     );
-    final Text text = Text(f.bigNumber!, textAlign: TextAlign.center, style: style);
+    final Text text =
+        Text(f.bigNumber!, textAlign: TextAlign.center, style: style);
 
     if (f.canBackward && f.canForward) {
       // Delt sort/rødt: hård overgang ved midten.
       return ShaderMask(
         shaderCallback: (Rect r) => const LinearGradient(
-          colors: <Color>[black, black, red, red],
+          colors: <Color>[_cInkFwd, _cInkFwd, _cInkBack, _cInkBack],
           stops: <double>[0.0, 0.5, 0.5, 1.0],
         ).createShader(r),
         child: text,
       );
     }
-    final Color solid = f.canBackward ? red : black;
+    final Color solid = f.canBackward ? _cInkBack : _cInkFwd;
     return Text(
       f.bigNumber!,
       textAlign: TextAlign.center,
@@ -435,24 +600,119 @@ class CardView extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _chip(String text, Color color) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: width * 0.09, vertical: width * 0.03),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: (width * 0.125).clamp(7.0, 13.0),
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-        ),
-      ),
-    );
+/// Byt-glyffet: to brikker med dobbeltpil imellem. Regel: KUN byt tegner
+/// brik-cirkler (ellers forveksles split/multi/byt indbyrdes). Fyldt = din
+/// brik, kontur = en andens — semantisk sandt: byttet sker mellem
+/// forskellige spillere.
+class SwapGlyphPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double r = size.height * 0.30;
+    final double cy = size.height / 2;
+    final Paint fill = Paint()..color = _cInkFwd;
+    final Paint stroke = Paint()
+      ..color = _cInkFwd
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.height * 0.12;
+    // Venstre brik (fyldt = din), højre brik (kontur = en andens).
+    canvas.drawCircle(Offset(r + stroke.strokeWidth, cy), r, fill);
+    canvas.drawCircle(
+        Offset(size.width - r - stroke.strokeWidth, cy), r, stroke);
+    // Dobbeltpil imellem: to korte linjer med pilehoveder.
+    final double x0 = r * 2 + stroke.strokeWidth * 2;
+    final double x1 = size.width - r * 2 - stroke.strokeWidth * 2;
+    if (x1 <= x0) return;
+    final double dy = size.height * 0.16;
+    _arrow(canvas, Offset(x0, cy - dy), Offset(x1, cy - dy), stroke,
+        headAtEnd: true);
+    _arrow(canvas, Offset(x1, cy + dy), Offset(x0, cy + dy), stroke,
+        headAtEnd: true);
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Hop-glyffet: bue-pil hen over ÉN kontur-brik. Bevidst kun én brik: en
+/// blokade er én brik på sit eget UD-felt — to stablede brikker ville lære
+/// spillerne en spærre-regel, der ikke findes.
+class JumpGlyphPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double r = size.height * 0.26;
+    final Paint stroke = Paint()
+      ..color = _cInkFwd
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.height * 0.12;
+    // Brikken der hoppes over (kontur = en andens), midt for.
+    final Offset c = Offset(size.width / 2, size.height - r - stroke.strokeWidth);
+    canvas.drawCircle(c, r, stroke);
+    // Buen: fra venstre bund, over brikken, ned mod højre — med pilehoved.
+    final Path arc = Path()
+      ..moveTo(stroke.strokeWidth, size.height * 0.85)
+      ..quadraticBezierTo(size.width / 2, -size.height * 0.25,
+          size.width - stroke.strokeWidth, size.height * 0.85);
+    canvas.drawPath(arc, stroke);
+    _arrowHead(
+        canvas,
+        Offset(size.width - stroke.strokeWidth, size.height * 0.85),
+        const Offset(0.5, 1),
+        size.height * 0.30,
+        Paint()..color = _cInkFwd);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// "Frem eller tilbage"-glyffet (klassisk 4): dobbeltpil ←→, venstre halvdel
+/// rød (tilbage), højre sort (frem) — retningen bæres af PILENE, farven
+/// forstærker kun (matcher det delte tal ovenover).
+class DirBothGlyphPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double cy = size.height / 2;
+    final double mid = size.width / 2;
+    final Paint back = Paint()
+      ..color = _cInkBack
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.height * 0.18;
+    final Paint fwd = Paint()
+      ..color = _cInkFwd
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.height * 0.18;
+    _arrow(canvas, Offset(mid, cy), Offset(0, cy), back, headAtEnd: true);
+    _arrow(canvas, Offset(mid, cy), Offset(size.width, cy), fwd,
+        headAtEnd: true);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+void _arrow(Canvas canvas, Offset from, Offset to, Paint stroke,
+    {required bool headAtEnd}) {
+  canvas.drawLine(from, to, stroke);
+  if (headAtEnd) {
+    final Offset dir = (to - from);
+    final double len = dir.distance;
+    if (len == 0) return;
+    final Offset unit = dir / len;
+    _arrowHead(canvas, to, unit, stroke.strokeWidth * 2.2,
+        Paint()..color = stroke.color);
+  }
+}
+
+void _arrowHead(
+    Canvas canvas, Offset tip, Offset unit, double size, Paint fill) {
+  final Offset back = tip - unit * size;
+  final Offset normal = Offset(-unit.dy, unit.dx) * (size * 0.6);
+  final Path head = Path()
+    ..moveTo(tip.dx, tip.dy)
+    ..lineTo(back.dx + normal.dx, back.dy + normal.dy)
+    ..lineTo(back.dx - normal.dx, back.dy - normal.dy)
+    ..close();
+  canvas.drawPath(head, fill);
 }
