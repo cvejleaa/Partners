@@ -6,7 +6,11 @@
 //  - `if (c.swap)` ↔ `if (c.jumpsBlockade)` byttet om → nine/five-testene
 //    røde (de asserterer FORSKELLIGE glyf-typer).
 //  - `&& c.forwardSteps.isNotEmpty` fjernet fra hop-vagten → "hop uden
-//    frem-skridt"-testen rød (kortet ville love en evne uden effekt).
+//    frem-skridt (kun tilbage)"-testen rød (kortet ville love en evne uden
+//    effekt). NB: den simple "ingen bevægelse"-variant af testen rammer
+//    describeCardFace's sidste default-literal, som ALDRIG læser den lokale
+//    `glyphs`-liste — den fanger IKKE denne mutation alene og bevises kun af
+//    tilbage-varianten nedenfor, som går gennem "Kort med bevægelse"-grenen.
 //  - 2 og 5 byttet i sekvens-tokenen → a/b-assertions røde.
 //  - eyebrow-grænsen flippet → 48/56-widget-testene røde.
 //  - glyf + gammel 8px-tekst begge beholdt → findsNothing-testene røde.
@@ -71,8 +75,29 @@ void main() {
 
     test('hop UDEN frem-skridt viser INTET hop-glyf (evnen har ingen effekt)',
         () {
+      // NB: dette kort har HVERKEN frem- eller tilbage-skridt, exitStart
+      // eller swap — describeCardFace falder derfor helt igennem til den
+      // sidste default-literal (`eyebrow: '—' ...`), som er en konstant med
+      // TOM glyphs-liste og ALDRIG læser den lokale `glyphs`-variabel hop-
+      // guarden bygger. Testen er derfor grøn UANSET om
+      // `&& c.forwardSteps.isNotEmpty` findes — den beviser kun at et helt
+      // virkningsløst kort ikke viser noget. Den reelle guard bevises af
+      // testen nedenfor (kort med KUN tilbage-skridt, som rent faktisk går
+      // gennem grenen der bruger `glyphs`).
       final CardRules rules = CardRules.defaults()
           .withRank(Rank.six, const CardRuleConfig(jumpsBlockade: true));
+      expect(_types(Rank.six, rules), isEmpty);
+    });
+
+    test(
+        'hop UDEN frem-skridt (kun tilbage-træk) viser INTET hop-glyf — '
+        'dækker guarden i den gren der FAKTISK læser glyphs', () {
+      // backwardSteps sat (ingen forwardSteps) → kortet går gennem "Kort med
+      // bevægelse"-grenen (hasBackward), som konsumerer den lokale glyphs-
+      // liste. Fjernes `&& c.forwardSteps.isNotEmpty` fra hop-guarden, ville
+      // dette kort forkert vise et hop-glyf — DENNE assertion bliver rød.
+      final CardRules rules = CardRules.defaults().withRank(
+          Rank.six, const CardRuleConfig(backwardSteps: 4, jumpsBlockade: true));
       expect(_types(Rank.six, rules), isEmpty);
     });
 

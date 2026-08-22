@@ -202,7 +202,11 @@ String cardFunctionSummary(PlayingCard card, CardRules rules) {
   final CardFace f = describeCardFace(card, rules);
   final StringBuffer b = StringBuffer(f.eyebrow);
   if (f.bigNumber != null) b.write(' ${f.bigNumber}');
-  if (f.unit != null) b.write(' ${f.unit}');
+  // Efter et tal er unit en fortsættelse ("Flyt 6 frem"); uden tal er den
+  // en beskrivelse og får skilletegn ("Ud-kort — Sæt en brik ud").
+  if (f.unit != null) {
+    b.write(f.bigNumber != null ? ' ${f.unit}' : ' — ${f.unit}');
+  }
   if (f.startChip) b.write(' · ♥ Ud af start');
   for (final CardGlyph g in f.glyphs) {
     b.write(' · ${g.label}');
@@ -400,10 +404,18 @@ class CardView extends StatelessWidget {
     // Split-tokenen (×1) står INLINE efter tallet — "4×1" er ét udtryk.
     final bool inlineX1 =
         f.glyphs.isNotEmpty && f.glyphs.first.type == CardGlyphType.splitX1;
-    final List<CardGlyph> rowGlyphs = <CardGlyph>[
+    final List<CardGlyph> allRow = <CardGlyph>[
       for (final CardGlyph g in f.glyphs)
         if (g.type != CardGlyphType.splitX1) g,
     ];
+    // Læsbarheds-loft (QC-fund): admin kan kombinere mekanikker frit, og
+    // FittedBox garanterer kun "intet overlap" — ikke læsbarhed. Med tal +
+    // 2 tokens + ♥-chip på 48 px ender tokens ~9 px: præcis den grød
+    // redesignet fjerner. Derfor vises højst 2 tokens (1 når ♥-chippen også
+    // skal være der); rækkefølgen i glyphs ER prioriteringen, og tooltippen
+    // bærer altid den fulde liste. De indbyggede sæt rammer aldrig loftet.
+    final int maxTokens = f.startChip ? 1 : 2;
+    final List<CardGlyph> rowGlyphs = allRow.take(maxTokens).toList();
     // FittedBox(scaleDown) sikrer at tal + tokens ALTID skaleres ned til den
     // plads Expanded giver — så en hjerte-chip nedenunder aldrig overlappes.
     return Center(
@@ -602,10 +614,11 @@ class CardView extends StatelessWidget {
   }
 }
 
-/// Byt-glyffet: to brikker med dobbeltpil imellem. Regel: KUN byt tegner
-/// brik-cirkler (ellers forveksles split/multi/byt indbyrdes). Fyldt = din
-/// brik, kontur = en andens — semantisk sandt: byttet sker mellem
-/// forskellige spillere.
+/// Byt-glyffet: to brikker med dobbeltpil imellem. Regel: KUN byt tegner et
+/// PAR brikker (repræsenterer byttet mellem to spillere) — split/multi er
+/// ren typografi, så de ikke kan forveksles med byt. Hop-glyffets ENE
+/// cirkel er den statiske blokade, ikke et par. Fyldt = din brik, kontur =
+/// en andens — semantisk sandt: byttet sker mellem forskellige spillere.
 class SwapGlyphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -655,11 +668,14 @@ class JumpGlyphPainter extends CustomPainter {
       ..quadraticBezierTo(size.width / 2, -size.height * 0.25,
           size.width - stroke.strokeWidth, size.height * 0.85);
     canvas.drawPath(arc, stroke);
-    _arrowHead(
-        canvas,
-        Offset(size.width - stroke.strokeWidth, size.height * 0.85),
-        const Offset(0.5, 1),
-        size.height * 0.30,
+    // Pilehovedet følger kurvens FAKTISKE tangent i endepunktet (endepunkt
+    // minus kontrolpunkt for en kvadratisk bezier), normaliseret — et
+    // håndsat (0.5,1)-gæt gav et ~12 % aflangt hoved, der ikke fulgte buen.
+    final Offset end =
+        Offset(size.width - stroke.strokeWidth, size.height * 0.85);
+    final Offset control = Offset(size.width / 2, -size.height * 0.25);
+    final Offset tangent = end - control;
+    _arrowHead(canvas, end, tangent / tangent.distance, size.height * 0.30,
         Paint()..color = _cInkFwd);
   }
 
