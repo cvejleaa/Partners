@@ -175,6 +175,35 @@ void main() {
           contains('frem'));
     });
 
+    testWidgets('multi-tokenen siger "2× 1→" — antal brikker FØRST '
+        '(brugerens ordstilling)', (tester) async {
+      await tester.pumpWidget(host(PlayingCard(Rank.jack, Suit.hearts),
+          _p25Rules, 48, UniqueKey()));
+      // Den GAMLE ordstilling var '1→ ×2' — byttes b og a tilbage, findes
+      // '2× 1→' ikke og testen bliver rød.
+      expect(
+          find.byWidgetPredicate((w) =>
+              w is Text && w.textSpan?.toPlainText() == '2× 1→'),
+          findsOneWidget);
+      // Og label-teksten (tooltip/legend) følger samme ordstilling.
+      expect(cardFunctionSummary(PlayingCard(Rank.jack, Suit.hearts), _p25Rules),
+          contains('2× 1 frem'));
+    });
+
+    testWidgets('hero-glyffet bærer sit ord: "byt" under det store ⇄',
+        (tester) async {
+      // Brugerens ønske på klassisk-11'eren: tegning + ordet sammen.
+      final CardRules swapOnly = CardRules.defaults()
+          .withRank(Rank.jack, const CardRuleConfig(swap: true));
+      await tester.pumpWidget(host(
+          PlayingCard(Rank.jack, Suit.hearts), swapOnly, 48, UniqueKey()));
+      expect(find.text('byt'), findsOneWidget);
+      // På kort MED tal (9/⇄ i 25 år) er glyffet i rækken — INTET ord der.
+      await tester.pumpWidget(host(PlayingCard(Rank.nine, Suit.hearts),
+          _p25Rules, 48, UniqueKey()));
+      expect(find.text('byt'), findsNothing);
+    });
+
     testWidgets('"tilbage"-ordet er RØDT på rene tilbage-kort (følger tallet)',
         (tester) async {
       // QC-fund: ordet er kortets eneste retningsord og må ikke modsige

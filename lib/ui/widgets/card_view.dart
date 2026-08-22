@@ -41,10 +41,21 @@ class CardGlyph {
         // a == 0: rent "eller N tilbage"-alternativ (intet frem-led).
         CardGlyphType.seq =>
           a > 0 ? '$a frem → $b tilbage' : 'eller $b tilbage',
-        CardGlyphType.multi => '$a frem × $b brikker',
+        // Antal brikker FØRST ("2× 1 frem") — brugerens læsning: man vælger
+        // to brikker og rykker hver 1 frem, ikke omvendt.
+        CardGlyphType.multi => '$b× $a frem',
         CardGlyphType.swap => 'byt to brikker',
         CardGlyphType.jump => 'hopper over blokade',
         CardGlyphType.dirBoth => 'frem eller tilbage',
+      };
+
+  /// Ét-ords etiket under HERO-glyffet (glyf-only-kort): tegningen bærer
+  /// mekanikken, ordet bekræfter den (brugerens ønske på klassisk-11'eren:
+  /// "ordet byt må gerne være med"). null = intet ord.
+  String? get heroWord => switch (type) {
+        CardGlyphType.swap => 'byt',
+        CardGlyphType.jump => 'hop',
+        _ => null,
       };
 
   /// Kompakt hjørne-token til thumbnails (<40 px) — dér hvor tekst er
@@ -442,9 +453,21 @@ class CardView extends StatelessWidget {
                       fontSize: width * 0.5,
                       color: f.accent,
                       height: 1.0)),
-            if (heroGlyph)
-              _glyphWidget(rowGlyphs.first, heroSize: true)
-            else if (f.bigNumber != null)
+            if (heroGlyph) ...<Widget>[
+              _glyphWidget(rowGlyphs.first, heroSize: true),
+              if (rowGlyphs.first.heroWord != null)
+                Padding(
+                  padding: EdgeInsets.only(top: width * 0.04),
+                  child: Text(
+                    rowGlyphs.first.heroWord!,
+                    style: TextStyle(
+                      fontSize: (width * 0.17).clamp(9.0, 18.0),
+                      fontWeight: FontWeight.w700,
+                      color: _cInkFwd,
+                    ),
+                  ),
+                ),
+            ] else if (f.bigNumber != null)
               inlineX1
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
@@ -531,14 +554,15 @@ class CardView extends StatelessWidget {
           ),
         );
       case CardGlyphType.multi:
-        // "1→ ×2··" — skridt + pil, antal brikker som ×N med brik-prikker.
+        // "2× 1→" — antal brikker FØRST (guld), så skridtet med pil (samme
+        // ordstilling som label-teksten "2× 1 frem").
         return Text.rich(
           TextSpan(children: <InlineSpan>[
             TextSpan(
-                text: '${g.a}→', style: const TextStyle(color: _cInkFwd)),
-            TextSpan(
-                text: ' ×${g.b}',
+                text: '${g.b}× ',
                 style: const TextStyle(color: _cSpecial)),
+            TextSpan(
+                text: '${g.a}→', style: const TextStyle(color: _cInkFwd)),
           ]),
           style: TextStyle(
             fontSize: h,
