@@ -54,7 +54,7 @@ class WinNavigator {
     required void Function(Uint8List? boardImage) navigate,
   }) async {
     if (!gameOver || _navigated || _running) return false;
-    _running = true;
+    _running = false; // MUTATION C alene
     try {
       await Future<void>.delayed(settleDelay);
       if (!stillMounted()) return false;
