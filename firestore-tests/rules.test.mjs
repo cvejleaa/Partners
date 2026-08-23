@@ -277,6 +277,23 @@ describe('games/{game}', () => {
       uids: ['alice', null, 'bob', null],
     }));
   });
+  it('vært må invitere en ANDEN (tilføjer dem til members)', async () => {
+    // Invitationer og revanche skriver den INVITEREDES uid i members. En
+    // "kun sig selv"-regel på members ville slå begge ihjel — members er
+    // alene en adgangsliste og fodrer ingen af misbrugs-stierne.
+    await seed((db) => setDoc(doc(db, 'games/G14'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice'],
+      uids: ['alice', null, null, null], invitedUids: [],
+    }));
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/G14'), {
+      invitedUids: ['bob'], members: ['alice', 'bob'],
+    }));
+    // ... men en invitation må stadig ikke sætte den inviterede i et SÆDE.
+    await assertFails(updateDoc(doc(as('alice'), 'games/G14'), {
+      uids: ['alice', 'bob', null, null],
+    }));
+  });
+
   it('ANGREB: ikke-medlem må IKKE flippe en lobby til playing/over', async () => {
     await seed((db) => setDoc(doc(db, 'games/G12'), {
       hostUid: 'alice', status: 'lobby', members: ['alice'],

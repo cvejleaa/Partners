@@ -79,10 +79,12 @@ service cloud.firestore {
             .hasOnly(resource.data.get('uids', [])
                 .concat([request.auth.uid, null]));
       }
-      function onlySelfAsMember() {
-        return request.resource.data.get('members', [])
-            .hasOnly(resource.data.get('members', []).concat([request.auth.uid]));
-      }
+      // BEMÆRK: 'members' begrænses bevidst IKKE ved update. Det er alene en
+      // adgangsliste for dokumentet, og den fodrer INGEN af misbrugs-stierne:
+      // statistik-attribution (arrayContains på 'uids'), onGameOver-markering
+      // og "din tur"-push læser alle 'uids', aldrig 'members'. Til gengæld
+      // tilføjer invite() netop den INVITEREDES uid til members — en
+      // selv-kun-regel ville have slået invitationer og revanche ihjel.
       // Kun deltagere må starte/afslutte et spil. En udenforstående må joine
       // en åben lobby, men ikke flippe den til 'playing'/'over'.
       function statusUnchangedOrMember() {
@@ -102,7 +104,6 @@ service cloud.firestore {
             .hasOnly([request.auth.uid, null]);
       allow update: if isSignedIn()
         && onlySelfInSeats()
-        && onlySelfAsMember()
         && statusUnchangedOrMember()
         && (
           request.auth.uid in resource.data.members ||
