@@ -187,10 +187,15 @@ class StatsRepository {
     // mens den OFFENTLIGE rangliste stod tilbage med forældede tal — og
     // intet ville nogensinde prøve igen. Atomisk: enten begge eller ingen.
     final batch = _db.batch();
-    if (own != null) {
-      batch.set(_db.collection('userStats').doc(uid),
-          docJsonFor(own, combined.byVariant, slim: false));
-    }
+    // Skriv ALTID userStats — også når brugeren ingen afsluttede spil har
+    // (0-stats med kendt navn). Sprang vi skrivningen over, ville
+    // `staleSince`-markøren aldrig blive ryddet, og hver app-start ville
+    // koste et forgæves læs + genberegning for evigt (security-fund: kan
+    // fremprovokeres ved at markere nogen og derefter slette spillet).
+    final UserStats ownOrEmpty = own ??
+        UserStats(uid: uid, displayName: onlineOwn.displayName);
+    batch.set(_db.collection('userStats').doc(uid),
+        docJsonFor(ownOrEmpty, combined.byVariant, slim: false));
     batch.set(_db.collection('userStatsOnline').doc(uid),
         docJsonFor(onlineOwn, online.byVariant, slim: true));
     await batch.commit();

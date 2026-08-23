@@ -26,19 +26,42 @@ test("tåler manglende/tomme dokumenter", () => {
   assert.equal(isGameOverTransition(null, null), false);
 });
 
+// Realistiske Firebase-uid'er (28 tegn) — testene skal ramme den samme
+// formvalidering som produktionen, ikke en løsere legetøjsudgave.
+const A = "AaBbCcDdEeFfGgHhIiJjKkLl0001";
+const B = "AaBbCcDdEeFfGgHhIiJjKkLl0002";
+const C = "AaBbCcDdEeFfGgHhIiJjKkLl0003";
+const D = "AaBbCcDdEeFfGgHhIiJjKkLl0004";
+
 test("markerer ALLE menneskelige deltagere — ikke kun den der trak sidst", () => {
   // Kernen i brugerens fund: makkeren manglede i toplisterne.
-  const uids = staleTargets({uids: ["a", "b", "c", "d"]});
-  assert.deepEqual(uids, ["a", "b", "c", "d"]);
+  assert.deepEqual(staleTargets({uids: [A, B, C, D]}), [A, B, C, D]);
 });
 
 test("AI-pladser og skæve felter springes over", () => {
-  assert.deepEqual(staleTargets({uids: ["a", null, "c", null]}), ["a", "c"]);
-  assert.deepEqual(staleTargets({uids: ["a", "", 42, {x: 1}]}), ["a"]);
+  assert.deepEqual(staleTargets({uids: [A, null, C, null]}), [A, C]);
+  assert.deepEqual(staleTargets({uids: [A, "", 42, {x: 1}]}), [A]);
 });
 
 test("samme spiller på to pladser markeres kun én gang", () => {
-  assert.deepEqual(staleTargets({uids: ["a", "b", "a", "b"]}), ["a", "b"]);
+  assert.deepEqual(staleTargets({uids: [A, B, A, B]}), [A, B]);
+});
+
+test("sti-injektion og vanformede uid'er afvises (serveren omgår reglerne)", () => {
+  // Efterprøvet i emulatoren: admin-SDK'et afviser IKKE ".." eller "a/b/c" —
+  // uden formkravet ville serveren skrive i utilsigtede stier, og ét skævt
+  // felt kunne vælte markeringen for de ægte deltagere.
+  // MUTATION: fjern UID_FORM-tjekket → denne bliver rød.
+  assert.deepEqual(staleTargets({uids: ["..", "a/b/c", A]}), [A]);
+  assert.deepEqual(staleTargets({uids: [".", "kort", "æøå123456789012"]}), []);
+});
+
+test("fan-out har et loft: højst bordets fire pladser", () => {
+  // En fabrikeret liste med hundredvis af uid'er må ikke give hundredvis af
+  // skrivninger. MUTATION: fjern .slice(0, maxSeats) → rød.
+  const many = Array.from({length: 800}, (_, i) =>
+    `AaBbCcDdEeFfGgHhIiJjKkLl${String(i).padStart(4, "0")}`);
+  assert.equal(staleTargets({uids: many}).length, 4);
 });
 
 test("intet uids-felt giver tom liste (ingen skrivninger)", () => {

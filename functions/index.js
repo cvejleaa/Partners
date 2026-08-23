@@ -176,7 +176,9 @@ exports.onGameOver = onDocumentUpdated(
     if (!isGameOverTransition(before, after)) return;
     const uids = staleTargets(after);
     if (!uids.length) return;
-    await Promise.all(
+    // allSettled, ikke all: én afvist skrivning må ikke koste de ØVRIGE
+    // deltagere deres markering (og dermed deres opdaterede statistik).
+    const results = await Promise.allSettled(
       uids.map((uid) =>
         db
           .collection("userStats")
@@ -184,5 +186,14 @@ exports.onGameOver = onDocumentUpdated(
           .set({staleSince: FieldValue.serverTimestamp()}, {merge: true})
       )
     );
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        // Synlig i Cloud Functions-loggen — ellers kunne markeringen kun
+        // fejle tavst.
+        console.error(
+          `[onGameOver] kunne ikke markere ${uids[i]}: ${r.reason}`
+        );
+      }
+    });
   }
 );

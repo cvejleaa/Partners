@@ -27,10 +27,26 @@ function isGameOverTransition(before, after) {
  * @param {object} game spil-dokumentet
  * @return {string[]} unikke uids
  */
-function staleTargets(game) {
+const UID_FORM = /^[A-Za-z0-9_-]{6,128}$/;
+
+/**
+ * Deltagere hvis statistik skal markeres forældet: rigtige uids, uden
+ * dubletter og uden AI-pladser (null/tomme felter).
+ *
+ * Uid'et valideres på FORM — serveren omgår Firestore-reglerne, så den må
+ * aldrig være mere gavmild end klienten. Uden formkravet kunne fx ".." eller
+ * "a/b/c" skabe dokumenter i utilsigtede stier (efterprøvet i emulatoren), og
+ * ét skævt felt kunne vælte hele markeringen for de ægte deltagere.
+ * Antallet skæres af ved bordets størrelse, så en fabrikeret liste ikke kan
+ * udløse tusindvis af skrivninger.
+ * @param {object} game spil-dokumentet
+ * @param {number} maxSeats loft på antal markerede (default 4 = bordet)
+ * @return {string[]} unikke, velformede uids
+ */
+function staleTargets(game, maxSeats = 4) {
   const uids = Array.isArray((game || {}).uids) ? game.uids : [];
-  const real = uids.filter((u) => typeof u === "string" && u.length > 0);
-  return Array.from(new Set(real));
+  const real = uids.filter((u) => typeof u === "string" && UID_FORM.test(u));
+  return Array.from(new Set(real)).slice(0, maxSeats);
 }
 
 module.exports = {isGameOverTransition, staleTargets};

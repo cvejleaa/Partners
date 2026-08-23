@@ -64,13 +64,50 @@ service cloud.firestore {
     //    lukker for at en tilfældig bruger overskriver et igangværende spil.
     //  - delete: kun vært eller admin.
     match /games/{game} {
+      // Man må KUN sætte SIG SELV ind i et spil. Uden dette kunne enhver
+      // indlogget fabrikere et spil med FREMMEDE uid'er (eller redigere en
+      // åben lobby) og dermed: forgifte ofrenes statistik (den genberegnes
+      // ud fra alle spil der nævner ens uid), udløse server-skrivninger på
+      // deres vegne (onGameOver-markeringen) og spamme dem med "din tur"-push.
+      // Alle tre angreb er efterprøvet i emulatoren — se rules.test.mjs.
+      // null er tilladt, så en tom plads (og et sædeskift) stadig kan skrives.
+      // .get(...) overalt: et dokument uden feltet må give AFVISNING af et
+      // fremmed uid, ikke en regel-FEJL (som ville afvise alt, også de ægte
+      // flows).
+      function onlySelfInSeats() {
+        return request.resource.data.get('uids', [])
+            .hasOnly(resource.data.get('uids', [])
+                .concat([request.auth.uid, null]));
+      }
+      function onlySelfAsMember() {
+        return request.resource.data.get('members', [])
+            .hasOnly(resource.data.get('members', []).concat([request.auth.uid]));
+      }
+      // Kun deltagere må starte/afslutte et spil. En udenforstående må joine
+      // en åben lobby, men ikke flippe den til 'playing'/'over'.
+      function statusUnchangedOrMember() {
+        return request.resource.data.get('status', '') ==
+                resource.data.get('status', '')
+            || request.auth.uid in resource.data.get('members', []);
+      }
       allow read: if isSignedIn();
+      // Oprettelse: kun med sig selv som vært, som eneste medlem og som
+      // eneste besatte plads. (Status er bevidst fri: online-spil oprettes
+      // som 'lobby', mens et færdigspillet AI-solospil gemmes direkte som
+      // 'over' — begge kun med opretterens egen uid.)
       allow create: if isSignedIn()
-        && request.resource.data.hostUid == request.auth.uid;
-      allow update: if isSignedIn() && (
-        request.auth.uid in resource.data.members ||
-        resource.data.status == 'lobby'
-      );
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.get('members', []).hasOnly([request.auth.uid])
+        && request.resource.data.get('uids', [])
+            .hasOnly([request.auth.uid, null]);
+      allow update: if isSignedIn()
+        && onlySelfInSeats()
+        && onlySelfAsMember()
+        && statusUnchangedOrMember()
+        && (
+          request.auth.uid in resource.data.members ||
+          resource.data.status == 'lobby'
+        );
       allow delete: if isSignedIn() &&
         (resource.data.hostUid == request.auth.uid || isAdmin());
 

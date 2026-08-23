@@ -220,6 +220,88 @@ describe('games/{game}', () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game()));
     await assertFails(updateDoc(doc(as('mallory'), 'games/G1'), { seq: 99 }));
   });
+  // ---- ANGREB mod spil-dokumentets deltagerliste (security-gennemgang) ----
+  // Roden til tre efterprøvede angreb: kunne man skrive FREMMEDE uid'er ind i
+  // et spil, kunne man (1) forgifte ofrenes statistik — den genberegnes ud fra
+  // alle spil der nævner deres uid, (2) få serveren (onGameOver) til at skrive
+  // på deres vegne, og (3) spamme dem med "din tur"-push via onGameTurn.
+  it('ANGREB: må IKKE oprette et spil med FREMMEDE uid\'er i sæderne', async () => {
+    await assertFails(setDoc(doc(as('mallory'), 'games/EVIL1'), {
+      hostUid: 'mallory', status: 'lobby', members: ['mallory'],
+      uids: ['alice', 'bob', null, 'mallory'],
+    }));
+  });
+  it('ANGREB: må IKKE oprette et spil med fremmede MEDLEMMER', async () => {
+    await assertFails(setDoc(doc(as('mallory'), 'games/EVIL2'), {
+      hostUid: 'mallory', status: 'lobby', members: ['mallory', 'alice'],
+      uids: ['mallory', null, null, null],
+    }));
+  });
+  it('må oprette et spil med sig selv i ét sæde (det ægte flow)', async () => {
+    await assertSucceeds(setDoc(doc(as('mallory'), 'games/OK1'), {
+      hostUid: 'mallory', status: 'lobby', members: ['mallory'],
+      uids: ['mallory', null, null, null],
+    }));
+  });
+  it('må gemme et færdigt AI-solospil direkte som over (kun egen uid)', async () => {
+    await assertSucceeds(setDoc(doc(as('alice'), 'games/AI1'), {
+      hostUid: 'alice', status: 'over', members: ['alice'],
+      uids: ['alice', null, null, null],
+    }));
+  });
+  it('ANGREB: må IKKE skrive fremmede uid\'er ind i en ÅBEN lobby', async () => {
+    await seed((db) => setDoc(doc(db, 'games/G9'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice'],
+      uids: ['alice', null, null, null],
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/G9'), {
+      uids: ['alice', 'bob', 'carol', 'mallory'],
+    }));
+  });
+  it('join: må sætte SIG SELV i en ledig plads (det ægte flow)', async () => {
+    await seed((db) => setDoc(doc(db, 'games/G10'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice'],
+      uids: ['alice', null, null, null],
+    }));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/G10'), {
+      uids: ['alice', 'bob', null, null],
+      members: ['alice', 'bob'],
+    }));
+  });
+  it('join: sædeskift frigør egen plads (null skal stadig være tilladt)', async () => {
+    await seed((db) => setDoc(doc(db, 'games/G11'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/G11'), {
+      uids: ['alice', null, 'bob', null],
+    }));
+  });
+  it('ANGREB: ikke-medlem må IKKE flippe en lobby til playing/over', async () => {
+    await seed((db) => setDoc(doc(db, 'games/G12'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice'],
+      uids: ['alice', null, null, null],
+    }));
+    // 'over' ville udløse onGameOver-markeringen; 'playing' åbner for
+    // "din tur"-push-spam via onGameTurn.
+    await assertFails(updateDoc(doc(as('mallory'), 'games/G12'), {
+      status: 'over',
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/G12'), {
+      status: 'playing',
+    }));
+  });
+  it('medlem må selv starte og afslutte spillet', async () => {
+    await seed((db) => setDoc(doc(db, 'games/G13'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice'],
+      uids: ['alice', null, null, null],
+    }));
+    await assertSucceeds(
+      updateDoc(doc(as('alice'), 'games/G13'), { status: 'playing' }));
+    await assertSucceeds(
+      updateDoc(doc(as('alice'), 'games/G13'), { status: 'over' }));
+  });
+
   it('ikke-medlem må opdatere et spil i LOBBY (for at kunne joine)', async () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game({ status: 'lobby' })));
     await assertSucceeds(updateDoc(doc(as('newbie'), 'games/G1'), { seq: 1 }));
