@@ -17,6 +17,19 @@ import '../online/online_service.dart';
 import 'records.dart';
 import 'user_stats.dart';
 
+/// Har serveren markeret brugerens statistik som forældet?
+///
+/// Markøren `staleSince` sættes af Cloud Function'en onGameOver, når et spil
+/// slutter — for ALLE deltagere. Den findes, fordi en brugers tal kun kan
+/// skrives af brugerens egen klient (Firestore-reglerne), og kun mens dén
+/// klient ser spillet slutte: lå makkerens app i baggrunden, blev deres tal
+/// aldrig opdateret, og de manglede i variant-toplisterne.
+///
+/// Manglende dokument = ingen spil endnu = intet at genberegne (markeringen
+/// OPRETTER dokumentet med merge, så en spiller med spil har det altid).
+bool statsNeedRecompute(Map<String, dynamic>? statsDoc) =>
+    statsDoc != null && statsDoc['staleSince'] != null;
+
 /// Sidste spils stats + hvilken variant det blev spillet i. Varianten følger
 /// med fra samme spil-doc, så UI/rekord-logikken ikke skal gætte den igen.
 class LastGameStats {
@@ -178,6 +191,19 @@ class StatsRepository {
         .collection('userStatsOnline')
         .doc(uid)
         .set(docJsonFor(onlineOwn, online.byVariant, slim: true));
+  }
+
+  /// Selvhelbredelse ved app-start: ét dokument-læs, og kun en genberegning
+  /// hvis serveren har markeret tallene forældede. Genberegningen skriver
+  /// dokumentet med set() UDEN merge, så markøren ryddes af sig selv — ingen
+  /// ekstra skrivning, ingen mulighed for at hænge fast i "forældet".
+  ///
+  /// Returnerer true hvis der faktisk blev genberegnet.
+  Future<bool> recomputeOwnIfStale(String uid) async {
+    final doc = await _db.collection('userStats').doc(uid).get();
+    if (!statsNeedRecompute(doc.data())) return false;
+    await recomputeAndSaveOwn(uid);
+    return true;
   }
 
   /// Hent én brugers samlede stats fra cachen (top-niveau, alle varianter).

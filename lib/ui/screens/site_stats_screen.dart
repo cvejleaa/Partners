@@ -212,6 +212,13 @@ class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
                                     : -1,
                             (s) =>
                                 '${(s.split7Ratio * 100).toStringAsFixed(0)}%')),
+                    // Byttekortet er en stilart på linje med delekortet —
+                    // tælles på FORMEN (A↔B), så det virker uanset hvilken
+                    // rang varianten lægger byttet på (25 år: 9'eren).
+                    _ranking(
+                        '🔀 Mest byttelystne',
+                        _topBy((s) => s.swapCount.toDouble(),
+                            (s) => '${s.swapCount}')),
                     _ranking(
                         '🏠 Flest brikker i mål',
                         _topBy((s) => s.homeStretchEntries.toDouble(),

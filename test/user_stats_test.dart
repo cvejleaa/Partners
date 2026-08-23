@@ -386,6 +386,18 @@ void main() {
       expect(slimBy.containsKey('favoriteStarter'), isFalse);
     });
 
+    test('byt tælles og bæres med i den SLANKE ranglisteform', () {
+      // Brugerfund: byttekortet manglede i statistikken. Tallet blev talt
+      // (på FORMEN A↔B, ikke rangen — 25 år lægger byttet på 9'eren), men
+      // den slanke form, som variant-toplisterne læser, bar det ikke videre.
+      // MUTATION: fjern 'swapCount' fra toSlimRankingJson → rød.
+      final UserStats u =
+          UserStats(uid: 'u0', displayName: 'A', gamesPlayed: 1, swapCount: 3);
+      expect(u.toSlimRankingJson()['swapCount'], 3);
+      // Og round-trip: det slanke doc kan læses tilbage med byttet intakt.
+      expect(UserStats.fromJson(u.toSlimRankingJson()).swapCount, 3);
+    });
+
     test('UserStatsDoc.fromJson: gamle docs uden byVariant → tom map', () {
       final doc = UserStatsDoc.fromJson(<String, dynamic>{
         'uid': 'u0',

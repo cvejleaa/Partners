@@ -49,6 +49,12 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Cloud Functions-enhedstests (rene helpers, ingen emulator)
+        run: |
+          node --check functions/index.js
+          node --check functions/game_over.js
+          node --test functions-tests/game_over.test.mjs
+
       - name: Firestore-regeltests (emulator)
         # Angriber firestore.rules i emulatoren (@firebase/rules-unit-testing).
         run: npm run test:rules

@@ -426,6 +426,11 @@ class _PartnersAppState extends ConsumerState<PartnersApp>
   // Baggrunds-ophold længere end dette regnes som "rigtig væk".
   static const Duration _kLongBackground = Duration(seconds: 5);
 
+  /// Uid'en vi allerede har kørt stats-selvhelbredelsen for i denne session —
+  /// så en token-fornyelse (authStateChanges fyrer igen) ikke udløser et nyt
+  /// dokument-læs.
+  String? _statsHealedForUid;
+
   @override
   void initState() {
     super.initState();
@@ -531,11 +536,26 @@ class _PartnersAppState extends ConsumerState<PartnersApp>
       ));
     });
 
-    // Når login bliver klar (eller ved opstart), håndtér et evt. deeplink.
+    // Når login bliver klar (eller ved opstart), håndtér et evt. deeplink —
+    // og helbred egen statistik hvis serveren har markeret den forældet.
     ref.listen<AsyncValue<User?>>(authStateProvider, (prev, next) {
-      if (next.valueOrNull != null) {
+      final User? user = next.valueOrNull;
+      if (user != null) {
         WidgetsBinding.instance
             .addPostFrameCallback((_) => _maybeHandleDeepLink());
+        // Ét dokument-læs; genberegner kun når markøren står (se
+        // StatsRepository.recomputeOwnIfStale). Én gang pr. uid pr. session,
+        // så en token-fornyelse ikke udløser den igen. Fejler den (offline),
+        // prøves igen ved næste start — tallene er en cache, ikke sandheden.
+        if (_statsHealedForUid != user.uid) {
+          _statsHealedForUid = user.uid;
+          // ignore: discarded_futures
+          StatsRepository().recomputeOwnIfStale(user.uid).catchError(
+              (Object e) {
+            debugPrint('[stats] selvhelbredelse fejlede: $e');
+            return false;
+          });
+        }
       }
     });
     if (_pendingCode != null && !_linkHandled) {

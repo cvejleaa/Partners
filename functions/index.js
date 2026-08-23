@@ -12,6 +12,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {initializeApp} = require("firebase-admin/app");
 const {FieldValue} = require("firebase-admin/firestore");
+const {isGameOverTransition, staleTargets} = require("./game_over");
 
 initializeApp();
 const db = getFirestore("partners");
@@ -146,5 +147,42 @@ exports.onGameTurn = onDocumentUpdated(
       },
       webpush: {headers: {Urgency: "high", TTL: "300"}},
     });
+  }
+);
+
+// Ved spil-slut: markér ALLE deltageres statistik som forældet.
+//
+// Hvorfor: en brugers stats skrives kun af brugerens EGEN klient (Firestore-
+// reglerne tillader kun at skrive sit eget dokument), og kun mens dén klient
+// ser spillet slutte. Lå makkerens app i baggrunden, blev deres tal aldrig
+// opdateret — de manglede så i variant-toplisterne, indtil en admin
+// genberegnede alt. Nu sætter serveren en markør, og hver klient genberegner
+// sine EGNE tal ved næste app-start (StatsRepository.recomputeOwnIfStale).
+// Genberegningen overskriver dokumentet uden markøren, så den rydder sig selv.
+//
+// merge:true, så vi kun rører 'staleSince' og aldrig kan ødelægge tal.
+exports.onGameOver = onDocumentUpdated(
+  {
+    document: "games/{code}",
+    database: "partners",
+    region: "europe-west1",
+    memory: "256MiB",
+    timeoutSeconds: 60,
+    maxInstances: 10,
+  },
+  async (event) => {
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
+    if (!isGameOverTransition(before, after)) return;
+    const uids = staleTargets(after);
+    if (!uids.length) return;
+    await Promise.all(
+      uids.map((uid) =>
+        db
+          .collection("userStats")
+          .doc(uid)
+          .set({staleSince: FieldValue.serverTimestamp()}, {merge: true})
+      )
+    );
   }
 );

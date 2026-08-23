@@ -229,6 +229,7 @@ class UserStats {
         'captureGames': captureGames,
         'split7Count': split7Count,
         'solid7Count': solid7Count,
+        'swapCount': swapCount,
         'homeStretchEntries': homeStretchEntries,
       };
 
