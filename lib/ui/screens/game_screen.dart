@@ -1,8 +1,6 @@
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
@@ -43,17 +41,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   /// aldrig kan tages), for alle senere forsøg. Se WinNavigator.
   final WinNavigator _winNav = WinNavigator();
 
-  Future<Uint8List?> _captureBoard() async {
-    try {
-      final obj = _boardKey.currentContext?.findRenderObject();
-      if (obj is! RenderRepaintBoundary) return null;
-      final ui.Image image = await obj.toImage(pixelRatio: 2.0);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      return data?.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
-  }
 
   @override
   void initState() {
@@ -141,7 +128,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final Player human = state.players.firstWhere((Player p) => p.isHuman,
         orElse: () => state.players.first);
     if (state.phase == GamePhase.gameOver &&
-        state.winningTeamIndex != null) {
+        state.winningTeamIndex != null &&
+        !_winNav.navigated) {
       final int winner = state.winningTeamIndex!;
       final int? margin = winMarginFields(state);
       final bool viewerWon = human.index % 2 == winner;
@@ -165,7 +153,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         _winNav.run(
           gameOver: true,
           stillMounted: () => mounted,
-          capture: _captureBoard,
+          capture: () => captureBoardImage(_boardKey),
           navigate: (Uint8List? shot) {
             Navigator.of(context).pushReplacement<void, void>(
               MaterialPageRoute<void>(

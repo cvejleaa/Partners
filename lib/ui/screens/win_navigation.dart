@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/rendering.dart';
 
 /// Orkestrering af "spillet er slut → vis sejrsskærmen", udskilt fra
 /// spilskærmene så den kan testes uden Firestore og uden at montere spilfladen.
@@ -68,5 +71,22 @@ class WinNavigator {
     } finally {
       _running = false;
     }
+  }
+}
+
+/// Fang et billede af brættet bag [boardKey]. Ét sted for BEGGE spilskærme —
+/// de havde ordret samme rutine hver for sig og kunne drive fra hinanden.
+/// Fejler den (eller findes brættet ikke), returneres null: fejringen vises
+/// uden billede frem for slet ikke.
+Future<Uint8List?> captureBoardImage(GlobalKey boardKey) async {
+  try {
+    final RenderObject? obj = boardKey.currentContext?.findRenderObject();
+    if (obj is! RenderRepaintBoundary) return null;
+    final ui.Image image = await obj.toImage(pixelRatio: 2.0);
+    final ByteData? data =
+        await image.toByteData(format: ui.ImageByteFormat.png);
+    return data?.buffer.asUint8List();
+  } catch (_) {
+    return null;
   }
 }

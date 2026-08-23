@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/ai/ai_player.dart';
@@ -48,17 +46,6 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   /// Nøgle til at fange et billede af brættet ved spil-slut.
   final GlobalKey _boardKey = GlobalKey();
 
-  Future<Uint8List?> _captureBoard() async {
-    try {
-      final obj = _boardKey.currentContext?.findRenderObject();
-      if (obj is! RenderRepaintBoundary) return null;
-      final ui.Image image = await obj.toImage(pixelRatio: 2.0);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      return data?.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
-  }
 
   bool _replayActive = false;
   int _replayTarget = 0; // rå log-længde (til markSeen)
@@ -343,7 +330,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               if (!OnlineService.seatIsAway(uids, presenceMs, seat)) seat,
           };
 
-          if (state.winningTeamIndex != null) {
+          if (state.winningTeamIndex != null && !_winNav.navigated) {
             // Stats genberegnes præcis én gang; navigationen har sin EGEN
             // lås, så et forsøg der ikke nåede igennem kan prøves igen.
             if (!_statsRecomputed) {
@@ -381,7 +368,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               _winNav.run(
                 gameOver: true,
                 stillMounted: () => mounted,
-                capture: _captureBoard,
+                capture: () => captureBoardImage(_boardKey),
                 navigate: (Uint8List? shot) {
                   Navigator.of(context).pushReplacement<void, void>(
                     MaterialPageRoute<void>(
