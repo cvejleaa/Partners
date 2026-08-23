@@ -23,6 +23,7 @@ import '../widgets/card_view.dart';
 import '../widgets/game_play_view.dart';
 import '../widgets/variant_badge.dart';
 import 'online_screens.dart';
+import 'win_navigation.dart';
 import 'win_screen.dart';
 
 /// Online-skærm. Selve UI-laget (tap, valg, split-7, byt, paneler, board)
@@ -67,6 +68,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   int _replayPos = 0;
 
   bool _statsRecomputed = false;
+
+  /// Navigations-låsen til sejrsskærmen — BEVIDST adskilt fra
+  /// [_statsRecomputed]: da de delte flag, spærrede et mislykket
+  /// navigations-forsøg for alle senere forsøg, og spillet skriver aldrig
+  /// mere til doc'et efter 'over'. Se WinNavigator.
+  final WinNavigator _winNav = WinNavigator();
   Timer? _heartbeat;
   String _lastTakeoverSig = '';
   bool _initialReplayChecked = false;
@@ -336,12 +343,16 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               if (!OnlineService.seatIsAway(uids, presenceMs, seat)) seat,
           };
 
-          if (state.winningTeamIndex != null && !_statsRecomputed) {
-            _statsRecomputed = true;
-            final myUid = _svc.uid;
-            if (myUid != null && mySeat >= 0) {
-              // ignore: discarded_futures
-              StatsRepository().recomputeAndSaveOwn(myUid);
+          if (state.winningTeamIndex != null) {
+            // Stats genberegnes præcis én gang; navigationen har sin EGEN
+            // lås, så et forsøg der ikke nåede igennem kan prøves igen.
+            if (!_statsRecomputed) {
+              _statsRecomputed = true;
+              final myUid = _svc.uid;
+              if (myUid != null && mySeat >= 0) {
+                // ignore: discarded_futures
+                StatsRepository().recomputeAndSaveOwn(myUid);
+              }
             }
             final int winner = state.winningTeamIndex!;
             final int? margin = winMarginFields(state);
@@ -362,39 +373,41 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
             // ref) disposes — en senere `ref.read` i revanche-callbacken ville
             // ellers kaste "Cannot use ref after the widget was disposed".
             final OnlineService svc = _svc;
-            // Naviger til WinScreen — fang først et billede af slutstillingen.
-            WidgetsBinding.instance.addPostFrameCallback((_) async {
-              if (!mounted) return;
-              // Vent til brik-animationen (480 ms) er faldet til ro, så billedet
-              // viser slutstillingen — dvs. det vindende holds sidste brik er
-              // nået hjem — og ikke et øjebliksbillede midt i bevægelsen.
-              await Future<void>.delayed(const Duration(milliseconds: 560));
-              if (!mounted) return;
-              final shot = await _captureBoard();
-              if (!mounted) return;
-              Navigator.of(context).pushReplacement<void, void>(
-                MaterialPageRoute<void>(
-                  builder: (_) => WinScreen(
-                    variant: state.variant,
-                    winningTeamIndex: winner,
-                    fromOnline: true,
-                    boardImage: shot,
-                    marginFields: margin,
-                    viewerWon: viewerWon,
-                    winnerNames: winnerNames,
-                    winnerColors: winnerColors,
-                    rematchLabel: 'Revanche',
-                    onRematch: (ctx) async {
-                      final code = await svc.createRematch(oldCode);
-                      if (!ctx.mounted) return;
-                      Navigator.of(ctx).pushReplacement<void, void>(
-                        MaterialPageRoute<void>(
-                          builder: (_) => LobbyScreen(code: code),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+            // Naviger til WinScreen. Brætbilledet er VALGFRIT (WinNavigator
+            // har timeout på det): en baggrundsfane tegner ingen frames, og
+            // fejringen må aldrig koste på et billede der ikke kan tages.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              // ignore: discarded_futures
+              _winNav.run(
+                gameOver: true,
+                stillMounted: () => mounted,
+                capture: _captureBoard,
+                navigate: (Uint8List? shot) {
+                  Navigator.of(context).pushReplacement<void, void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) => WinScreen(
+                        variant: state.variant,
+                        winningTeamIndex: winner,
+                        fromOnline: true,
+                        boardImage: shot,
+                        marginFields: margin,
+                        viewerWon: viewerWon,
+                        winnerNames: winnerNames,
+                        winnerColors: winnerColors,
+                        rematchLabel: 'Revanche',
+                        onRematch: (ctx) async {
+                          final code = await svc.createRematch(oldCode);
+                          if (!ctx.mounted) return;
+                          Navigator.of(ctx).pushReplacement<void, void>(
+                            MaterialPageRoute<void>(
+                              builder: (_) => LobbyScreen(code: code),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
               );
             });
           }

@@ -20,6 +20,7 @@ import '../widgets/card_legend_sheet.dart';
 import '../widgets/game_play_view.dart';
 import '../widgets/variant_badge.dart';
 import 'setup_screen.dart';
+import 'win_navigation.dart';
 import 'win_screen.dart';
 
 /// Single-player skærm: bruger den fælles [GamePlayView] og driver AI-pladser
@@ -37,7 +38,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   bool _showCardCounter = false;
   final Map<int, PlayingCard> _lastPlayedCard = <int, PlayingCard>{};
   final GlobalKey _boardKey = GlobalKey();
-  bool _winNavigated = false;
+  /// Navigations-låsen sættes FØRST når sejrsskærmen faktisk er vist —
+  /// ellers spærrer et forsøg, der ikke nåede igennem (fx et brætbillede der
+  /// aldrig kan tages), for alle senere forsøg. Se WinNavigator.
+  final WinNavigator _winNav = WinNavigator();
 
   Future<Uint8List?> _captureBoard() async {
     try {
@@ -137,9 +141,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final Player human = state.players.firstWhere((Player p) => p.isHuman,
         orElse: () => state.players.first);
     if (state.phase == GamePhase.gameOver &&
-        state.winningTeamIndex != null &&
-        !_winNavigated) {
-      _winNavigated = true;
+        state.winningTeamIndex != null) {
       final int winner = state.winningTeamIndex!;
       final int? margin = winMarginFields(state);
       final bool viewerWon = human.index % 2 == winner;
@@ -156,35 +158,37 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       // `ref.read` i revanche-callbacken ville ellers kaste "Cannot use ref
       // after the widget was disposed".
       final gameNotifier = ref.read(gameProvider.notifier);
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        // Vent til brik-animationen (480 ms) er faldet til ro, så billedet viser
-        // slutstillingen — det vindende holds sidste brik er nået hjem — og ikke
-        // et øjebliksbillede midt i bevægelsen.
-        await Future<void>.delayed(const Duration(milliseconds: 560));
-        if (!mounted) return;
-        final shot = await _captureBoard();
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement<void, void>(
-          MaterialPageRoute<void>(
-            builder: (_) => WinScreen(
-              winningTeamIndex: winner,
-              variant: state.variant,
-              boardImage: shot,
-              marginFields: margin,
-              viewerWon: viewerWon,
-              winnerNames: winnerNames,
-              winnerColors: winnerColors,
-              rematchLabel: 'Spil igen',
-              onRematch: (ctx) async {
-                gameNotifier.reset();
-                Navigator.of(ctx).pushReplacement<void, void>(
-                  MaterialPageRoute<void>(
-                      builder: (_) => const SetupScreen()),
-                );
-              },
-            ),
-          ),
+      // Brætbilledet er valgfrit (WinNavigator har timeout): fejringen må
+      // aldrig udeblive, fordi et billede ikke kunne tages.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // ignore: discarded_futures
+        _winNav.run(
+          gameOver: true,
+          stillMounted: () => mounted,
+          capture: _captureBoard,
+          navigate: (Uint8List? shot) {
+            Navigator.of(context).pushReplacement<void, void>(
+              MaterialPageRoute<void>(
+                builder: (_) => WinScreen(
+                  winningTeamIndex: winner,
+                  variant: state.variant,
+                  boardImage: shot,
+                  marginFields: margin,
+                  viewerWon: viewerWon,
+                  winnerNames: winnerNames,
+                  winnerColors: winnerColors,
+                  rematchLabel: 'Spil igen',
+                  onRematch: (ctx) async {
+                    gameNotifier.reset();
+                    Navigator.of(ctx).pushReplacement<void, void>(
+                      MaterialPageRoute<void>(
+                          builder: (_) => const SetupScreen()),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
         );
       });
     }
