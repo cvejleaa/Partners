@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/rendering.dart'; // RenderRepaintBoundary
+import 'package:flutter/widgets.dart'; // GlobalKey
 
 /// Orkestrering af "spillet er slut → vis sejrsskærmen", udskilt fra
 /// spilskærmene så den kan testes uden Firestore og uden at montere spilfladen.
