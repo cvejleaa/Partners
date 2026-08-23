@@ -175,22 +175,25 @@ class StatsRepository {
     final games = await _ownFinishedGames(uid);
     final combined = computePartitionedStats(games);
     final UserStats? own = combined.total[uid];
-    if (own != null) {
-      await _db
-          .collection('userStats')
-          .doc(uid)
-          .set(docJsonFor(own, combined.byVariant, slim: false));
-    }
     // Online-kun cache til ranglisten. Hvis brugeren ingen online-spil har,
     // skrives 0-stats (med rigtigt navn), så evt. gamle online-tal ryddes og
     // brugeren ikke fejlagtigt bliver hængende på ranglisten.
     final online = computePartitionedStats(_onlineOnly(games));
     final UserStats onlineOwn = online.total[uid] ??
         UserStats(uid: uid, displayName: own?.displayName ?? 'Spiller');
-    await _db
-        .collection('userStatsOnline')
-        .doc(uid)
-        .set(docJsonFor(onlineOwn, online.byVariant, slim: true));
+    // ÉN batch for BEGGE dokumenter (QC-fund): det er userStats-skrivningen
+    // der rydder `staleSince`-markøren. Blev de skrevet hver for sig og det
+    // andet kald fejlede (netværksdrop på mobil), ville markøren være væk,
+    // mens den OFFENTLIGE rangliste stod tilbage med forældede tal — og
+    // intet ville nogensinde prøve igen. Atomisk: enten begge eller ingen.
+    final batch = _db.batch();
+    if (own != null) {
+      batch.set(_db.collection('userStats').doc(uid),
+          docJsonFor(own, combined.byVariant, slim: false));
+    }
+    batch.set(_db.collection('userStatsOnline').doc(uid),
+        docJsonFor(onlineOwn, online.byVariant, slim: true));
+    await batch.commit();
   }
 
   /// Selvhelbredelse ved app-start: ét dokument-læs, og kun en genberegning

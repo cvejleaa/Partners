@@ -167,7 +167,7 @@ exports.onGameOver = onDocumentUpdated(
     database: "partners",
     region: "europe-west1",
     memory: "256MiB",
-    timeoutSeconds: 60,
+    timeoutSeconds: 30,
     maxInstances: 10,
   },
   async (event) => {
