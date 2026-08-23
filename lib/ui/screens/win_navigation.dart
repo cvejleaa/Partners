@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
 
 /// Orkestrering af "spillet er slut → vis sejrsskærmen", udskilt fra
 /// spilskærmene så den kan testes uden Firestore og uden at montere spilfladen.
