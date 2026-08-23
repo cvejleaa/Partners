@@ -540,6 +540,13 @@ class _PartnersAppState extends ConsumerState<PartnersApp>
     // og helbred egen statistik hvis serveren har markeret den forældet.
     ref.listen<AsyncValue<User?>>(authStateProvider, (prev, next) {
       final User? user = next.valueOrNull;
+      if (user == null) {
+        // Logget ud: nulstil vagten, så et gen-login (også med SAMME uid i
+        // samme session) helbreder statistikken igen — ellers ville en
+        // markering, der kom mens man var logget ud, først blive opdaget ved
+        // næste rigtige app-start (TM-fund).
+        _statsHealedForUid = null;
+      }
       if (user != null) {
         WidgetsBinding.instance
             .addPostFrameCallback((_) => _maybeHandleDeepLink());
