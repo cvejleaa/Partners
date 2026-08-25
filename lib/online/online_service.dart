@@ -316,16 +316,26 @@ class OnlineService {
     0xFFFDD835,
   ];
 
-  /// Fire FORSKELLIGE farver hvor plads 0 er [first]. De øvrige pladser fyldes
-  /// fra paletten uden at genbruge en farve. (Paletten har 4 forskellige, så
-  /// resultatet er altid 4 unikke.)
-  static List<int> _distinctColors(int first) {
-    final List<int> out = <int>[first];
-    for (final int c in kPalette) {
-      if (out.length >= 4) break;
-      if (!out.contains(c)) out.add(c);
+  /// Farverne på de fire pladser, med værtens [hostColor] på plads 0.
+  ///
+  /// Rækkefølgen er en ROTATION af paletten — aldrig en indsættelse. Makkerne
+  /// sidder diagonalt (plads 0+2 og 1+3), og kun en rotation bevarer de par,
+  /// spillerne kender fra bordet: rød+grøn og blå+gul. Skubbede man i stedet
+  /// værtens farve forrest og fyldte resten på i palet-rækkefølge (som før),
+  /// fik en vært med blå pladserne [blå, rød, grøn, gul] → makkerne blev
+  /// blå+grøn og rød+gul. Det sker i praksis ved REVANCHE, hvor værten
+  /// beholder sin farve fra forrige parti.
+  ///
+  /// Er [hostColor] ikke en af paletten (fx en fremtidig fri farvevælger),
+  /// overtager den plads 0's rolle, og de tre øvrige følger paletten — så det
+  /// andet par (blå+gul) stadig holder sammen. Resultatet er altid fire
+  /// FORSKELLIGE farver (en vært med blå gav før to blå ved revanche).
+  static List<int> seatColors(int hostColor) {
+    final int i = kPalette.indexOf(hostColor);
+    if (i < 0) {
+      return <int>[hostColor, kPalette[1], kPalette[2], kPalette[3]];
     }
-    return out;
+    return <int>[for (int k = 0; k < 4; k++) kPalette[(i + k) % 4]];
   }
 
   Future<String> createGame({
@@ -373,7 +383,7 @@ class OnlineService {
       // Værten får sin valgte farve på plads 0; de øvrige pladser fyldes med
       // paletten MINUS værtens farve, så alle fire farver er forskellige (fx en
       // vært med blå gav før to blå ved revanche).
-      'colors': _distinctColors(colorValue),
+      'colors': seatColors(colorValue),
       'uids': <String?>[uid, null, null, null],
       // Pladser markeret som AI fra lobbyen (true = computer-spiller).
       'aiSeats': <bool>[false, false, false, false],
