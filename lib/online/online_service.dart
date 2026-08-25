@@ -380,9 +380,9 @@ class OnlineService {
       'hostUid': uid,
       'hostName': name,
       'names': <String>[name, 'Åben', 'Åben', 'Åben'],
-      // Værten får sin valgte farve på plads 0; de øvrige pladser fyldes med
-      // paletten MINUS værtens farve, så alle fire farver er forskellige (fx en
-      // vært med blå gav før to blå ved revanche).
+      // Pladsernes farver: en ROTATION af paletten med værtens farve på
+      // plads 0 — se seatColors (den bevarer makkerparrene rød+grøn og
+      // blå+gul, som en indsættelse brød ved revanche).
       'colors': seatColors(colorValue),
       'uids': <String?>[uid, null, null, null],
       // Pladser markeret som AI fra lobbyen (true = computer-spiller).
