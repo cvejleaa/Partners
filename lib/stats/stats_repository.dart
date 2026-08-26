@@ -124,7 +124,8 @@ class StatsRepository {
   /// ONLINE-parti hvor en AI dækkede en fraværende plads har ingen `mode` og
   /// tæller stadig med — det er et rigtigt parti aftalt mellem mennesker, og
   /// de øvrige tre spilleres tal ville ellers forsvinde med det.
-  static bool countsInStats(Map<String, dynamic> game) => game['mode'] != 'ai';
+  static bool countsInStats(Map<String, dynamic> game) =>
+      game['mode'] != 'AI';
 
   /// Hent KUN de afsluttede spil hvor [uid] selv var med.
   ///
