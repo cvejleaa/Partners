@@ -360,28 +360,39 @@ class _WinScreenState extends ConsumerState<WinScreen>
   /// telefon.
   Widget _cardMixSection(UserStats mix) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 320),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white10,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      constraints: const BoxConstraints(maxWidth: 340),
+      // Material, IKKE en farvet Container: ExpansionTile indeholder en
+      // ListTile, og en ListTile inde i en DecoratedBox med baggrundsfarve
+      // gør Flutter indsigelse imod (dens blæk-effekter males på nærmeste
+      // Material og ville blive skjult). Den indsigelse er en assertion —
+      // usynlig i release, men den vælter enhver widget-test af skærmen.
+      child: Material(
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(12),
         child: Theme(
           // ExpansionTile tegner sine egne skillelinjer oven i kortet.
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             initiallyExpanded: _cardMixOpen,
             onExpansionChanged: (bool open) => _cardMixOpen = open,
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: const EdgeInsets.only(bottom: 12),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            // Rapporten tegner på variantens bordfarve — altid mørk, uanset
+            // om appen kører lyst eller mørkt tema. Farverne sættes derfor
+            // eksplicit; temaets tekstfarver ville være næsten sorte her.
+            iconColor: Colors.white70,
+            collapsedIconColor: Colors.white70,
             title: const Text('Sådan faldt kortene',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white)),
             children: <Widget>[
               CardMixBlock(
                 stats: mix,
                 rules: widget.cardMixRules,
                 anchor: _cardMixAnchor,
+                color: Colors.white,
               ),
             ],
           ),
