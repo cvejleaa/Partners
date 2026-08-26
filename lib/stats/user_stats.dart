@@ -149,7 +149,7 @@ class UserStats {
   /// Snittet pr. spil — ankeret et enkelt partis tal måles MOD. Uden det
   /// ligner en helt normal kortfordeling et overgreb.
   double? get avgMyExitCards =>
-      cardMixGames == 0 ? null : myExitCards / cardMixGames;
+      gamesPlayed == 0 ? null : myExitCards / gamesPlayed;
   double? get avgMySpecialCards =>
       cardMixGames == 0 ? null : mySpecialCards / cardMixGames;
 
