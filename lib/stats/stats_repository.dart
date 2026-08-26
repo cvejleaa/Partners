@@ -59,7 +59,7 @@ List<Map<String, dynamic>> gamesUpTo(
   if (game == null) return const <Map<String, dynamic>>[];
   final int cutoff = gameTimeMs(game);
   return games
-      .where((g) => gameTimeMs(g) < cutoff || g['code'] == code)
+      .where((g) => gameTimeMs(g) <= cutoff)
       .toList();
 }
 
