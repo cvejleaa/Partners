@@ -19,10 +19,14 @@ UserStats _stats({int games = 4}) => UserStats(
       uid: 'u0',
       displayName: 'Mig',
       cardMixGames: games,
+      // ALLE fire tal er forskellige, og de to rækker peger hver sin vej
+      // (vi fik flest ud-af-start, de fik flest specialkort). Med ens tal —
+      // som denne fixture havde først — kunne mine/deres byttes om på
+      // ud-af-start-rækken uden at nogen test blev rød (TM-fund).
       myExitCards: 17,
       mySpecialCards: 14,
       myUnseenCards: 8,
-      oppExitCards: 17,
+      oppExitCards: 12,
       oppSpecialCards: 21,
       oppUnseenCards: 5,
     );
@@ -54,15 +58,33 @@ void main() {
     await _pump(tester);
     expect(find.text('Jer'), findsOneWidget);
     expect(find.text('Dem'), findsOneWidget);
-    // Og tallene står hver for sig, ikke som "17 mod 17" i én klump.
-    expect(find.text('17 mod 17'), findsNothing);
+    // Og tallene står hver for sig, ikke som "17 mod 12" i én klump.
+    expect(find.text('17 mod 12'), findsNothing);
+    expect(find.text('17'), findsOneWidget);
+    expect(find.text('12'), findsOneWidget);
     expect(find.text('14'), findsOneWidget);
     expect(find.text('21'), findsOneWidget);
+    // Rækkerne har navne — ellers ved man ikke hvad der tælles.
+    expect(find.text('Ud af start'), findsOneWidget);
+    expect(find.text('Specialkort'), findsOneWidget);
+  });
+
+  testWidgets('overskrifterne står OVER de rigtige kolonner',
+      (WidgetTester tester) async {
+    // At 'Jer' og 'Dem' findes beviser ikke at de står over hver sit tal.
+    // Byttes de to overskrifter om, peger tabellen forkert — og uden denne
+    // test ville ingen opdage det (TM-fund).
+    await _pump(tester);
+    expect(tester.getCenter(find.text('Jer')).dx,
+        closeTo(tester.getCenter(find.text('17')).dx, 1.0));
+    expect(tester.getCenter(find.text('Dem')).dx,
+        closeTo(tester.getCenter(find.text('12')).dx, 1.0));
   });
 
   testWidgets('forskellen siges med ord', (WidgetTester tester) async {
     await _pump(tester);
-    expect(find.text('Lige mange'), findsOneWidget); // 17 mod 17
+    // De to rækker peger hver sin vej, så en fortegnsfejl fanges begge veje.
+    expect(find.text('5 flere til jer'), findsOneWidget); // 17 mod 12
     expect(find.text('7 flere til dem'), findsOneWidget); // 14 mod 21
   });
 
@@ -78,6 +100,10 @@ void main() {
 
     // Den sekundære tekst er dæmpet, men må ikke være VÆK: samme grundfarve,
     // ikke temaets.
+    // Rækkens titel skal også følge kalderens farve — den er lige så
+    // ulæselig som tallet, hvis den bliver temaets mørke.
+    expect(tester.widget<Text>(find.text('Ud af start')).style?.color,
+        Colors.white);
     final Text verdict = tester.widget<Text>(find.text('7 flere til dem'));
     final Color? c = verdict.style?.color;
     expect(c, isNotNull);
@@ -118,6 +144,43 @@ void main() {
     await _pump(tester, rules: CardRules.defaults());
     expect(find.text('UD · A · K'), findsOneWidget);
     expect(find.text('4 · 7'), findsOneWidget);
+  });
+
+  testWidgets('trecifrede tal klippes ikke væk', (WidgetTester tester) async {
+    // "I alt"-fanen viser livstids-tal, som let bliver trecifrede. En fast
+    // kolonnebredde uden nedskalering ville klippe dem TAVST (QC-fund).
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: CardMixBlock(
+          stats: UserStats(
+            uid: 'u0',
+            displayName: 'Mig',
+            cardMixGames: 40,
+            myExitCards: 412,
+            mySpecialCards: 318,
+            oppExitCards: 399,
+            oppSpecialCards: 301,
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('412'), findsOneWidget);
+    // Tallet skal ligge INDE i sin kolonne, ikke flyde ud over den.
+    // getRect (ikke getSize) tager FittedBox'ens nedskalering med.
+    expect(tester.getRect(find.text('412')).width, lessThanOrEqualTo(60.5));
+  });
+
+  testWidgets('stor systemskrift flyder ikke ud', (WidgetTester tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+        child: Scaffold(body: CardMixBlock(stats: _stats())),
+      ),
+    ));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('de usete kort nævnes med antal', (WidgetTester tester) async {

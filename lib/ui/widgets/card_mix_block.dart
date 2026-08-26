@@ -71,7 +71,10 @@ class CardMixBlock extends StatelessWidget {
   /// Dansk decimaltegn. "17.8" er engelsk og læses forkert her.
   static String _num1(double v) => v.toStringAsFixed(1).replaceAll('.', ',');
 
-  static const double _colWidth = 54;
+  /// Talkolonnens bredde. Tallene kan blive trecifrede i "I alt"-fanen, og
+  /// systemskriften kan være skruet op — derfor skaleres tallet NED inde i
+  /// kolonnen ([FittedBox]) i stedet for at blive klippet tavst væk.
+  static const double _colWidth = 60;
 
   /// Sekundær tekst — dæmpet, men stadig læsbar. 0,78 er valgt så
   /// underteksten kan skelnes fra tallet uden at forsvinde.
@@ -119,11 +122,11 @@ class CardMixBlock extends StatelessWidget {
         ),
         // Ankeret ÉN gang nederst frem for i hver række: to gange "jeres snit
         // er …" midt i tallene gjorde rækkerne til en støjvæg.
-        if (avgExit != null && avgSpecial != null) ...<Widget>[
+        if (avgExit != null) ...<Widget>[
           const SizedBox(height: 12),
           Text(
             'Jeres snit pr. spil: ${_num1(avgExit)} ud af start · '
-            '${_num1(avgSpecial)} specialkort',
+            '${_num1(avgSpecial!)} specialkort',
             style: t.bodySmall?.copyWith(color: dim),
           ),
         ],
@@ -174,14 +177,8 @@ class CardMixBlock extends StatelessWidget {
                   style: t.bodyMedium
                       ?.copyWith(fontWeight: FontWeight.w600, color: base)),
             ),
-            SizedBox(
-                width: _colWidth,
-                child: Text('$mine',
-                    textAlign: TextAlign.right, style: number)),
-            SizedBox(
-                width: _colWidth,
-                child: Text('$theirs',
-                    textAlign: TextAlign.right, style: number)),
+            _number(mine, number),
+            _number(theirs, number),
           ],
         ),
         if (subtitle.isNotEmpty)
@@ -193,6 +190,16 @@ class CardMixBlock extends StatelessWidget {
       ],
     );
   }
+
+  /// Ét tal i sin kolonne. Skaleres ned frem for at blive klippet.
+  static Widget _number(int value, TextStyle? style) => SizedBox(
+        width: _colWidth,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text('$value', style: style),
+        ),
+      );
 
   /// Sætningen under tallene — forskellen sagt med ord.
   static String _verdict(int mine, int theirs) {

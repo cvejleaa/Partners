@@ -75,15 +75,39 @@ void main() {
     expect(scrollable.position.maxScrollExtent, greaterThan(0));
   });
 
-  testWidgets('B: bunden kan nås — knappen kan rulles frem',
-      (WidgetTester tester) async {
+  testWidgets('B: en FINGER kan rulle siden', (WidgetTester tester) async {
+    // TM-fund: den første udgave af denne test brugte dragUntilVisible. Det
+    // beviste ingenting. SingleChildScrollView bygger hele sit barn uanset
+    // rulle-position, så knappen findes i træet FØR nogen trækker — løkken
+    // kørte nul gange og landede på Scrollable.ensureVisible, som ruller
+    // PROGRAMMATISK uden om ScrollPhysics. Med
+    // `physics: NeverScrollableScrollPhysics()` — altså en side en bruger
+    // umuligt kan rulle — forblev alle fire tests grønne.
+    //
+    // Her trækkes der rigtigt, og positionen måles før og efter.
     await pumpReport(tester);
-    await tester.dragUntilVisible(
-      find.text('Tilbage til listen'),
-      find.byType(SingleChildScrollView),
-      const Offset(0, -120),
-    );
-    expect(find.text('Tilbage til listen'), findsOneWidget);
+    final ScrollableState scrollable = tester.state(find.byType(Scrollable));
+    final double before = scrollable.position.pixels;
+    await tester.drag(
+        find.byType(SingleChildScrollView), const Offset(0, -300));
+    await tester.pump();
+    expect(scrollable.position.pixels, greaterThan(before),
+        reason: 'et træk skal flytte siden — ikke kun et programmatisk '
+            'ensureVisible');
+  });
+
+  testWidgets('B2: og bunden kan nås', (WidgetTester tester) async {
+    await pumpReport(tester);
+    final ScrollableState scrollable = tester.state(find.byType(Scrollable));
+    await tester.drag(find.byType(SingleChildScrollView),
+        Offset(0, -scrollable.position.maxScrollExtent - 50));
+    await tester.pump();
+    expect(scrollable.position.pixels,
+        closeTo(scrollable.position.maxScrollExtent, 0.5));
+    // Knappen står nu inde i skærmen, ikke bare i widget-træet.
+    final Rect button = tester.getRect(find.text('Tilbage til listen'));
+    expect(button.bottom, lessThanOrEqualTo(tester.view.physicalSize.height));
+    expect(button.top, greaterThanOrEqualTo(0));
   });
 
   testWidgets('C: intet flyder ud over kanten', (WidgetTester tester) async {
