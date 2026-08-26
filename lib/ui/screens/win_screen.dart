@@ -376,15 +376,23 @@ class _WinScreenState extends ConsumerState<WinScreen>
             initiallyExpanded: _cardMixOpen,
             onExpansionChanged: (bool open) => _cardMixOpen = open,
             tilePadding: const EdgeInsets.symmetric(horizontal: 14),
-            childrenPadding:
-                const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            // Rapporten tegner på variantens bordfarve — altid mørk, uanset
+            // om appen kører lyst eller mørkt tema. Farverne sættes derfor
+            // eksplicit; temaets tekstfarver ville være næsten sorte her.
+            iconColor: Colors.white70,
+            collapsedIconColor: Colors.white70,
             title: const Text('Sådan faldt kortene',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white)),
             children: <Widget>[
               CardMixBlock(
                 stats: mix,
                 rules: widget.cardMixRules,
                 anchor: _cardMixAnchor,
+                color: Colors.white,
               ),
             ],
           ),

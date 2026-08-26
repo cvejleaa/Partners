@@ -27,6 +27,7 @@ class CardMixBlock extends StatelessWidget {
     required this.stats,
     this.rules,
     this.anchor,
+    this.color,
   });
 
   /// Tallene. Ét spil (fra `computeAllStats([game])`) eller en livstid — det
@@ -46,6 +47,15 @@ class CardMixBlock extends StatelessWidget {
   /// alt hvad man har spillet, ikke af hvad man havde spillet dengang.
   final UserStats? anchor;
 
+  /// Grundfarven for al tekst i blokken.
+  ///
+  /// SKAL sættes af kaldere der tegner på deres EGEN baggrund. Slutrapporten
+  /// har mørkegrøn bordfarve uanset appens tema, så temaets tekstfarver kan
+  /// ikke bruges dér: i lyst tema er de næsten sorte, og hele blokken bliver
+  /// ulæselig (brugerfund: "statistikken er dimmet"). Udeladt = appens
+  /// normale tekstfarve, hvilket er det rigtige på profilskærmen.
+  final Color? color;
+
   /// Har spillet/spillene overhovedet et kortregnskab? Kun spil hvor alle fire
   /// pladser er mennesker tælles med, så et solospil mod computeren har ingen
   /// (og et heldregnskab mod en maskine siger heller ikke noget).
@@ -63,9 +73,18 @@ class CardMixBlock extends StatelessWidget {
 
   static const double _colWidth = 54;
 
+  /// Sekundær tekst — dæmpet, men stadig læsbar. 0,78 er valgt så
+  /// underteksten kan skelnes fra tallet uden at forsvinde.
+  static Color _dim(Color base) => base.withValues(alpha: 0.78);
+
+  Color _base(BuildContext context) =>
+      color ?? Theme.of(context).colorScheme.onSurface;
+
   @override
   Widget build(BuildContext context) {
     final TextTheme t = Theme.of(context).textTheme;
+    final Color base = _base(context);
+    final Color dim = _dim(base);
     final int unseen = stats.myUnseenCards + stats.oppUnseenCards;
     final double? avgExit = anchor?.avgMyExitCards;
     final double? avgSpecial = anchor?.avgMySpecialCards;
@@ -82,7 +101,7 @@ class CardMixBlock extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 2),
-        const Divider(height: 9),
+        Divider(height: 9, color: base.withValues(alpha: 0.25)),
         _row(
           context,
           title: 'Ud af start',
@@ -105,7 +124,7 @@ class CardMixBlock extends StatelessWidget {
           Text(
             'Jeres snit pr. spil: ${_num1(avgExit)} ud af start · '
             '${_num1(avgSpecial)} specialkort',
-            style: t.bodySmall,
+            style: t.bodySmall?.copyWith(color: dim),
           ),
         ],
         if (unseen > 0) ...<Widget>[
@@ -113,7 +132,8 @@ class CardMixBlock extends StatelessWidget {
           Text(
             '$unseen kort nåede aldrig at blive spillet — de blev smidt, da '
             'nogen måtte sidde over, så ingen så hvad de var.',
-            style: t.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+            style:
+                t.bodySmall?.copyWith(fontStyle: FontStyle.italic, color: dim),
           ),
         ],
       ],
@@ -125,10 +145,8 @@ class CardMixBlock extends StatelessWidget {
         child: Text(
           label,
           textAlign: TextAlign.right,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w700, color: _dim(_base(context))),
         ),
       );
 
@@ -140,8 +158,10 @@ class CardMixBlock extends StatelessWidget {
     required int theirs,
   }) {
     final TextTheme t = Theme.of(context).textTheme;
+    final Color base = _base(context);
+    final Color dim = _dim(base);
     final TextStyle? number =
-        t.titleMedium?.copyWith(fontWeight: FontWeight.w700);
+        t.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: base);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -151,8 +171,8 @@ class CardMixBlock extends StatelessWidget {
           children: <Widget>[
             Expanded(
               child: Text(title,
-                  style:
-                      t.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  style: t.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600, color: base)),
             ),
             SizedBox(
                 width: _colWidth,
@@ -164,10 +184,12 @@ class CardMixBlock extends StatelessWidget {
                     textAlign: TextAlign.right, style: number)),
           ],
         ),
-        if (subtitle.isNotEmpty) Text(subtitle, style: t.bodySmall),
+        if (subtitle.isNotEmpty)
+          Text(subtitle, style: t.bodySmall?.copyWith(color: dim)),
         // Konklusionen skrives ud. En tabel med fire tal beder læseren regne
         // selv — og en læser der regner selv, regner i sin egen favør.
-        Text(_verdict(mine, theirs), style: t.bodySmall),
+        Text(_verdict(mine, theirs),
+            style: t.bodySmall?.copyWith(color: dim)),
       ],
     );
   }
