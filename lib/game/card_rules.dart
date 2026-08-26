@@ -1,5 +1,11 @@
 import '../models/playing_card.dart';
 
+/// Kort-slags, som spillerne taler om dem: kort der kan sætte en brik UD af
+/// start, kort der kan noget særligt, og resten. Kategorierne er DISJUNKTE —
+/// se [CardRules.categoryOf] — så tallene kan lægges sammen og kontrolleres
+/// mod antallet af kort.
+enum CardCategory { exit, special, plain }
+
 /// Konfigurerbare funktioner for ét kort (én rang).
 ///
 /// Bruges af [Rules] i stedet for hardkodede rang-regler, så funktionerne kan
@@ -179,6 +185,48 @@ class CardRules {
         for (final entry in byRank.entries)
           entry.key.name: entry.value.toJson(),
       };
+
+  /// Hvilken slags kort er [card] under DISSE regler?
+  ///
+  /// Afgøres på kortets FORM (hvad reglen kan), aldrig på rangen. Huset er
+  /// brændt to gange på rang-tjek: delekort-procenten gav falsk "0 % split" i
+  /// 25 år, og byttekortet blev talt forkert i begge retninger. Et rang-tjek
+  /// ville desuden lyve i enhver variant hvor admin har flyttet en evne.
+  ///
+  /// RÆKKEFØLGEN ER EN DEL AF KONTRAKTEN: ud-af-start slår special. Es og
+  /// Konge kan begge dele, og uden en fast prioritet ville de tælle to gange —
+  /// så ville rækken ikke summe til antallet af kort. Byttes rækkefølgen om,
+  /// bliver [categoryOf] rød i card_category_test.
+  CardCategory categoryOf(PlayingCard card) {
+    if (card.isExit) return CardCategory.exit;
+    final CardRuleConfig c = forRank(card.rank!);
+    if (c.exitStart) return CardCategory.exit;
+    if (c.backwardSteps != null ||
+        c.splitTotal != null ||
+        c.swap ||
+        c.jumpsBlockade ||
+        c.hasFwdThenBack ||
+        c.hasMultiForward) {
+      return CardCategory.special;
+    }
+    return CardCategory.plain;
+  }
+
+  /// Etiketterne på de kort der havner i [cat] under DISSE regler — fx
+  /// `['UD', 'A', 'K']`. Bruges som undertekst, så et tal på skærmen altid
+  /// siger HVAD det dækker for netop den variant man spillede.
+  ///
+  /// Udledt af [categoryOf] selv, så teksten aldrig kan komme til at love
+  /// noget andet end det, der faktisk blev talt.
+  List<String> labelsFor(CardCategory cat) {
+    final List<String> out = <String>[];
+    if (cat == CardCategory.exit) out.add(PlayingCard.exit(0).rankLabel);
+    for (final Rank r in Rank.values) {
+      final PlayingCard card = PlayingCard(r, Suit.hearts);
+      if (categoryOf(card) == cat) out.add(card.rankLabel);
+    }
+    return out;
+  }
 
   /// True hvis de to regelsæt giver samme config for [rank] (bruges af admin-
   /// UI'et til at vise om en variant-rang afviger fra klassisk).

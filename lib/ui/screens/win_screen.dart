@@ -5,12 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
+import '../../game/card_rules.dart';
 import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../services/feedback_service.dart';
 import '../../stats/records.dart';
 import '../../stats/stats_repository.dart';
+import '../../stats/user_stats.dart';
 import '../../state/variant_card_rules_controller.dart';
+import '../widgets/card_mix_block.dart';
 import '../widgets/variant_badge.dart';
 
 class WinScreen extends ConsumerStatefulWidget {
@@ -29,6 +32,8 @@ class WinScreen extends ConsumerStatefulWidget {
     this.gameCode,
     this.archived = false,
     this.playedAt,
+    this.cardMix,
+    this.cardMixRules,
   });
 
   final int winningTeamIndex;
@@ -61,6 +66,14 @@ class WinScreen extends ConsumerStatefulWidget {
   /// ellers ikke kan kende partierne fra hinanden.
   final DateTime? playedAt;
 
+  /// Kortregnskabet for PRÆCIS dette parti (mit par mod modstanderparret),
+  /// beregnet af kalderen, som allerede har spil-doc'et. null = ingen blok —
+  /// fx et solospil mod computeren, hvor et heldregnskab intet siger.
+  final UserStats? cardMix;
+
+  /// Spillets opløste regler — kun til underteksten under tallene.
+  final CardRules? cardMixRules;
+
   /// Kald for at starte en revanche (online) / nyt spil (AI). Vises som knap
   /// hvis sat.
   final Future<void> Function(BuildContext context)? onRematch;
@@ -80,6 +93,16 @@ class _WinScreenState extends ConsumerState<WinScreen>
   List<GameRecord> _records = const <GameRecord>[];
   late final AnimationController _confetti;
   bool _rematchBusy = false;
+
+  /// Langtidssnittet kortregnskabet måles mod. null indtil det er hentet —
+  /// tallene vises uden anker så længe.
+  UserStats? _cardMixAnchor;
+
+  /// Er kortblokken foldet ud? I den friske rapport starter den LUKKET: et
+  /// heldregnskab serveret i samme sekund som nederlaget er en
+  /// undskyldnings-maskine, og man skal selv bede om det. I arkivet, hvor man
+  /// kigger tilbage i ro, står den åben.
+  late bool _cardMixOpen = widget.archived;
 
   @override
   void initState() {
@@ -121,6 +144,15 @@ class _WinScreenState extends ConsumerState<WinScreen>
           : await _repo.lastGameRecordsFor(uid, labelFor: label);
       if (!mounted) return;
       if (records.isNotEmpty) setState(() => _records = records);
+    } catch (_) {}
+    // Ankeret hentes separat: fejler det, skal rekorderne stadig vises.
+    final UserStats? mix = widget.cardMix;
+    if (mix == null || !CardMixBlock.hasData(mix)) return;
+    try {
+      final UserStats? anchor = await _repo.cardMixAnchorFor(
+          uid, widget.variant?.id ?? classicVariant.id);
+      if (!mounted || anchor == null) return;
+      setState(() => _cardMixAnchor = anchor);
     } catch (_) {}
   }
 
@@ -245,6 +277,11 @@ class _WinScreenState extends ConsumerState<WinScreen>
                       const SizedBox(height: 16),
                       for (final r in _records) _RecordBanner(record: r),
                     ],
+                    if (widget.cardMix != null &&
+                        CardMixBlock.hasData(widget.cardMix!)) ...<Widget>[
+                      const SizedBox(height: 16),
+                      _cardMixSection(widget.cardMix!),
+                    ],
                     const SizedBox(height: 26),
                     if (widget.onRematch != null)
                       SizedBox(
@@ -317,6 +354,43 @@ class _WinScreenState extends ConsumerState<WinScreen>
             SnackBar(content: Text('Kunne ikke starte revanche: $e')));
       }
     }
+  }
+
+  /// "Sådan faldt kortene" — kortregnskabet, foldet sammen i den friske
+  /// rapport og åbent i arkivet (se [_cardMixOpen]).
+  ///
+  /// Bredden bindes som brætbilledets, så de fire tal ikke wrapper på en
+  /// telefon.
+  Widget _cardMixSection(UserStats mix) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white10,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        child: Theme(
+          // ExpansionTile tegner sine egne skillelinjer oven i kortet.
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: _cardMixOpen,
+            onExpansionChanged: (bool open) => _cardMixOpen = open,
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: 12),
+            title: const Text('Sådan faldt kortene',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            children: <Widget>[
+              CardMixBlock(
+                stats: mix,
+                rules: widget.cardMixRules,
+                anchor: _cardMixAnchor,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _winnerChip(String name, Color color) {

@@ -12,6 +12,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../game/card_rules.dart';
 import '../models/variant_config.dart';
 import '../online/online_service.dart';
 import 'records.dart';
@@ -76,9 +77,14 @@ Map<String, dynamic>? gameWithCode(
 /// Sidste spils stats + hvilken variant det blev spillet i. Varianten følger
 /// med fra samme spil-doc, så UI/rekord-logikken ikke skal gætte den igen.
 class LastGameStats {
-  LastGameStats(this.stats, this.variantId);
+  LastGameStats(this.stats, this.variantId, this.cardRules);
   final UserStats stats;
   final String variantId;
+
+  /// De regler spillet FAKTISK blev spillet med. Følger med herfra, så
+  /// kortregnskabets undertekst navngiver præcis de kort der blev talt — ikke
+  /// dem en anden opløsning ville have givet.
+  final CardRules cardRules;
 }
 
 class StatsRepository {
@@ -298,7 +304,22 @@ class StatsRepository {
     final latest = docs.first;
     final stats = computeAllStats(<Map<String, dynamic>>[latest])[uid];
     if (stats == null) return null;
-    return LastGameStats(stats, variantIdOfGameDoc(latest));
+    final String vid = variantIdOfGameDoc(latest);
+    return LastGameStats(
+        stats, vid, cardRulesOfGameDoc(latest, variantForState(vid)));
+  }
+
+  /// Langtids-kortregnskabet for [uid] i [variantId] — ankeret et enkelt
+  /// partis tal måles MOD. Uden det ligner en helt normal kortfordeling et
+  /// overgreb: to rå tal har ingen målestok.
+  ///
+  /// VARIANT-SCOPET med vilje. Kortmixet er vidt forskelligt fra variant til
+  /// variant (25 år har langt flere specialkort end klassisk), så et snit på
+  /// tværs ville sammenligne et parti med noget det ikke er.
+  Future<UserStats?> cardMixAnchorFor(String uid, String variantId) async {
+    final UserStatsDoc? doc = await getDoc(uid);
+    if (doc == null) return null;
+    return recordAggregateFor(doc, variantId);
   }
 
   /// Find personlige rekorder som [uid] satte i sit seneste afsluttede spil.

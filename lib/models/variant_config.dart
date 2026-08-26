@@ -540,6 +540,31 @@ CardRules effectiveCardRules(
   return overrides == null ? base : base.withOverrides(overrides);
 }
 
+/// De regler et SPIL-DOC faktisk blev spillet med.
+///
+/// Rækkefølgen er ikke til forhandling: `state.cr` er de OPLØSTE regler, der
+/// blev skrevet da spillet startede, og de vinder altid. Doc'ets rå
+/// `cardRules` er et snapshot af KLASSISK — bruges den alene, replayes et
+/// 25 år-spil med klassiske kort.
+///
+/// [variant] gives af kalderen frem for at blive udledt her: i en LOBBY er
+/// der endnu ingen state at læse `vid` fra, og en udledning ville dér falde
+/// til klassisk og vise de forkerte kort. Denne funktion findes, fordi
+/// samme opslag ellers står tre steder (statistik, kortlegende, slutrapport)
+/// — tre vagter om samme regel, hvor de to kan drive fra hinanden ubemærket.
+CardRules cardRulesOfGameDoc(Map<String, dynamic> game, VariantConfig variant) {
+  final dynamic state = game['state'];
+  if (state is Map && state['cr'] is Map) {
+    return CardRules.fromJson(Map<String, dynamic>.from(state['cr'] as Map));
+  }
+  final dynamic raw = game['cardRules'];
+  final CardRules base = raw is Map
+      ? CardRules.fromJson(Map<String, dynamic>.from(raw))
+      : CardRules.defaults();
+  return effectiveCardRules(variant, base,
+      stored: storedOverridesFor(game['cardRulesVariants'], variant.id));
+}
+
 /// Rå `variants`-map fra config/cardRules-doc'et (eller lobby-doc'ets kopi
 /// `cardRulesVariants`) → gemte overrides for [variantId]. DEFENSIV hele vejen:
 /// ikke-map på ethvert niveau → null (fald til kode-seedet). Ren funktion, så

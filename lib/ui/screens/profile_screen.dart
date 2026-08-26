@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../game/card_rules.dart';
 import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../stats/badges.dart';
@@ -9,6 +10,7 @@ import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 import '../../utils/avatars.dart';
 import '../widgets/badge_chip.dart';
+import '../widgets/card_mix_block.dart';
 import '../widgets/variant_badge.dart';
 import 'friends_screen.dart';
 
@@ -475,13 +477,35 @@ class _LastGameTab extends StatefulWidget {
   State<_LastGameTab> createState() => _LastGameTabState();
 }
 
+/// Sidste spil + det langtidssnit dets kortregnskab måles mod. Hentes samlet,
+/// så skærmen ikke skal jonglere to futures der kan lande i hver sin ende.
+class _LastGameView {
+  _LastGameView(this.last, this.anchor);
+  final LastGameStats? last;
+  final UserStats? anchor;
+}
+
 class _LastGameTabState extends State<_LastGameTab> {
-  Future<LastGameStats?>? _future;
+  Future<_LastGameView>? _future;
+
+  Future<_LastGameView> _load() async {
+    final LastGameStats? last = await widget.repo.lastGameStatsFor(widget.uid);
+    if (last == null) return _LastGameView(null, null);
+    // Ankeret må aldrig vælte skærmen: kan det ikke hentes, vises tallene
+    // bare uden snit.
+    UserStats? anchor;
+    try {
+      anchor = await widget.repo.cardMixAnchorFor(widget.uid, last.variantId);
+    } catch (_) {
+      anchor = null;
+    }
+    return _LastGameView(last, anchor);
+  }
 
   @override
   void initState() {
     super.initState();
-    _future = widget.repo.lastGameStatsFor(widget.uid);
+    _future = _load();
   }
 
   @override
@@ -489,17 +513,17 @@ class _LastGameTabState extends State<_LastGameTab> {
     return RefreshIndicator(
       onRefresh: () async {
         setState(() {
-          _future = widget.repo.lastGameStatsFor(widget.uid);
+          _future = _load();
         });
         await _future;
       },
-      child: FutureBuilder<LastGameStats?>(
+      child: FutureBuilder<_LastGameView>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final last = snap.data;
+          final last = snap.data?.last;
           if (last == null) {
             return ListView(
               children: const <Widget>[
@@ -516,6 +540,8 @@ class _LastGameTabState extends State<_LastGameTab> {
           return _StatsBody(
             stats: last.stats,
             singleGame: true,
+            cardRules: last.cardRules,
+            cardMixAnchor: snap.data?.anchor,
             leading: <Widget>[
               // Read-only mærke for det SPILS variant (sidste spil HAR en
               // variant — et filter ville ikke give mening her). Ikke
@@ -550,11 +576,21 @@ class _StatsBody extends StatelessWidget {
     required this.singleGame,
     this.leading = const <Widget>[],
     this.showBadges = true,
+    this.cardRules,
+    this.cardMixAnchor,
   });
   final UserStats stats;
   final bool singleGame;
   final List<Widget> leading;
   final bool showBadges;
+
+  /// Spillets opløste regler — kun til underteksten i kortregnskabet, så den
+  /// navngiver de kort DEN variant faktisk havde.
+  final CardRules? cardRules;
+
+  /// Langtids-tallene et enkelt partis kortregnskab måles mod. null i
+  /// "I alt"-fanen, hvor tallet selv ER snittet.
+  final UserStats? cardMixAnchor;
 
   @override
   Widget build(BuildContext context) {
@@ -635,6 +671,16 @@ class _StatsBody extends StatelessWidget {
             _statRow('Sad over 😴', '${s.passCount} runder'),
           if (s.totalCardsDiscarded > 0)
             _statRow('Døde kort ☠️', '${s.totalCardsDiscarded} smidt'),
+          // Kortregnskabet pr. par. Kun i spil hvor alle fire pladser var
+          // mennesker — se CardMixBlock.hasData.
+          if (CardMixBlock.hasData(s)) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(singleGame ? 'Sådan faldt kortene' : 'Kortene i alt',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            CardMixBlock(
+                stats: s, rules: cardRules, anchor: cardMixAnchor),
+          ],
         ]),
         _section('Tempo & adfærd', <Widget>[
           if (!singleGame && s.gamesPlayed > 0) ...<Widget>[

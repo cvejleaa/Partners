@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/ai/ai_player.dart';
-import '../../game/card_rules.dart';
 import '../../game/progress.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
@@ -17,6 +16,7 @@ import '../../online/online_service.dart';
 import '../../online/serialize.dart';
 import '../../state/display_config.dart';
 import '../../stats/stats_repository.dart';
+import '../../stats/user_stats.dart';
 import '../widgets/card_legend_sheet.dart';
 import '../widgets/card_view.dart';
 import '../widgets/game_play_view.dart';
@@ -289,20 +289,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               tooltip: 'Kortene i dette spil',
               icon: const Icon(Icons.style),
               onPressed: () {
-                final dynamic cr =
-                    rawState is Map ? rawState['cr'] : null;
-                final CardRules rules = cr is Map
-                    ? CardRules.fromJson(Map<String, dynamic>.from(cr))
-                    : effectiveCardRules(
-                        variant,
-                        rawDoc['cardRules'] is Map
-                            ? CardRules.fromJson(Map<String, dynamic>.from(
-                                rawDoc['cardRules'] as Map))
-                            : CardRules.defaults(),
-                        stored: storedOverridesFor(
-                            rawDoc['cardRulesVariants'], variant.id),
-                      );
-                showCardLegendSheet(context, rules);
+                showCardLegendSheet(
+                    context, cardRulesOfGameDoc(rawDoc, variant));
               },
             ),
         ],
@@ -388,6 +376,13 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               }
             }
             final String oldCode = widget.code;
+            // Kortregnskabet for PRÆCIS dette parti. Beregnes her, hvor doc'et
+            // allerede er i hånden — så slutrapporten koster ingen ekstra
+            // Firestore-læsning for at kunne vise det. Reglerne følger med fra
+            // samme doc, så underteksten navngiver de kort der blev talt.
+            final UserStats? cardMix =
+                myUid == null ? null : computeAllStats(<Map<String, dynamic>>[
+                    Map<String, dynamic>.from(d)])[myUid];
             // Fang service-instansen NU, mens denne skærm stadig er i live.
             // WinScreen pushes via pushReplacement, så OnlineGameScreen (og dens
             // ref) disposes — en senere `ref.read` i revanche-callbacken ville
@@ -420,6 +415,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                         winnerNames: winnerNames,
                         winnerColors: winnerColors,
                         rematchLabel: 'Revanche',
+                        cardMix: cardMix,
+                        cardMixRules: cardRulesOfGameDoc(
+                            Map<String, dynamic>.from(d), state.variant),
                         onRematch: (ctx) async {
                           final code = await svc.createRematch(oldCode);
                           if (!ctx.mounted) return;

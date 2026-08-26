@@ -14,6 +14,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../game/card_rules.dart';
 import '../game/progress.dart';
+import '../models/playing_card.dart';
 import '../models/variant_config.dart';
 import '../online/serialize.dart';
 import 'replay_engine.dart';
@@ -56,6 +57,15 @@ class UserStats {
     this.lossMarginGames = 0,
     this.maxWinMargin,
     this.minWinMargin,
+    this.myExitCards = 0,
+    this.mySpecialCards = 0,
+    this.myPlainCards = 0,
+    this.myUnseenCards = 0,
+    this.oppExitCards = 0,
+    this.oppSpecialCards = 0,
+    this.oppPlainCards = 0,
+    this.oppUnseenCards = 0,
+    this.cardMixGames = 0,
   })  : favoriteStarter = favoriteStarter ?? <String, int>{},
         partnerStats = partnerStats ?? <String, PairStats>{},
         rivalStats = rivalStats ?? <String, PairStats>{};
@@ -119,6 +129,29 @@ class UserStats {
   /// Største og mindste sejrsmargin (felter) på tværs af vundne spil.
   int? maxWinMargin;
   int? minWinMargin;
+
+  // Kortregnskab — hvilke kort fik MIT par, og hvilke fik modstanderparret?
+  //
+  // "Fået" = spillet + resthånd ved spil-slut. [myUnseenCards] er den rest der
+  // blev smidt ved et pas, og som ingen så rangen på — se _deriveGame. Kun
+  // spil hvor alle fire pladser er mennesker tælles med, og [cardMixGames] er
+  // antallet af DEM (ikke gamesPlayed), så snittet nedenfor bliver rigtigt.
+  int myExitCards;
+  int mySpecialCards;
+  int myPlainCards;
+  int myUnseenCards;
+  int oppExitCards;
+  int oppSpecialCards;
+  int oppPlainCards;
+  int oppUnseenCards;
+  int cardMixGames;
+
+  /// Snittet pr. spil — ankeret et enkelt partis tal måles MOD. Uden det
+  /// ligner en helt normal kortfordeling et overgreb.
+  double? get avgMyExitCards =>
+      cardMixGames == 0 ? null : myExitCards / cardMixGames;
+  double? get avgMySpecialCards =>
+      cardMixGames == 0 ? null : mySpecialCards / cardMixGames;
 
   double? get avgWinMargin =>
       winMarginGames == 0 ? null : winMarginSum / winMarginGames;
@@ -211,6 +244,18 @@ class UserStats {
         'lossMarginGames': lossMarginGames,
         'maxWinMargin': maxWinMargin,
         'minWinMargin': minWinMargin,
+        // Kortregnskab. Bevidst IKKE i toSlimRankingJson: ranglisten viser det
+        // ikke, og ni ekstra felter pr. variant ville gange den offentlige
+        // payload op uden at nogen læser dem.
+        'myExitCards': myExitCards,
+        'mySpecialCards': mySpecialCards,
+        'myPlainCards': myPlainCards,
+        'myUnseenCards': myUnseenCards,
+        'oppExitCards': oppExitCards,
+        'oppSpecialCards': oppSpecialCards,
+        'oppPlainCards': oppPlainCards,
+        'oppUnseenCards': oppUnseenCards,
+        'cardMixGames': cardMixGames,
         if (withTimestamp) 'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -280,6 +325,15 @@ class UserStats {
       lossMarginGames: (m['lossMarginGames'] as num?)?.toInt() ?? 0,
       maxWinMargin: (m['maxWinMargin'] as num?)?.toInt(),
       minWinMargin: (m['minWinMargin'] as num?)?.toInt(),
+      myExitCards: (m['myExitCards'] as num?)?.toInt() ?? 0,
+      mySpecialCards: (m['mySpecialCards'] as num?)?.toInt() ?? 0,
+      myPlainCards: (m['myPlainCards'] as num?)?.toInt() ?? 0,
+      myUnseenCards: (m['myUnseenCards'] as num?)?.toInt() ?? 0,
+      oppExitCards: (m['oppExitCards'] as num?)?.toInt() ?? 0,
+      oppSpecialCards: (m['oppSpecialCards'] as num?)?.toInt() ?? 0,
+      oppPlainCards: (m['oppPlainCards'] as num?)?.toInt() ?? 0,
+      oppUnseenCards: (m['oppUnseenCards'] as num?)?.toInt() ?? 0,
+      cardMixGames: (m['cardMixGames'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -408,6 +462,11 @@ class _GameFacts {
     required this.passBySeat,
     required this.cardsDiscardedBySeat,
     required this.protectionBySeat,
+    required this.teamOfSeat,
+    required this.exitByTeam,
+    required this.specialByTeam,
+    required this.plainByTeam,
+    required this.unseenByTeam,
   });
 
   final List<dynamic> uids;
@@ -429,6 +488,20 @@ class _GameFacts {
   final Map<int, int> passBySeat;
   final Map<int, int> cardsDiscardedBySeat;
   final Map<int, int> protectionBySeat;
+
+  /// Kortregnskabet er pr. PAR, ikke pr. spiller: brugeren spurgte efter
+  /// parret, og makkerbyttet flytter kort INDEN for parret, så et pr-spiller-
+  /// tal ville være direkte forkert. [teamOfSeat] kommer fra variantens egen
+  /// holdopstilling (VariantConfig.teamOf) — ikke fra endnu et `seat % 2`.
+  final Map<int, int> teamOfSeat;
+  final Map<int, int> exitByTeam;
+  final Map<int, int> specialByTeam;
+  final Map<int, int> plainByTeam;
+
+  /// Kort parret FIK, men som ingen nogensinde så rangen på: hele hånden
+  /// smides ved et pas, og passLogEntry skriver kun et ANTAL. Resten er kendt
+  /// (spillet = log'en, resthånd = state'ns 'hd').
+  final Map<int, int> unseenByTeam;
 }
 
 _GameFacts _deriveGame(Map<String, dynamic> game) {
@@ -453,19 +526,12 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
   final log = ((game['log'] as List?) ?? const <dynamic>[])
       .map((e) => Map<String, dynamic>.from(e as Map))
       .toList();
-  // Replay skal køre med de OPLØSTE regler spillet faktisk blev spillet med —
-  // dvs. state'ns 'cr' (som bærer variantens kort, fx Hopsakortet), IKKE
-  // doc'ets rå 'cardRules' (det uopløste klassiske snapshot). Ellers replayes
-  // et 25 år-spil med klassiske kort. Fallback: doc'ets cardRules → defaults.
-  Map? cardRulesMap;
-  final dynamic stateRaw = game['state'];
-  if (stateRaw is Map && stateRaw['cr'] is Map) {
-    cardRulesMap = stateRaw['cr'] as Map;
-  }
-  cardRulesMap ??= game['cardRules'] as Map?;
-  final cardRules = cardRulesMap == null
-      ? CardRules.defaults()
-      : CardRules.fromJson(Map<String, dynamic>.from(cardRulesMap));
+  // Replay OG kortregnskab skal køre med de OPLØSTE regler spillet faktisk
+  // blev spillet med — se cardRulesOfGameDoc, som er den ene vagt om det
+  // opslag (state.cr vinder over doc'ets uopløste klassiske snapshot; ellers
+  // replayes et 25 år-spil med klassiske kort).
+  final VariantConfig variant = variantForState(variantIdOfGameDoc(game));
+  final CardRules cardRules = cardRulesOfGameDoc(game, variant);
 
   // Online vs AI: alle 4 uids udfyldt = online; ellers AI-blandet.
   final isFullyOnline = uids.length == 4 && uids.every((u) => u != null);
@@ -599,6 +665,74 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
     }
   }
 
+  // ---- Kortregnskab pr. par: hvad FIK de to par i hånden? ----
+  //
+  // Regnestykket pr. plads er:
+  //     fået = spillet (log'en) + resthånd (state'ns 'hd') + smidt ved pas
+  // De to første er kendt med rang; kun pas-kortene er ukendte, fordi
+  // passLogEntry kun skriver et ANTAL (online_service.dart). Den rest er
+  // SKÆV, ikke tilfældig: man passer netop når man ikke kunne bruge noget, så
+  // de usete kort er systematisk dårligere end gennemsnittet. Derfor vises
+  // tallet altid, når det er > 0 — aldrig et tavst underestimat.
+  //
+  // Alle pladser lægges i kortet FORFRA — ikke først når pladsen gør noget.
+  // Ellers ville en spiller der hverken spillede, passede eller sad med kort
+  // til sidst mangle helt, og deres PARS tal ville forsvinde for dem alene,
+  // mens makkeren så dem.
+  final teamOfSeat = <int, int>{
+    for (int seat = 0; seat < uids.length; seat++)
+      seat: variant.teamOf(seat),
+  };
+  final exitByTeam = <int, int>{};
+  final specialByTeam = <int, int>{};
+  final plainByTeam = <int, int>{};
+  final unseenByTeam = <int, int>{};
+
+  void countCard(int seat, PlayingCard card) {
+    final int team = teamOfSeat.putIfAbsent(seat, () => variant.teamOf(seat));
+    final CardCategory cat = cardRules.categoryOf(card);
+    if (cat == CardCategory.exit) {
+      exitByTeam[team] = (exitByTeam[team] ?? 0) + 1;
+    } else if (cat == CardCategory.special) {
+      specialByTeam[team] = (specialByTeam[team] ?? 0) + 1;
+    } else {
+      plainByTeam[team] = (plainByTeam[team] ?? 0) + 1;
+    }
+  }
+
+  // (a) Spillede kort. Positivt filter på type == 'move' — IKKE "har et
+  // 'card'-felt": exchangeLogEntry skriver også et kort, og et bredt filter
+  // ville tælle makkerbyttet med som et ekstra kort.
+  for (final entry in log) {
+    if ((entry['type'] as String? ?? 'move') != 'move') continue;
+    final dynamic cardRaw = entry['card'];
+    if (cardRaw is! Map) continue;
+    countCard((entry['player'] as num).toInt(),
+        cardFromMap(Map<String, dynamic>.from(cardRaw)));
+  }
+
+  // (b) Kort der stadig lå på hånden, da spillet sluttede. De ER gemt —
+  // playerToMap skriver 'hd' (serialize.dart) — så de tæller med i "fået".
+  final dynamic playersRaw = (game['state'] as Map?)?['pl'];
+  if (playersRaw is List) {
+    for (int seat = 0; seat < playersRaw.length; seat++) {
+      final dynamic p = playersRaw[seat];
+      if (p is! Map) continue;
+      final dynamic hand = p['hd'];
+      if (hand is! List) continue;
+      for (final dynamic c in hand) {
+        if (c is! Map) continue;
+        countCard(seat, cardFromMap(Map<String, dynamic>.from(c)));
+      }
+    }
+  }
+
+  // (c) De ukendte: smidt ved et pas, rang aldrig logget.
+  for (final e in cardsDiscardedBySeat.entries) {
+    final int team = teamOfSeat.putIfAbsent(e.key, () => variant.teamOf(e.key));
+    unseenByTeam[team] = (unseenByTeam[team] ?? 0) + e.value;
+  }
+
   return _GameFacts(
     uids: uids,
     names: names,
@@ -619,6 +753,11 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
     passBySeat: passBySeat,
     cardsDiscardedBySeat: cardsDiscardedBySeat,
     protectionBySeat: protectionBySeat,
+    teamOfSeat: teamOfSeat,
+    exitByTeam: exitByTeam,
+    specialByTeam: specialByTeam,
+    plainByTeam: plainByTeam,
+    unseenByTeam: unseenByTeam,
   );
 }
 
@@ -722,6 +861,33 @@ void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
     // Pass.
     s.passCount += passBySeat[seat] ?? 0;
     s.totalCardsDiscarded += cardsDiscardedBySeat[seat] ?? 0;
+
+    // Kortregnskab: mit par mod modstanderparret. KUN i spil hvor alle fire
+    // pladser er mennesker — et heldregnskab mod computeren siger intet, og
+    // AI-pladser ville gøre "modstanderparret" til en maskine.
+    if (isFullyOnline && f.teamOfSeat.containsKey(seat)) {
+      final int myTeam = f.teamOfSeat[seat]!;
+      int mine(Map<int, int> m) => m[myTeam] ?? 0;
+      // Summér ALLE andre hold, ikke "hold 1 minus mit": en variant kan have
+      // en anden holdopstilling end to par.
+      int theirs(Map<int, int> m) {
+        int total = 0;
+        for (final e in m.entries) {
+          if (e.key != myTeam) total += e.value;
+        }
+        return total;
+      }
+
+      s.myExitCards += mine(f.exitByTeam);
+      s.mySpecialCards += mine(f.specialByTeam);
+      s.myPlainCards += mine(f.plainByTeam);
+      s.myUnseenCards += mine(f.unseenByTeam);
+      s.oppExitCards += theirs(f.exitByTeam);
+      s.oppSpecialCards += theirs(f.specialByTeam);
+      s.oppPlainCards += theirs(f.plainByTeam);
+      s.oppUnseenCards += theirs(f.unseenByTeam);
+      s.cardMixGames += 1;
+    }
 
     // Tænketid.
     final times = thinkSecondsBySeat[seat] ?? const <double>[];
