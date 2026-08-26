@@ -56,27 +56,28 @@ Widget _app() => ProviderScope(
     );
 
 void main() {
-  testWidgets('rapporten kan rulles, og bunden kan nås på en lille skærm',
-      (WidgetTester tester) async {
-    // En lille, men helt almindelig telefonskærm.
-    tester.view.physicalSize = const Size(400, 640);
+  /// Lille skærm — en telefon i et smalt vindue. Testene deles op i ét
+  /// spørgsmål hver, så et rødt testnavn alene siger hvad der er galt.
+  Future<void> pumpReport(WidgetTester tester,
+      {Size size = const Size(360, 420)}) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-
     await tester.pumpWidget(_app());
     // IKKE pumpAndSettle: konfettien kører i en uendelig løkke.
     await tester.pump();
+  }
 
-    // 1. Indholdet er højere end skærmen — ellers måler testen ingenting
-    //    (en test hvor alt alligevel er synligt ville bestå med rulningen
-    //    helt fjernet).
+  testWidgets('A: indholdet er højere end skærmen (ellers måler vi intet)',
+      (WidgetTester tester) async {
+    await pumpReport(tester);
     final ScrollableState scrollable = tester.state(find.byType(Scrollable));
-    expect(scrollable.position.maxScrollExtent, greaterThan(0),
-        reason: 'rapporten skal være højere end skærmen, ellers prøver '
-            'testen ikke det den påstår');
+    expect(scrollable.position.maxScrollExtent, greaterThan(0));
+  });
 
-    // 2. Og man kan faktisk komme derned. Kan siden ikke rulles, giver
-    //    dragUntilVisible op og testen bliver rød.
+  testWidgets('B: bunden kan nås — knappen kan rulles frem',
+      (WidgetTester tester) async {
+    await pumpReport(tester);
     await tester.dragUntilVisible(
       find.text('Tilbage til listen'),
       find.byType(SingleChildScrollView),
@@ -85,15 +86,18 @@ void main() {
     expect(find.text('Tilbage til listen'), findsOneWidget);
   });
 
-  testWidgets('intet indhold flyder ud over kanten', (WidgetTester tester) async {
-    // Et RenderFlex-overflow ville vise den gule/sorte stribe i stedet for
-    // at gøre siden rulbar.
-    tester.view.physicalSize = const Size(400, 640);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-
-    await tester.pumpWidget(_app());
-    await tester.pump();
+  testWidgets('C: intet flyder ud over kanten', (WidgetTester tester) async {
+    // I release-byg tegnes den gule stribe ikke — indholdet bliver bare
+    // klippet væk. Derfor skal et overflow fanges her.
+    await pumpReport(tester);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('D: heller ikke på en bred, lav skærm',
+      (WidgetTester tester) async {
+    await pumpReport(tester, size: const Size(900, 400));
+    expect(tester.takeException(), isNull);
+    final ScrollableState scrollable = tester.state(find.byType(Scrollable));
+    expect(scrollable.position.maxScrollExtent, greaterThan(0));
   });
 }
