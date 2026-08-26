@@ -30,6 +30,49 @@ import 'user_stats.dart';
 bool statsNeedRecompute(Map<String, dynamic>? statsDoc) =>
     statsDoc != null && statsDoc['staleSince'] != null;
 
+/// Tidsstemplet et spil-doc regnes efter (afsluttet, ellers oprettet, ellers 0).
+int gameTimeMs(Map<String, dynamic> game) =>
+    _tsMsOf(game['finishedAt']) ?? _tsMsOf(game['createdAt']) ?? 0;
+
+int? _tsMsOf(dynamic v) {
+  if (v is Timestamp) return v.millisecondsSinceEpoch;
+  if (v is int) return v;
+  return null;
+}
+
+/// Spillene "som verden så ud, da [code] blev spillet": alle spil afsluttet
+/// FØR det, plus spillet selv. Bruges til at genskabe en gammel slutrapport
+/// fra arkivet, så rekorderne er dem der gjaldt dengang — ikke dem der gælder
+/// i dag.
+///
+/// Tie-bracket er EKSPLICIT: `t < cutoff || g['code'] == code`. Et rent
+/// `t <= cutoff` ville trække ethvert FREMMED spil med præcis samme
+/// millisekund med ind i "dengang" — og hvilket af to samtidige spil der så
+/// talte med, ville afhænge af skrive-rækkefølgen i Firestore. Spillet selv er
+/// altid med, uanset hvad dets tidsstempel er (også 0 for et doc uden
+/// tidsstempler).
+///
+/// Ukendt [code] → tom liste (kalderen viser ingen rekorder frem for forkerte).
+List<Map<String, dynamic>> gamesUpTo(
+    List<Map<String, dynamic>> games, String code) {
+  final Map<String, dynamic>? game = gameWithCode(games, code);
+  if (game == null) return const <Map<String, dynamic>>[];
+  final int cutoff = gameTimeMs(game);
+  return games
+      .where((g) => gameTimeMs(g) < cutoff || g['code'] == code)
+      .toList();
+}
+
+/// Spil-doc'et med [code], eller null. (Ingen `firstOrNull` — den kræver en
+/// extension-import, og et opslag her skal ikke kunne vælte oversættelsen.)
+Map<String, dynamic>? gameWithCode(
+    List<Map<String, dynamic>> games, String code) {
+  for (final Map<String, dynamic> g in games) {
+    if (g['code'] == code) return g;
+  }
+  return null;
+}
+
 /// Sidste spils stats + hvilken variant det blev spillet i. Varianten følger
 /// med fra samme spil-doc, så UI/rekord-logikken ikke skal gætte den igen.
 class LastGameStats {
@@ -250,11 +293,8 @@ class StatsRepository {
     // [_ownFinishedGames]).
     final docs = await _ownFinishedGames(uid);
     if (docs.isEmpty) return null;
-    docs.sort((a, b) {
-      final ta = _ts(a['finishedAt']) ?? _ts(a['createdAt']) ?? 0;
-      final tb = _ts(b['finishedAt']) ?? _ts(b['createdAt']) ?? 0;
-      return tb.compareTo(ta); // nyeste først
-    });
+    // nyeste først
+    docs.sort((a, b) => gameTimeMs(b).compareTo(gameTimeMs(a)));
     final latest = docs.first;
     final stats = computeAllStats(<Map<String, dynamic>>[latest])[uid];
     if (stats == null) return null;
@@ -318,15 +358,10 @@ class StatsRepository {
   Future<List<GameRecord>> recordsForGame(String uid, String code,
       {String Function(String variantId)? labelFor}) async {
     final List<Map<String, dynamic>> games = await _ownFinishedGames(uid);
-    final Map<String, dynamic>? game =
-        games.where((g) => g['code'] == code).firstOrNull;
+    final Map<String, dynamic>? game = gameWithCode(games, code);
     if (game == null) return const <GameRecord>[];
-    final int cutoff = _ts(game['finishedAt']) ?? _ts(game['createdAt']) ?? 0;
-    final List<Map<String, dynamic>> until = games.where((g) {
-      final int t = _ts(g['finishedAt']) ?? _ts(g['createdAt']) ?? 0;
-      return t <= cutoff;
-    }).toList();
-    final PartitionedStats then = computePartitionedStats(until);
+    final PartitionedStats then =
+        computePartitionedStats(gamesUpTo(games, code));
     final String vid = variantIdOfGameDoc(game);
     final UserStats? aggregate = then.byVariant[vid]?[uid];
     final UserStats? lastGame =
@@ -338,11 +373,5 @@ class StatsRepository {
       variantLabel:
           labelFor != null ? labelFor(vid) : variantForState(vid).shortLabel,
     );
-  }
-
-  static int? _ts(dynamic v) {
-    if (v is Timestamp) return v.millisecondsSinceEpoch;
-    if (v is int) return v;
-    return null;
   }
 }

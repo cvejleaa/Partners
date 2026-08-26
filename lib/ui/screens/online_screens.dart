@@ -468,15 +468,17 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                   // Igangværende spil først (så man hurtigt kan genindtræde),
                   // dernæst lobbyer der venter, og til sidst arkivet.
                   final playing = list.where((g) => g.isPlaying).toList();
-                  final lobbies =
-                      list.where((g) => g.isLobby).toList();
+                  final lobbies = list.where((g) => g.isLobby).toList();
                   // Arkivet: afsluttede ONLINE-spil, nyeste først. Solospil
                   // mod computeren holdes ude (de er i flertal og hører til i
                   // profilen). Ét sted: archiveOf i online_service.
                   final List<GameSummary> archiveAll = archiveOf(list);
+                  // Udsnittet tages af den FÆRDIGE liste — archiveOf sorterer,
+                  // og at kalde den to gange pr. build ville gøre det arbejde
+                  // dobbelt for præcis samme resultat.
                   final List<GameSummary> archive = _showAllArchive
                       ? archiveAll
-                      : archiveOf(list, limit: _kArchivePreview);
+                      : archiveAll.take(_kArchivePreview).toList();
                   // Tom-tilstanden måler på AKTIVE spil: har man kun et arkiv,
                   // skal opfordringen til at starte et spil stadig stå.
                   if (playing.isEmpty && lobbies.isEmpty && archive.isEmpty) {
