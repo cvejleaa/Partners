@@ -193,10 +193,12 @@ class CardRules {
   /// 25 år, og byttekortet blev talt forkert i begge retninger. Et rang-tjek
   /// ville desuden lyve i enhver variant hvor admin har flyttet en evne.
   ///
-  /// RÆKKEFØLGEN ER EN DEL AF KONTRAKTEN: ud-af-start slår special. Es og
-  /// Konge kan begge dele, og uden en fast prioritet ville de tælle to gange —
-  /// så ville rækken ikke summe til antallet af kort. Byttes rækkefølgen om,
-  /// bliver [categoryOf] rød i card_category_test.
+  /// RÆKKEFØLGEN ER EN DEL AF KONTRAKTEN: ud-af-start slår special. Uden en
+  /// fast prioritet ville et kort der kan begge dele tælle to gange, og
+  /// rækken ville ikke summe til antallet af kort. Reglen kan kun prøves på
+  /// et kort der FAKTISK har begge egenskaber — hverken klassisk eller 25 år
+  /// har et, men admin kan sætte begge flag på samme rang. Netop dét kort
+  /// bygger card_mix_test ("et kort der kan BEGGE dele").
   CardCategory categoryOf(PlayingCard card) {
     if (card.isExit) return CardCategory.exit;
     final CardRuleConfig c = forRank(card.rank!);

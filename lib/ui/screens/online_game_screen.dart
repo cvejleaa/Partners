@@ -356,10 +356,13 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
             // dyreste linje i hele arkivet (QC-fund).
             if (!_statsRecomputed && _wasOverOnOpen == false) {
               _statsRecomputed = true;
-              final myUid = _svc.uid;
-              if (myUid != null && mySeat >= 0) {
+              // Samme værdi som den ydre myUid — men et eget navn, så det
+              // er tydeligt at genberegningen ikke hænger sammen med
+              // kortregnskabet længere nede.
+              final String? recomputeUid = _svc.uid;
+              if (recomputeUid != null && mySeat >= 0) {
                 // ignore: discarded_futures
-                StatsRepository().recomputeAndSaveOwn(myUid);
+                StatsRepository().recomputeAndSaveOwn(recomputeUid);
               }
             }
             final int winner = state.winningTeamIndex!;

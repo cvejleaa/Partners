@@ -88,13 +88,23 @@ void main() {
       expect(classic.categoryOf(_two), CardCategory.plain);
     });
 
-    test('Es tælles ÉN gang — ud-af-start slår special', () {
-      // Es har BÅDE exitStart og fremad-skridt. Uden en fast prioritet ville
-      // et kort kunne lande i to spande, og rækken ville ikke længere summe
-      // til antallet af kort. Byttes de to if-sætninger om i categoryOf,
-      // bliver denne test rød.
-      expect(classic.categoryOf(_ace), isNot(CardCategory.special));
-      expect(classic.categoryOf(_king), isNot(CardCategory.special));
+    test('et kort der kan BEGGE dele er ud-af-start, ikke special', () {
+      // Prioritetsreglen i categoryOf. Den kan KUN prøves på et kort der
+      // faktisk har begge egenskaber — og hverken klassisk eller 25 år har
+      // et sådant kort, så en test på Es/Konge alene beviser ingenting:
+      // ombytter man de to if-sætninger, forbliver den grøn. Admin KAN sætte
+      // begge flag på samme rang, og så skal svaret være entydigt.
+      final CardRules both = classic.withRank(
+          Rank.nine,
+          const CardRuleConfig(
+              exitStart: true, swap: true, forwardSteps: <int>[9]));
+      final PlayingCard nine = const PlayingCard(Rank.nine, Suit.hearts);
+      expect(both.categoryOf(nine), CardCategory.exit);
+      // Og den må ikke ALLIGEVEL dukke op blandt specialkortene: så ville
+      // underteksten love et kort til begge kolonner, mens tallet kun lå i
+      // den ene.
+      expect(both.labelsFor(CardCategory.exit), contains('9'));
+      expect(both.labelsFor(CardCategory.special), isNot(contains('9')));
     });
 
     test('25 år: byttet ligger på 9, ikke på Knægten', () {
@@ -212,6 +222,42 @@ void main() {
       expect(_mixFor('u0', g).myPlainCards, 0);
     });
 
+    test('state.cr har FORRANG for en gen-udledning fra varianten', () {
+      // Testen ovenfor kan ikke skelne de to veje: for et p25-doc giver
+      // "læs state.cr" og "udled reglerne af varianten igen" samme svar.
+      // Her siger doc'ets gemte regler KLASSISK (9 er et almindeligt kort),
+      // mens vid siger p25. Gen-udledes reglerne, bliver 9 talt som
+      // byttekort — og et spil ville blive gjort op efter andre regler end
+      // det blev spillet efter.
+      final Map<String, dynamic> g = _game(
+        vid: partners25.id,
+        cr: CardRules.defaults().toJson(),
+        log: <Map<String, dynamic>>[
+          _move(0, const PlayingCard(Rank.nine, Suit.hearts)),
+        ],
+      );
+      expect(_mixFor('u0', g).myPlainCards, 1);
+      expect(_mixFor('u0', g).mySpecialCards, 0);
+    });
+
+    test('specialkortene fordeles på parrene som ud-af-start-kortene', () {
+      // oppSpecialCards vises på skærmen. Uden denne test kunne
+      // special/plain byttes om i foldningen med grøn suite.
+      final Map<String, dynamic> g = _game(log: <Map<String, dynamic>>[
+        _move(0, _seven),
+        _move(2, _four),
+        _move(1, _seven),
+        _move(3, _two),
+      ]);
+      final UserStats s = _mixFor('u0', g);
+      expect(s.mySpecialCards, 2);
+      expect(s.oppSpecialCards, 1);
+      expect(s.oppPlainCards, 1);
+      // Spejlet: set fra den anden side er tallene byttet om.
+      expect(_mixFor('u1', g).mySpecialCards, 1);
+      expect(_mixFor('u1', g).oppSpecialCards, 2);
+    });
+
     test('cardMixGames tæller kun spil med fire mennesker', () {
       // Et heldregnskab mod computeren siger intet. AI-pladser har uid null.
       final Map<String, dynamic> ai = _game(log: <Map<String, dynamic>>[
@@ -239,6 +285,9 @@ void main() {
       expect(s.gamesPlayed, 2);
       expect(s.cardMixGames, 1);
       expect(s.avgMyExitCards, 2.0);
+      // Samme nævner for special-snittet — og det læser sit EGET felt:
+      // peger getteren på myExitCards, bliver den 2,0 i stedet for 0,0.
+      expect(s.avgMySpecialCards, 0.0);
     });
 
     test('intet regnskab → intet snit (ikke 0)', () {
@@ -250,18 +299,54 @@ void main() {
 
   group('Firestore-rundtur', () {
     test('kortregnskabet overlever toJson/fromJson', () {
+      // Hvert af de ni felter får en FORSKELLIG værdi. Med nuller (eller to
+      // ens tal) ville en ombyttet nøgle i fromJson se rigtig ud.
+      // mit par: 1 ud-af-start, 2 special, 3 almindelige, 4 usete
+      // deres:   5 ud-af-start, 6 special, 7 almindelige, 8 usete
+      final List<PlayingCard> plain = <PlayingCard>[
+        const PlayingCard(Rank.two, Suit.spades),
+        const PlayingCard(Rank.three, Suit.spades),
+        const PlayingCard(Rank.five, Suit.spades),
+        const PlayingCard(Rank.six, Suit.spades),
+        const PlayingCard(Rank.eight, Suit.spades),
+        const PlayingCard(Rank.nine, Suit.spades),
+        const PlayingCard(Rank.ten, Suit.spades),
+      ];
       final UserStats s = _mixFor(
           'u0',
           _game(
-            log: <Map<String, dynamic>>[_move(0, _ace), _pass(1, 3)],
-            hands: <int, List<PlayingCard>>{
-              2: <PlayingCard>[_seven]
-            },
+            log: <Map<String, dynamic>>[
+              _move(0, _ace),
+              for (int i = 0; i < 2; i++) _move(0, _seven),
+              for (int i = 0; i < 3; i++) _move(0, plain[i]),
+              _pass(0, 4),
+              _move(1, _ace),
+              _move(1, _king),
+              for (int i = 0; i < 3; i++) _move(1, PlayingCard.exit(i)),
+              for (int i = 0; i < 6; i++) _move(1, _four),
+              for (int i = 0; i < 7; i++) _move(1, plain[i]),
+              _pass(1, 8),
+            ],
           ));
+      expect(s.myExitCards, 1);
+      expect(s.mySpecialCards, 2);
+      expect(s.myPlainCards, 3);
+      expect(s.myUnseenCards, 4);
+      expect(s.oppExitCards, 5);
+      expect(s.oppSpecialCards, 6);
+      expect(s.oppPlainCards, 7);
+      expect(s.oppUnseenCards, 8);
       final UserStats back =
           UserStats.fromJson(s.toJson(withTimestamp: false));
+      // ALLE ni felter. Med kun fire ville en kopieret-og-ikke-rettet nøgle i
+      // fromJson (fx oppExitCards læst fra 'oppSpecialCards') slippe igennem.
       expect(back.myExitCards, s.myExitCards);
       expect(back.mySpecialCards, s.mySpecialCards);
+      expect(back.myPlainCards, s.myPlainCards);
+      expect(back.myUnseenCards, s.myUnseenCards);
+      expect(back.oppExitCards, s.oppExitCards);
+      expect(back.oppSpecialCards, s.oppSpecialCards);
+      expect(back.oppPlainCards, s.oppPlainCards);
       expect(back.oppUnseenCards, s.oppUnseenCards);
       expect(back.cardMixGames, s.cardMixGames);
     });
