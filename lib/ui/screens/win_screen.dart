@@ -139,20 +139,17 @@ class _WinScreenState extends ConsumerState<WinScreen>
       // Kendes spillets kode, måles rekorderne på PRÆCIS dét spil, som de så
       // ud dengang — ellers ville en gammel rapport vise rekorder fra et
       // senere parti.
-      final records = widget.gameCode != null
+      // Rekorder OG kortregnskabets anker kommer ud af SAMME hentning, når
+      // koden kendes (GameReport) — ingen ekstra læsning for ankeret.
+      final GameReport report = widget.gameCode != null
           ? await _repo.recordsForGame(uid, widget.gameCode!, labelFor: label)
-          : await _repo.lastGameRecordsFor(uid, labelFor: label);
+          : GameReport(
+              records: await _repo.lastGameRecordsFor(uid, labelFor: label));
       if (!mounted) return;
-      if (records.isNotEmpty) setState(() => _records = records);
-    } catch (_) {}
-    // Ankeret hentes separat: fejler det, skal rekorderne stadig vises.
-    final UserStats? mix = widget.cardMix;
-    if (mix == null || !CardMixBlock.hasData(mix)) return;
-    try {
-      final UserStats? anchor = await _repo.cardMixAnchorFor(
-          uid, widget.variant?.id ?? classicVariant.id);
-      if (!mounted || anchor == null) return;
-      setState(() => _cardMixAnchor = anchor);
+      setState(() {
+        if (report.records.isNotEmpty) _records = report.records;
+        _cardMixAnchor = report.anchor;
+      });
     } catch (_) {}
   }
 

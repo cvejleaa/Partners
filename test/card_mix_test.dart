@@ -240,6 +240,23 @@ void main() {
       expect(_mixFor('u0', g).mySpecialCards, 0);
     });
 
+    test('UDEN state.cr bruges variantens regler, ikke det rå snapshot', () {
+      // Ældre docs (og AI-docs) har ingen 'cr'. Doc'ets 'cardRules' er et
+      // snapshot af KLASSISK — bruges det alene, gøres et 25 år-spil op efter
+      // klassiske regler, og 9'eren tælles som et almindeligt kort.
+      // cardRulesOfGameDoc lægger variantens overrides ovenpå i det tilfælde.
+      final Map<String, dynamic> g = _game(
+        vid: partners25.id,
+        log: <Map<String, dynamic>>[
+          _move(0, const PlayingCard(Rank.nine, Suit.hearts)),
+        ],
+      );
+      expect((g['state'] as Map).containsKey('cr'), isFalse,
+          reason: 'fixturen skal netop mangle cr — ellers prøver testen '
+              'den anden gren');
+      expect(_mixFor('u0', g).mySpecialCards, 1);
+    });
+
     test('specialkortene fordeles på parrene som ud-af-start-kortene', () {
       // oppSpecialCards vises på skærmen. Uden denne test kunne
       // special/plain byttes om i foldningen med grøn suite.

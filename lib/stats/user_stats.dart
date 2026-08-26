@@ -865,8 +865,8 @@ void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
     // Kortregnskab: mit par mod modstanderparret. KUN i spil hvor alle fire
     // pladser er mennesker — et heldregnskab mod computeren siger intet, og
     // AI-pladser ville gøre "modstanderparret" til en maskine.
-    if (isFullyOnline && f.teamOfSeat.containsKey(seat)) {
-      final int myTeam = f.teamOfSeat[seat]!;
+    final int? myTeam = f.teamOfSeat[seat];
+    if (isFullyOnline && myTeam != null) {
       int mine(Map<int, int> m) => m[myTeam] ?? 0;
       // Summér ALLE andre hold, ikke "hold 1 minus mit": en variant kan have
       // en anden holdopstilling end to par.

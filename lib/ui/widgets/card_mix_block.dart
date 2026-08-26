@@ -83,8 +83,8 @@ class CardMixBlock extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             '$unseen kort nåede aldrig at blive spillet — de blev smidt, da '
-            'nogen måtte sidde over, så ingen så hvad de var. Det rammer '
-            'oftest det par der var bagud.',
+            'nogen måtte sidde over, så ingen så hvad de var. Man sidder over, '
+            'når man ikke kan bruge noget af det man har.',
             style: small?.copyWith(fontStyle: FontStyle.italic),
           ),
         ],

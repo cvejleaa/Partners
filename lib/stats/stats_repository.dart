@@ -316,6 +316,15 @@ class StatsRepository {
   /// VARIANT-SCOPET med vilje. Kortmixet er vidt forskelligt fra variant til
   /// variant (25 år har langt flere specialkort end klassisk), så et snit på
   /// tværs ville sammenligne et parti med noget det ikke er.
+  ///
+  /// Læser cachen (ét doc) frem for at udlede ankeret af de rå spil, som
+  /// [recordsForGame] gør. Det er bevidst forskelligt: slutrapporten replayer
+  /// alligevel alle brugerens spil for rekorderne, så dér er ankeret gratis.
+  /// Profilens "Sidste spil" gør IKKE det — den beregner kun det seneste spil
+  /// — og en udledning fra de rå spil ville tvinge en fuld replay af hele
+  /// historikken ved hver åbning. Ét cache-read er billigere. Prisen er, at en
+  /// bruger med en ikke-genberegnet cache ser tallene UDEN snit (aldrig
+  /// forkerte tal: cardMixGames == 0 → intet snit).
   Future<UserStats?> cardMixAnchorFor(String uid, String variantId) async {
     final UserStatsDoc? doc = await getDoc(uid);
     if (doc == null) return null;
@@ -376,23 +385,47 @@ class StatsRepository {
   ///
   /// Koster samme ENE forespørgsel som en almindelig genberegning: alle
   /// brugerens spil er allerede hentet.
-  Future<List<GameRecord>> recordsForGame(String uid, String code,
+  Future<GameReport> recordsForGame(String uid, String code,
       {String Function(String variantId)? labelFor}) async {
     final List<Map<String, dynamic>> games = await _ownFinishedGames(uid);
     final Map<String, dynamic>? game = gameWithCode(games, code);
-    if (game == null) return const <GameRecord>[];
+    if (game == null) return const GameReport();
+    final String vid = variantIdOfGameDoc(game);
+    // Kortregnskabets anker kommer ud af DE SAMME spil, der lige er hentet —
+    // ikke af et ekstra getDoc på userStats-cachen (QC-fund). Det sparer en
+    // læsning, og det fjerner en staleness-risiko: cachen kan være ældre end
+    // spillene, de rå spil kan ikke.
+    final UserStats? anchor =
+        computePartitionedStats(games).byVariant[vid]?[uid];
     final PartitionedStats then =
         computePartitionedStats(gamesUpTo(games, code));
-    final String vid = variantIdOfGameDoc(game);
     final UserStats? aggregate = then.byVariant[vid]?[uid];
     final UserStats? lastGame =
         computeAllStats(<Map<String, dynamic>>[game])[uid];
-    if (aggregate == null || lastGame == null) return const <GameRecord>[];
-    return recordsFromLastGame(
-      aggregate: aggregate,
-      lastGame: lastGame,
-      variantLabel:
-          labelFor != null ? labelFor(vid) : variantForState(vid).shortLabel,
+    if (aggregate == null || lastGame == null) {
+      return GameReport(anchor: anchor);
+    }
+    return GameReport(
+      records: recordsFromLastGame(
+        aggregate: aggregate,
+        lastGame: lastGame,
+        variantLabel:
+            labelFor != null ? labelFor(vid) : variantForState(vid).shortLabel,
+      ),
+      anchor: anchor,
     );
   }
+}
+
+/// Alt slutrapporten skal bruge om ét spil, ud af ÉN hentning: rekorderne som
+/// de så ud DENGANG, og langtids-ankeret kortregnskabet måles MOD.
+///
+/// De to bruger bevidst forskellige udsnit af de samme spil: rekorderne må kun
+/// se spil til og med dette (ellers viser en gammel rapport et senere partis
+/// rekord), mens ankeret skal se ALT — spørgsmålet "var det her normalt for
+/// os?" besvares bedst af alt hvad man har spillet.
+class GameReport {
+  const GameReport({this.records = const <GameRecord>[], this.anchor});
+  final List<GameRecord> records;
+  final UserStats? anchor;
 }
