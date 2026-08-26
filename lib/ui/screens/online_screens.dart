@@ -184,8 +184,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 // Online-hjem: opret spil + mine spil/invitationer
 // ---------------------------------------------------------------------------
 
-class OnlineHomeScreen extends ConsumerWidget {
+class OnlineHomeScreen extends ConsumerStatefulWidget {
   const OnlineHomeScreen({super.key});
+
+  @override
+  ConsumerState<OnlineHomeScreen> createState() => _OnlineHomeScreenState();
+}
+
+class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
+  /// Antal afsluttede spil der vises uden at folde ud. Resten er ét tryk væk
+  /// — aldrig tavs afkortning (det var netop klagen: "spillet forsvandt").
+  static const int _kArchivePreview = 5;
+  bool _showAllArchive = false;
 
   /// Grøn "det er din tur til at handle"-chip.
   Widget _actionChip(String label) {
@@ -208,6 +218,62 @@ class OnlineHomeScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Række i arkivet. BEVIDST en anden — og kortere — række end de aktive:
+  /// her er dato og deltagere det man leder efter, ikke "tryk for at
+  /// genindtræde". Ingen papirkurv: at slette et afsluttet spil ville også
+  /// fjerne grundlaget for statistikken for ALLE fire deltagere.
+  Widget _archiveTile(BuildContext context, GameSummary g) {
+    final List<String> participants = g.playerNames
+        .where((String n) => n.trim().isNotEmpty && n != 'Åben')
+        .toList();
+    // Uset rapport: SPOIL ikke udfaldet — det er netop dét man åbner for.
+    // Ellers står resultatet med ORD (ikke kun farve/emoji), så det kan
+    // læses af alle og i et smalt vindue.
+    final bool? won = g.iWon;
+    final String result = g.unseen
+        ? 'Ny slutrapport — tryk for at se'
+        : (won == null
+            ? 'Afsluttet'
+            : (won ? '🏆 Du vandt' : 'Du tabte'));
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      child: ListTile(
+        dense: true,
+        leading: VariantBadge(variant: g.variant, compact: true),
+        title: Text(
+          '${_archiveDate(g.finishedAtMs)} · $result',
+          style: TextStyle(
+              fontWeight: g.unseen ? FontWeight.bold : FontWeight.normal),
+        ),
+        subtitle: Text(
+          participants.isEmpty ? 'Spil ${g.code}' : participants.join(', '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            // Genbruger spilskærmen: den tegner slutstillingen og viser
+            // rapporten (WinNavigator) — så fejringen findes ét sted i koden.
+            builder: (_) => OnlineGameScreen(code: g.code),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// "14. aug." / "14. aug. 2025" (år kun når det ikke er i år).
+  static String _archiveDate(int? ms) {
+    if (ms == null) return 'Ukendt dato';
+    final DateTime t = DateTime.fromMillisecondsSinceEpoch(ms);
+    const List<String> m = <String>[
+      'jan.', 'feb.', 'mar.', 'apr.', 'maj', 'jun.',
+      'jul.', 'aug.', 'sep.', 'okt.', 'nov.', 'dec.',
+    ];
+    final String base = '${t.day}. ${m[t.month - 1]}';
+    return t.year == DateTime.now().year ? base : '$base ${t.year}';
   }
 
   Widget _gameTile(BuildContext context, WidgetRef ref, GameSummary g) {
@@ -335,7 +401,7 @@ class OnlineHomeScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final svc = ref.read(onlineServiceProvider);
     final games = ref.watch(myGamesProvider);
     return Scaffold(
@@ -399,13 +465,23 @@ class OnlineHomeScreen extends ConsumerWidget {
             Expanded(
               child: games.when(
                 data: (list) {
-                  if (list.isEmpty) {
+                  // Igangværende spil først (så man hurtigt kan genindtræde),
+                  // dernæst lobbyer der venter, og til sidst arkivet.
+                  final playing = list.where((g) => g.isPlaying).toList();
+                  final lobbies =
+                      list.where((g) => g.isLobby).toList();
+                  // Arkivet: afsluttede ONLINE-spil, nyeste først. Solospil
+                  // mod computeren holdes ude (de er i flertal og hører til i
+                  // profilen). Ét sted: archiveOf i online_service.
+                  final List<GameSummary> archiveAll = archiveOf(list);
+                  final List<GameSummary> archive = _showAllArchive
+                      ? archiveAll
+                      : archiveOf(list, limit: _kArchivePreview);
+                  // Tom-tilstanden måler på AKTIVE spil: har man kun et arkiv,
+                  // skal opfordringen til at starte et spil stadig stå.
+                  if (playing.isEmpty && lobbies.isEmpty && archive.isEmpty) {
                     return const Text('Ingen aktive spil endnu.');
                   }
-                  // Igangværende spil først (så man hurtigt kan genindtræde),
-                  // dernæst lobbyer der venter.
-                  final playing = list.where((g) => g.isPlaying).toList();
-                  final lobbies = list.where((g) => !g.isPlaying).toList();
                   return ListView(
                     children: <Widget>[
                       if (playing.isNotEmpty) ...<Widget>[
@@ -426,6 +502,25 @@ class OnlineHomeScreen extends ConsumerWidget {
                                   fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
                         for (final g in lobbies) _gameTile(context, ref, g),
+                        const SizedBox(height: 12),
+                      ],
+                      if (archive.isNotEmpty) ...<Widget>[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Text('Afsluttede spil',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                        for (final g in archive) _archiveTile(context, g),
+                        if (!_showAllArchive &&
+                            archiveAll.length > archive.length)
+                          // Aldrig tavs afkortning: sig hvor mange der er.
+                          TextButton(
+                            onPressed: () =>
+                                setState(() => _showAllArchive = true),
+                            child: Text(
+                                'Se alle afsluttede (${archiveAll.length})'),
+                          ),
                       ],
                     ],
                   );

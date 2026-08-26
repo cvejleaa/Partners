@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -60,7 +61,22 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   /// [_statsRecomputed]: da de delte flag, spærrede et mislykket
   /// navigations-forsøg for alle senere forsøg, og spillet skriver aldrig
   /// mere til doc'et efter 'over'. Se WinNavigator.
-  final WinNavigator _winNav = WinNavigator();
+  /// Var spillet ALLEREDE slut ved første build? Så kigger man på en gammel
+  /// slutrapport fra arkivet — ikke på et parti der lige er endt. Bruges til
+  /// at undgå unødigt arbejde på et dødt spil (genberegning, replay) og til
+  /// at springe ventetiden på brik-animationen over.
+  bool? _wasOverOnOpen;
+
+  /// Har vi markeret en åbnet slutrapport som set? (én gang pr. skærm).
+  bool _archiveSeenMarked = false;
+
+  WinNavigator? _winNavField;
+  WinNavigator get _winNav => _winNavField ??= WinNavigator(
+        // Ingen brik-animation at vente på i et afsluttet spil.
+        settleDelay: _wasOverOnOpen == true
+            ? Duration.zero
+            : const Duration(milliseconds: 560),
+      );
   Timer? _heartbeat;
   String _lastTakeoverSig = '';
   bool _initialReplayChecked = false;
@@ -304,6 +320,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           final state = gameStateFromMap(
               Map<String, dynamic>.from(d['state'] as Map),
               variantsRaw: d['cardRulesVariants']);
+          _wasOverOnOpen ??= state.winningTeamIndex != null;
           final uids = d['uids'] as List;
           final myUid = _svc.uid;
           final int mySeat = uids.indexOf(myUid);
@@ -314,7 +331,19 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
 
           final seenMap = (d['seen'] as Map?) ?? const <String, dynamic>{};
           final int mySeen = (seenMap[myUid] as num?)?.toInt() ?? 0;
-          _maybeStartReplay(state, log, mySeen);
+          // Intet "mens du var væk"-replay i et afsluttet spil: rapporten er
+          // det man kom efter, og navigationen ville alligevel afbryde det.
+          if (state.winningTeamIndex == null) {
+            _maybeStartReplay(state, log, mySeen);
+          } else if (!_archiveSeenMarked && mySeen < log.length) {
+            // Men markér den så SET her — ellers ville "Ny slutrapport"-
+            // mærket i arkivet aldrig kunne ryddes (replay'en er normalt den
+            // der kalder markSeen). Én skrivning, kun når der faktisk er
+            // noget uset.
+            _archiveSeenMarked = true;
+            // ignore: discarded_futures
+            _svc.markSeen(widget.code, log.length);
+          }
 
           if (!_replayActive) _maybeHostAct(state, isHost, d, presenceMs);
 
@@ -333,7 +362,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           if (state.winningTeamIndex != null && !_winNav.navigated) {
             // Stats genberegnes præcis én gang; navigationen har sin EGEN
             // lås, så et forsøg der ikke nåede igennem kan prøves igen.
-            if (!_statsRecomputed) {
+            // Genberegning hører til det ØJEBLIK spillet sluttede. Åbner man
+            // en gammel rapport fra arkivet, er tallene for længst skrevet —
+            // og et fuldt scan af brugerens spil pr. åbning ville være den
+            // dyreste linje i hele arkivet (QC-fund).
+            if (!_statsRecomputed && _wasOverOnOpen == false) {
               _statsRecomputed = true;
               final myUid = _svc.uid;
               if (myUid != null && mySeat >= 0) {
@@ -376,6 +409,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                         variant: state.variant,
                         winningTeamIndex: winner,
                         fromOnline: true,
+                        gameCode: widget.code,
+                        archived: _wasOverOnOpen == true,
+                        playedAt: d['finishedAt'] is Timestamp
+                            ? (d['finishedAt'] as Timestamp).toDate()
+                            : null,
                         boardImage: shot,
                         marginFields: margin,
                         viewerWon: viewerWon,

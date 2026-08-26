@@ -88,6 +88,30 @@ final myGamesProvider = StreamProvider<List<GameSummary>>((ref) {
   return ref.read(onlineServiceProvider).myGamesFor(user.uid);
 });
 
+/// Vandt sædet [mySeat] for hold [winningTeamIndex]? Ren funktion — makkerne
+/// sidder diagonalt (plads 0+2 = hold 0, plads 1+3 = hold 1). Null når det
+/// ikke kan afgøres.
+bool? didIWin(int mySeat, int? winningTeamIndex) {
+  if (winningTeamIndex == null || mySeat < 0) return null;
+  return mySeat % 2 == winningTeamIndex;
+}
+
+/// Arkivet: de afsluttede ONLINE-spil, nyeste først.
+///
+/// Solospil mod computeren (isAi) holdes UDE — de gemmes også i
+/// games-collectionen, og de er i flertal, så de ville skubbe de rigtige
+/// partier ud af listen. De ses i profilen i stedet.
+/// [limit] er et VISNINGS-loft; null = alle (når brugeren folder ud).
+List<GameSummary> archiveOf(List<GameSummary> all, {int? limit}) {
+  final List<GameSummary> out = all
+      .where((GameSummary g) => g.isOver && !g.isAi)
+      .toList()
+    ..sort((GameSummary a, GameSummary b) =>
+        (b.finishedAtMs ?? 0).compareTo(a.finishedAtMs ?? 0));
+  if (limit == null || out.length <= limit) return out;
+  return out.sublist(0, limit);
+}
+
 class GameSummary {
   GameSummary(this.code, this.hostName, this.status, this.playerNames,
       {this.hostUid,
@@ -97,7 +121,12 @@ class GameSummary {
       this.needsExchange = false,
       this.variantId = 'classic',
       this.variantLabel = '',
-      this.variant = classicVariant});
+      this.variant = classicVariant,
+      this.finishedAtMs,
+      this.winningTeamIndex,
+      this.mySeat = -1,
+      this.unseen = false,
+      this.isAi = false});
   final String code;
   final String hostName;
   final String status;
@@ -128,8 +157,30 @@ class GameSummary {
   /// bytte-kort (dvs. brugeren skal handle).
   final bool needsExchange;
 
+  /// Hvornår spillet sluttede (epoch-ms). Null for spil der ikke er slut.
+  final int? finishedAtMs;
+
+  /// Vinderholdet (0/1) for et afsluttet spil; null hvis ukendt.
+  final int? winningTeamIndex;
+
+  /// Min plads i spillet (-1 hvis jeg ikke sad med).
+  final int mySeat;
+
+  /// Sluttede spillet uden at jeg så det? (færre sete log-indlæg end der er).
+  /// Bruges til at vise "Ny slutrapport" i stedet for at SPOILE udfaldet.
+  final bool unseen;
+
+  /// Solospil mod computeren (mode:'ai'). De gemmes også i games-collectionen,
+  /// men hører hjemme i profilen — ikke i online-arkivet.
+  final bool isAi;
+
   bool get isLobby => status == 'lobby';
   bool get isPlaying => status == 'playing';
+  bool get isOver => status == 'over';
+
+  /// Vandt jeg? Null når det ikke kan afgøres (ukendt vinder eller jeg sad
+  /// ikke med). Makkerne sidder diagonalt: plads 0+2 mod 1+3.
+  bool? get iWon => didIWin(mySeat, winningTeamIndex);
 }
 
 /// Hvor længe der maks. må gå uden handling/heartbeat fra en spiller, før en
@@ -611,6 +662,25 @@ class OnlineService {
             ? state['vid'] as String
             : (d['variantId'] is String ? d['variantId'] as String : null),
         d['cardRulesVariants']);
+    // Arkiv-felter. Vinderen læses fra STATE ('wt') som autoritet: topniveau-
+    // feltet skrives kun ved selve overgangen, så ældre docs kan mangle det.
+    final List<dynamic> uidsAll = (d['uids'] as List?) ?? const <dynamic>[];
+    final int mySeat = uidsAll.indexOf(uid);
+    int? winner;
+    if (status == 'over') {
+      if (state is Map && state['wt'] is num) {
+        winner = (state['wt'] as num).toInt();
+      } else if (d['winningTeamIndex'] is num) {
+        winner = (d['winningTeamIndex'] as num).toInt();
+      }
+    }
+    // "Så jeg slutningen?" — samme kilde som replay'en bruger: har jeg set
+    // færre log-indlæg end der findes, sluttede spillet mens jeg var væk.
+    final int logLen = (d['log'] as List?)?.length ?? 0;
+    final dynamic seenRaw = d['seen'];
+    final int mySeen = (seenRaw is Map && seenRaw[uid] is num)
+        ? (seenRaw[uid] as num).toInt()
+        : 0;
     return GameSummary(
       id,
       d['hostName'] as String? ?? '?',
@@ -624,7 +694,20 @@ class OnlineService {
       variantId: variant.id,
       variantLabel: variantDisplayName(variant, d['cardRulesVariants']),
       variant: variant,
+      finishedAtMs: _tsMs(d['finishedAt']) ?? _tsMs(d['createdAt']),
+      winningTeamIndex: winner,
+      mySeat: mySeat,
+      unseen: status == 'over' && mySeen < logLen,
+      isAi: d['mode'] == 'ai',
     );
+  }
+
+  /// Firestore-tidsstempel (eller rå int) → epoch-ms. Samme klampning som
+  /// stats-laget bruger; null når feltet mangler.
+  static int? _tsMs(dynamic v) {
+    if (v is Timestamp) return v.millisecondsSinceEpoch;
+    if (v is int) return v;
+    return null;
   }
 
   /// Spil hvor [uid] er medlem. Kaldes med et bekræftet uid fra
@@ -642,9 +725,16 @@ class OnlineService {
         yield* _games
             .where('members', arrayContains: uid)
             .snapshots()
+            // BEMÆRK: afsluttede spil filtreres IKKE længere fra — arkiv-
+            // sektionen viser dem (archiveOf sorterer og afgrænser). Det
+            // koster ingen ekstra læsninger: forespørgslen hentede dem
+            // allerede, filteret smed dem bare væk.
+            // NAVNGIVET GRÆNSE: forespørgslen er stadig ubundet (alle spil
+            // man er medlem af). At binde den kræver et sammensat indeks
+            // (status + finishedAt), og der findes ingen firestore.indexes.json
+            // i repoet endnu — det er en selvstændig opgave.
             .map((q) => q.docs
                 .map((d) => _summaryFromDoc(d.id, d.data(), uid))
-                .where((g) => g.status != 'over')
                 .toList());
         return; // snapshots() afsluttes normalt aldrig.
       } on FirebaseException catch (e) {

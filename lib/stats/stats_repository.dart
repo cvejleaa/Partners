@@ -89,7 +89,9 @@ class StatsRepository {
         .where('uids', arrayContains: uid)
         .get();
     return snap.docs
-        .map((d) => Map<String, dynamic>.from(d.data()))
+        // Doc-id'et (spilkoden) med, så et BESTEMT spil kan slås op igen —
+        // fx når en gammel slutrapport åbnes fra arkivet.
+        .map((d) => <String, dynamic>{...d.data(), 'code': d.id})
         .where((g) => g['status'] == 'over')
         .toList();
   }
@@ -301,6 +303,41 @@ class StatsRepository {
     if (scoped != null) return scoped;
     if (doc.total.gamesPlayed > 0) return null;
     return UserStats(uid: doc.total.uid, displayName: doc.total.displayName);
+  }
+
+  /// Rekorder for ÉT bestemt spil ([code]) — målt som de så ud DENGANG.
+  ///
+  /// Aggregatet bygges kun af de spil der var afsluttet på det tidspunkt
+  /// (inklusive spillet selv, præcis som live-stien hvor cachen allerede er
+  /// genberegnet med det nye spil). Ellers ville en gammel slutrapport
+  /// påstå "ny rekord" ud fra tal, der først kom senere — eller tie om en
+  /// rekord, der faktisk blev sat dengang.
+  ///
+  /// Koster samme ENE forespørgsel som en almindelig genberegning: alle
+  /// brugerens spil er allerede hentet.
+  Future<List<GameRecord>> recordsForGame(String uid, String code,
+      {String Function(String variantId)? labelFor}) async {
+    final List<Map<String, dynamic>> games = await _ownFinishedGames(uid);
+    final Map<String, dynamic>? game =
+        games.where((g) => g['code'] == code).firstOrNull;
+    if (game == null) return const <GameRecord>[];
+    final int cutoff = _ts(game['finishedAt']) ?? _ts(game['createdAt']) ?? 0;
+    final List<Map<String, dynamic>> until = games.where((g) {
+      final int t = _ts(g['finishedAt']) ?? _ts(g['createdAt']) ?? 0;
+      return t <= cutoff;
+    }).toList();
+    final PartitionedStats then = computePartitionedStats(until);
+    final String vid = variantIdOfGameDoc(game);
+    final UserStats? aggregate = then.byVariant[vid]?[uid];
+    final UserStats? lastGame =
+        computeAllStats(<Map<String, dynamic>>[game])[uid];
+    if (aggregate == null || lastGame == null) return const <GameRecord>[];
+    return recordsFromLastGame(
+      aggregate: aggregate,
+      lastGame: lastGame,
+      variantLabel:
+          labelFor != null ? labelFor(vid) : variantForState(vid).shortLabel,
+    );
   }
 
   static int? _ts(dynamic v) {

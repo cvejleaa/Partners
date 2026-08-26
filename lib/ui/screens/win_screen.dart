@@ -26,6 +26,9 @@ class WinScreen extends ConsumerStatefulWidget {
     this.onRematch,
     this.rematchLabel,
     this.variant,
+    this.gameCode,
+    this.archived = false,
+    this.playedAt,
   });
 
   final int winningTeamIndex;
@@ -44,6 +47,19 @@ class WinScreen extends ConsumerStatefulWidget {
 
   final List<String> winnerNames;
   final List<Color> winnerColors;
+
+  /// Spillets kode. Når den er sat, hentes rekorderne for PRÆCIS dét spil
+  /// (målt som de så ud dengang) i stedet for "dit seneste spil".
+  final String? gameCode;
+
+  /// Åbnet fra arkivet (en gammel slutrapport) frem for lige efter spillet.
+  /// Så: ingen sejrsfanfare (den ville lyde selv når man TABTE), og
+  /// luk-knappen fører tilbage til listen i stedet for helt ud på forsiden.
+  final bool archived;
+
+  /// Hvornår partiet blev spillet — vises kun i arkiv-visningen, hvor man
+  /// ellers ikke kan kende partierne fra hinanden.
+  final DateTime? playedAt;
 
   /// Kald for at starte en revanche (online) / nyt spil (AI). Vises som knap
   /// hvis sat.
@@ -75,7 +91,9 @@ class _WinScreenState extends ConsumerState<WinScreen>
     _loadRecords();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(feedbackProvider).win();
+      // Fanfaren hører til ØJEBLIKKET. I arkivet ville den lyde hver gang man
+      // åbner en gammel rapport — også et TABT parti (lyden er ubetinget).
+      if (!widget.archived) ref.read(feedbackProvider).win();
     });
   }
 
@@ -93,12 +111,28 @@ class _WinScreenState extends ConsumerState<WinScreen>
       // rekord-teksten siger "Ny rekord i Familie!" og ikke id'et.
       final dynamic variantsRaw =
           ref.read(variantCardRulesProvider).toRawJson();
-      final records = await _repo.lastGameRecordsFor(uid,
-          labelFor: (String vid) =>
-              variantFromRaw(vid, variantsRaw).shortLabel);
+      final String Function(String) label =
+          (String vid) => variantFromRaw(vid, variantsRaw).shortLabel;
+      // Kendes spillets kode, måles rekorderne på PRÆCIS dét spil, som de så
+      // ud dengang — ellers ville en gammel rapport vise rekorder fra et
+      // senere parti.
+      final records = widget.gameCode != null
+          ? await _repo.recordsForGame(uid, widget.gameCode!, labelFor: label)
+          : await _repo.lastGameRecordsFor(uid, labelFor: label);
       if (!mounted) return;
       if (records.isNotEmpty) setState(() => _records = records);
     } catch (_) {}
+  }
+
+  /// "14. aug. 2026 kl. 20.15" — dansk, kort, uden ekstra pakker.
+  static String _playedAtLabel(DateTime t) {
+    const List<String> m = <String>[
+      'jan.', 'feb.', 'mar.', 'apr.', 'maj', 'jun.',
+      'jul.', 'aug.', 'sep.', 'okt.', 'nov.', 'dec.',
+    ];
+    final String hh = t.hour.toString().padLeft(2, '0');
+    final String mm = t.minute.toString().padLeft(2, '0');
+    return '${t.day}. ${m[t.month - 1]} ${t.year} kl. $hh.$mm';
   }
 
   List<Color> get _confettiColors {
@@ -113,7 +147,11 @@ class _WinScreenState extends ConsumerState<WinScreen>
 
   @override
   Widget build(BuildContext context) {
-    final teamLabel = widget.winningTeamIndex == 0 ? 'Hold A' : 'Hold B';
+    // Ved bordet siger man navnene, ikke "Hold A" — og i en rapport man ser
+    // uger senere er holdet ellers uidentificerbart.
+    final String teamLabel = widget.winnerNames.isEmpty
+        ? (widget.winningTeamIndex == 0 ? 'Hold A' : 'Hold B')
+        : widget.winnerNames.join(' & ');
     final bool reduceMotion = MediaQuery.of(context).disableAnimations;
     final int? margin = widget.marginFields;
 
@@ -166,6 +204,14 @@ class _WinScreenState extends ConsumerState<WinScreen>
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                    if (widget.archived && widget.playedAt != null) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Text(
+                        _playedAtLabel(widget.playedAt!),
+                        style: const TextStyle(
+                            color: Color(0xFF9C8B73), fontSize: 13),
+                      ),
+                    ],
                     if (margin != null) ...<Widget>[
                       const SizedBox(height: 6),
                       Text(
@@ -235,9 +281,15 @@ class _WinScreenState extends ConsumerState<WinScreen>
                             ref.read(gameProvider.notifier).reset();
                           }
                           Navigator.of(context)
-                              .popUntil((route) => route.isFirst);
+                              .popUntil((route) =>
+                                  // Fra arkivet: ét skridt tilbage til
+                                  // listen, så man kan åbne næste rapport.
+                                  // Ellers helt ud på forsiden som før.
+                                  widget.archived || route.isFirst);
                         },
-                        child: const Text('Tilbage til forsiden'),
+                        child: Text(widget.archived
+                            ? 'Tilbage til listen'
+                            : 'Tilbage til forsiden'),
                       ),
                     ),
                   ],
