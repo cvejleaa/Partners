@@ -105,21 +105,26 @@ class StatsRepository {
         .get();
     return snap.docs
         .map((d) => Map<String, dynamic>.from(d.data()))
+        .where(countsInStats)
         .toList();
   }
 
-  /// AI-solospil markeres med `mode: 'ai'` (se app.dart). De skal KUN tælle i
-  /// brugerens egen profil, ikke i den offentlige rangliste — så online-cachen
-  /// beregnes af spil UDEN den markør.
+  /// Tæller dette spil overhovedet med i statistikken?
   ///
-  /// BEVIDST afgrænsning: dette udelukker kun det lokale solo-praksis-flow
-  /// (den nemme "spil mod computeren"-genvej). Online-lobbyspil med en eller
-  /// flere AI-pladser har ingen `mode` og tæller derfor stadig med — de er
-  /// rigtige spil sat op mellem mennesker. Vil man også holde dem ude, skal
-  /// filteret skifte til "kun 4 menneskelige uids" (isFullyOnline).
-  static List<Map<String, dynamic>> _onlineOnly(
-          List<Map<String, dynamic>> games) =>
-      games.where((g) => g['mode'] != 'ai').toList();
+  /// AI-solospil (`mode: 'ai'`, se app.dart) gør IKKE. De er øvebaner, ikke
+  /// partier, og de gjorde tallene selvmodsigende: profilen talte dem med,
+  /// mens den offentlige rangliste holdt dem ude, så samme spiller havde to
+  /// forskellige badge-tal (brugerfund).
+  ///
+  /// ÉN vagt, brugt ét sted — ved kilden ([_ownFinishedGames] og
+  /// [_allFinishedGames]) — så profil, rangliste, rekorder, "sidste spil" og
+  /// kortregnskabet umuligt kan komme til at måle hver sit sæt spil.
+  ///
+  /// NAVNGIVET GRÆNSE: markøren sidder kun på det lokale solo-flow. Et
+  /// ONLINE-parti hvor en AI dækkede en fraværende plads har ingen `mode` og
+  /// tæller stadig med — det er et rigtigt parti aftalt mellem mennesker, og
+  /// de øvrige tre spilleres tal ville ellers forsvinde med det.
+  static bool countsInStats(Map<String, dynamic> game) => game['mode'] != 'ai';
 
   /// Hent KUN de afsluttede spil hvor [uid] selv var med.
   ///
@@ -142,6 +147,7 @@ class StatsRepository {
         // fx når en gammel slutrapport åbnes fra arkivet.
         .map((d) => <String, dynamic>{...d.data(), 'code': d.id})
         .where((g) => g['status'] == 'over')
+        .where(countsInStats)
         .toList();
   }
 
@@ -203,15 +209,16 @@ class StatsRepository {
   /// 100 % retroaktiv).
   Future<Map<String, UserStats>> recomputeAndSave() async {
     final games = await _allFinishedGames();
+    // ÉN beregning fodrer begge dokumenter: den private (fuld form) og den
+    // offentlige (slank byVariant). De to talte før hvert sit sæt spil.
     final combined = computePartitionedStats(games);
-    final online = computePartitionedStats(_onlineOnly(games));
     await _saveAllTo('userStats', <String, Map<String, dynamic>>{
       for (final s in combined.total.values)
         s.uid: docJsonFor(s, combined.byVariant, slim: false),
     });
     await _saveAllTo('userStatsOnline', <String, Map<String, dynamic>>{
-      for (final s in online.total.values)
-        s.uid: docJsonFor(s, online.byVariant, slim: true),
+      for (final s in combined.total.values)
+        s.uid: docJsonFor(s, combined.byVariant, slim: true),
     });
     return combined.total;
   }
@@ -226,12 +233,12 @@ class StatsRepository {
     final games = await _ownFinishedGames(uid);
     final combined = computePartitionedStats(games);
     final UserStats? own = combined.total[uid];
-    // Online-kun cache til ranglisten. Hvis brugeren ingen online-spil har,
-    // skrives 0-stats (med rigtigt navn), så evt. gamle online-tal ryddes og
-    // brugeren ikke fejlagtigt bliver hængende på ranglisten.
-    final online = computePartitionedStats(_onlineOnly(games));
-    final UserStats onlineOwn = online.total[uid] ??
-        UserStats(uid: uid, displayName: own?.displayName ?? 'Spiller');
+    // Den offentlige rangliste bygger på PRÆCIS samme tal som profilen —
+    // kun formen er slankere. Har brugeren ingen spil, skrives 0-stats (med
+    // rigtigt navn), så gamle tal ryddes og ingen bliver hængende på
+    // ranglisten.
+    final UserStats ownOrEmpty =
+        own ?? UserStats(uid: uid, displayName: 'Spiller');
     // ÉN batch for BEGGE dokumenter (QC-fund): det er userStats-skrivningen
     // der rydder `staleSince`-markøren. Blev de skrevet hver for sig og det
     // andet kald fejlede (netværksdrop på mobil), ville markøren være væk,
@@ -243,12 +250,10 @@ class StatsRepository {
     // `staleSince`-markøren aldrig blive ryddet, og hver app-start ville
     // koste et forgæves læs + genberegning for evigt (security-fund: kan
     // fremprovokeres ved at markere nogen og derefter slette spillet).
-    final UserStats ownOrEmpty = own ??
-        UserStats(uid: uid, displayName: onlineOwn.displayName);
     batch.set(_db.collection('userStats').doc(uid),
         docJsonFor(ownOrEmpty, combined.byVariant, slim: false));
     batch.set(_db.collection('userStatsOnline').doc(uid),
-        docJsonFor(onlineOwn, online.byVariant, slim: true));
+        docJsonFor(ownOrEmpty, combined.byVariant, slim: true));
     await batch.commit();
   }
 

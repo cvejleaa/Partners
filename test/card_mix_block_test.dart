@@ -75,10 +75,13 @@ void main() {
     // Byttes de to overskrifter om, peger tabellen forkert — og uden denne
     // test ville ingen opdage det (TM-fund).
     await _pump(tester);
-    expect(tester.getCenter(find.text('Jer')).dx,
-        closeTo(tester.getCenter(find.text('17')).dx, 1.0));
-    expect(tester.getCenter(find.text('Dem')).dx,
-        closeTo(tester.getCenter(find.text('12')).dx, 1.0));
+    // HØJRE kant, ikke centrum: overskriften fylder hele kolonnen, mens
+    // tallet er højrestillet inde i den — centrene ligger derfor ikke oven i
+    // hinanden, selv når kolonnerne er de rigtige.
+    expect(tester.getRect(find.text('Jer')).right,
+        closeTo(tester.getRect(find.text('17')).right, 1.0));
+    expect(tester.getRect(find.text('Dem')).right,
+        closeTo(tester.getRect(find.text('12')).right, 1.0));
   });
 
   testWidgets('forskellen siges med ord', (WidgetTester tester) async {

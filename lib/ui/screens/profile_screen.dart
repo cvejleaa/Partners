@@ -530,7 +530,8 @@ class _LastGameTabState extends State<_LastGameTab> {
                 Padding(
                   padding: EdgeInsets.all(24),
                   child: Text(
-                    'Du har ikke spillet et færdigspillet spil endnu.',
+                    'Du har ikke spillet et færdigt spil med andre endnu.\n'
+                    'Solospil mod computeren tælles ikke med i statistikken.',
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -683,15 +684,12 @@ class _StatsBody extends StatelessWidget {
           ],
         ]),
         _section('Tempo & adfærd', <Widget>[
-          if (!singleGame && s.gamesPlayed > 0) ...<Widget>[
-            _statRow('Online vs AI',
-                '${s.gamesOnline} online · ${s.gamesAiOnly} med AI'),
+          // Ingen "online vs AI"-række længere: solospil mod computeren
+          // tælles slet ikke med i statistikken, så tallet ville altid være
+          // "N online · 0 med AI" — et tal der ikke kan ændre sig er støj.
+          if (!singleGame && s.gamesPlayed > 0)
             _statRow('Værts-rate 👑',
                 '${s.gamesAsHost}/${s.gamesPlayed} spil'),
-          ],
-          if (singleGame)
-            _statRow('Spil-type',
-                s.gamesOnline > 0 ? 'Online' : 'Med AI'),
           if (!singleGame && s.avgHandsPerWin > 0)
             _statRow('Snit hænder pr. sejr',
                 s.avgHandsPerWin.toStringAsFixed(1)),
@@ -780,7 +778,8 @@ class _BadgesSection extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
                 'Optjen badges ved at spille og udvikle din stil. Badges '
-                'tæller alle dine spil — også på tværs af varianter.',
+                'tæller dine spil med andre — på tværs af varianter. '
+                'Solospil mod computeren tæller ikke med.',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             for (final entry in groups.entries) ...<Widget>[
               const SizedBox(height: 12),
