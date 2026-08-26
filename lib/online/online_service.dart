@@ -617,98 +617,15 @@ class OnlineService {
 
   /// Byg en [GameSummary] ud fra spil-dokumentet, inkl. hvis tur det er (for
   /// igangværende spil) set fra [uid]'s perspektiv.
-  GameSummary _summaryFromDoc(
-      String id, Map<String, dynamic> d, String uid) {
-    final List<String> names =
-        (d['names'] as List? ?? const <dynamic>[]).map((e) => '$e').toList();
-    final String status = d['status'] as String? ?? 'lobby';
-
-    String? phase;
-    String? currentName;
-    bool isMyTurn = false;
-    bool needsExchange = false;
-    final state = d['state'];
-    if (status == 'playing' && state is Map) {
-      phase = state['ph'] as String?;
-      final uids = d['uids'] as List?;
-      if (phase == 'play') {
-        // Kun i play-fasen er currentPlayerIndex en rigtig "tur".
-        final int? cp = (state['cp'] as num?)?.toInt();
-        if (cp != null) {
-          if (cp >= 0 && cp < names.length) currentName = names[cp];
-          if (uids != null && cp >= 0 && cp < uids.length) {
-            isMyTurn = uids[cp] == uid;
-          }
-        }
-      } else if (phase == 'exchange') {
-        // I byttefasen skal brugeren handle hvis de endnu ikke har afgivet et
-        // kort (samme signal som spillet selv: exchangeBuffer[seat]).
-        final int mySeat = uids?.indexOf(uid) ?? -1;
-        final eb = state['eb'];
-        if (mySeat >= 0) {
-          needsExchange = !(eb is Map && eb.containsKey('$mySeat'));
-        }
-      }
-    }
-
-    // Variant (defensivt; ukendt → klassisk) + resolvet navn — læses HER,
-    // hvor doc'et er: GameSummary er det eneste liste-laget ser. Efter start
-    // er STATE'ns 'vid' autoriteten (doc-feltet kan i princippet ændres af et
-    // medlem midt i spillet uden at røre brættet) — foretræk den.
-    // Materialiseret fra doc'ets kopi, så "Mine spil"-badgen viser custom-
-    // varianters navn/farve. Under spillet er state.vid autoriteten.
-    final VariantConfig variant = variantFromRaw(
-        (status == 'playing' && state is Map && state['vid'] is String)
-            ? state['vid'] as String
-            : (d['variantId'] is String ? d['variantId'] as String : null),
-        d['cardRulesVariants']);
-    // Arkiv-felter. Vinderen læses fra STATE ('wt') som autoritet: topniveau-
-    // feltet skrives kun ved selve overgangen, så ældre docs kan mangle det.
-    final List<dynamic> uidsAll = (d['uids'] as List?) ?? const <dynamic>[];
-    final int mySeat = uidsAll.indexOf(uid);
-    int? winner;
-    if (status == 'over') {
-      if (state is Map && state['wt'] is num) {
-        winner = (state['wt'] as num).toInt();
-      } else if (d['winningTeamIndex'] is num) {
-        winner = (d['winningTeamIndex'] as num).toInt();
-      }
-    }
-    // "Så jeg slutningen?" — samme kilde som replay'en bruger: har jeg set
-    // færre log-indlæg end der findes, sluttede spillet mens jeg var væk.
-    final int logLen = (d['log'] as List?)?.length ?? 0;
-    final dynamic seenRaw = d['seen'];
-    final int mySeen = (seenRaw is Map && seenRaw[uid] is num)
-        ? (seenRaw[uid] as num).toInt()
-        : 0;
-    return GameSummary(
-      id,
-      d['hostName'] as String? ?? '?',
-      status,
-      names,
-      hostUid: d['hostUid'] as String?,
-      phase: phase,
-      currentName: currentName,
-      isMyTurn: isMyTurn,
-      needsExchange: needsExchange,
-      variantId: variant.id,
-      variantLabel: variantDisplayName(variant, d['cardRulesVariants']),
-      variant: variant,
-      finishedAtMs: _tsMs(d['finishedAt']) ?? _tsMs(d['createdAt']),
-      winningTeamIndex: winner,
-      mySeat: mySeat,
-      unseen: status == 'over' && mySeen < logLen,
-      isAi: d['mode'] == 'ai',
-    );
-  }
+  /// Byg en [GameSummary] ud fra spil-dokumentet, inkl. hvis tur det er (for
+  /// igangværende spil) set fra [uid]'s perspektiv. Selve udledningen ligger
+  /// i den top-level [gameSummaryFromDoc], så den kan testes uden Firebase.
+  GameSummary _summaryFromDoc(String id, Map<String, dynamic> d, String uid) =>
+      gameSummaryFromDoc(id, d, uid);
 
   /// Firestore-tidsstempel (eller rå int) → epoch-ms. Samme klampning som
   /// stats-laget bruger; null når feltet mangler.
-  static int? _tsMs(dynamic v) {
-    if (v is Timestamp) return v.millisecondsSinceEpoch;
-    if (v is int) return v;
-    return null;
-  }
+
 
   /// Spil hvor [uid] er medlem. Kaldes med et bekræftet uid fra
   /// [myGamesProvider], der venter på login før abonnementet startes.
@@ -1124,3 +1041,102 @@ Map<String, dynamic> exchangeLogEntry(int seat, PlayingCard givenCard) =>
       'type': 'exchange',
       'card': cardToMap(givenCard),
     };
+
+/// Udled en [GameSummary] af et RÅ spil-dokument — top-level, og dermed
+/// testbar uden Firebase.
+///
+/// Her ligger de afledninger, arkivet hviler på: hvem vandt (state'ns 'wt' er
+/// autoritet, topniveau-feltet er fallback for ældre docs), hvornår spillet
+/// sluttede, og om JEG har set slutningen. De sad før på en privat metode i
+/// en klasse, der ikke kan konstrueres i et testmiljø — og var derfor helt
+/// udækkede.
+GameSummary gameSummaryFromDoc(
+    String id, Map<String, dynamic> d, String uid) {
+    final List<String> names =
+        (d['names'] as List? ?? const <dynamic>[]).map((e) => '$e').toList();
+    final String status = d['status'] as String? ?? 'lobby';
+
+    String? phase;
+    String? currentName;
+    bool isMyTurn = false;
+    bool needsExchange = false;
+    final state = d['state'];
+    if (status == 'playing' && state is Map) {
+      phase = state['ph'] as String?;
+      final uids = d['uids'] as List?;
+      if (phase == 'play') {
+        // Kun i play-fasen er currentPlayerIndex en rigtig "tur".
+        final int? cp = (state['cp'] as num?)?.toInt();
+        if (cp != null) {
+          if (cp >= 0 && cp < names.length) currentName = names[cp];
+          if (uids != null && cp >= 0 && cp < uids.length) {
+            isMyTurn = uids[cp] == uid;
+          }
+        }
+      } else if (phase == 'exchange') {
+        // I byttefasen skal brugeren handle hvis de endnu ikke har afgivet et
+        // kort (samme signal som spillet selv: exchangeBuffer[seat]).
+        final int mySeat = uids?.indexOf(uid) ?? -1;
+        final eb = state['eb'];
+        if (mySeat >= 0) {
+          needsExchange = !(eb is Map && eb.containsKey('$mySeat'));
+        }
+      }
+    }
+
+    // Variant (defensivt; ukendt → klassisk) + resolvet navn — læses HER,
+    // hvor doc'et er: GameSummary er det eneste liste-laget ser. Efter start
+    // er STATE'ns 'vid' autoriteten (doc-feltet kan i princippet ændres af et
+    // medlem midt i spillet uden at røre brættet) — foretræk den.
+    // Materialiseret fra doc'ets kopi, så "Mine spil"-badgen viser custom-
+    // varianters navn/farve. Under spillet er state.vid autoriteten.
+    final VariantConfig variant = variantFromRaw(
+        (status == 'playing' && state is Map && state['vid'] is String)
+            ? state['vid'] as String
+            : (d['variantId'] is String ? d['variantId'] as String : null),
+        d['cardRulesVariants']);
+    // Arkiv-felter. Vinderen læses fra STATE ('wt') som autoritet: topniveau-
+    // feltet skrives kun ved selve overgangen, så ældre docs kan mangle det.
+    final List<dynamic> uidsAll = (d['uids'] as List?) ?? const <dynamic>[];
+    final int mySeat = uidsAll.indexOf(uid);
+    int? winner;
+    if (status == 'over') {
+      if (state is Map && state['wt'] is num) {
+        winner = (state['wt'] as num).toInt();
+      } else if (d['winningTeamIndex'] is num) {
+        winner = (d['winningTeamIndex'] as num).toInt();
+      }
+    }
+    // "Så jeg slutningen?" — samme kilde som replay'en bruger: har jeg set
+    // færre log-indlæg end der findes, sluttede spillet mens jeg var væk.
+    final int logLen = (d['log'] as List?)?.length ?? 0;
+    final dynamic seenRaw = d['seen'];
+    final int mySeen = (seenRaw is Map && seenRaw[uid] is num)
+        ? (seenRaw[uid] as num).toInt()
+        : 0;
+    return GameSummary(
+      id,
+      d['hostName'] as String? ?? '?',
+      status,
+      names,
+      hostUid: d['hostUid'] as String?,
+      phase: phase,
+      currentName: currentName,
+      isMyTurn: isMyTurn,
+      needsExchange: needsExchange,
+      variantId: variant.id,
+      variantLabel: variantDisplayName(variant, d['cardRulesVariants']),
+      variant: variant,
+      finishedAtMs: _tsMs(d['finishedAt']) ?? _tsMs(d['createdAt']),
+      winningTeamIndex: winner,
+      mySeat: mySeat,
+      unseen: status == 'over' && mySeen < logLen,
+      isAi: d['mode'] == 'ai',
+    );
+  }
+
+int? _tsMs(dynamic v) {
+    if (v is Timestamp) return v.millisecondsSinceEpoch;
+    if (v is int) return v;
+    return null;
+  }

@@ -280,12 +280,16 @@ class _WinScreenState extends ConsumerState<WinScreen>
                           if (!widget.fromOnline) {
                             ref.read(gameProvider.notifier).reset();
                           }
-                          Navigator.of(context)
-                              .popUntil((route) =>
-                                  // Fra arkivet: ét skridt tilbage til
-                                  // listen, så man kan åbne næste rapport.
-                                  // Ellers helt ud på forsiden som før.
-                                  widget.archived || route.isFirst);
+                          if (widget.archived) {
+                            // Fra arkivet: ét skridt tilbage til listen, så
+                            // man kan åbne næste rapport. (popUntil dur IKKE
+                            // her: prædikatet ville være sandt for rapportens
+                            // egen rute og poppe nul gange.)
+                            Navigator.of(context).pop();
+                          } else {
+                            Navigator.of(context)
+                                .popUntil((route) => route.isFirst);
+                          }
                         },
                         child: Text(widget.archived
                             ? 'Tilbage til listen'
