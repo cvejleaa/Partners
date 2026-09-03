@@ -201,16 +201,6 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
   /// Farve-rotation der får MIN plads til at vise brugerens ønske-farve.
   /// displayColor(seat) = players[(seat + offset) % n].color.
-  int _offsetFor(GameState state, int mySeat, int? preferred) {
-    if (preferred == null) return 0;
-    final int n = state.players.length;
-    for (int k = 0; k < n; k++) {
-      if (state.players[(mySeat + k) % n].color.toARGB32() == preferred) {
-        return k;
-      }
-    }
-    return 0;
-  }
 
   void _cycleColor(GameState state, int mySeat) {
     final int n = state.players.length;
@@ -235,7 +225,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     }
     final int? preferred = ref.watch(
         settingsProvider.select((s) => s.preferredColorValue));
-    _colorOffset = _offsetFor(state, _mySeat, preferred);
+    _colorOffset = colorOffsetFor(
+        <int>[for (final Player p in state.players) p.color.toARGB32()],
+        _mySeat,
+        preferred);
     final Player me = state.players[_mySeat];
     final Player partner = state.players[me.partnerIndex];
     final Player left = state.players[(me.index + 1) % state.players.length];

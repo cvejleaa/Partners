@@ -8,6 +8,22 @@ import '../../models/piece.dart';
 import '../../models/player.dart';
 
 /// Beskriver brikker der animeres fra ét felt til et andet.
+/// Den lokale farve-rotation for [BoardView.colorOffset].
+///
+/// Spilleren kan vælge sin egen ønske-farve; brættet roterer så farverne uden
+/// at ændre noget i spillets data. ÉN vagt: både spille-brættet og
+/// "mens du var væk"-brættet skal regne den ens — ellers ville replayen vise
+/// Carin som gul, mens brættet lige under viser hende som blå.
+int colorOffsetFor(List<int> seatColorValues, int mySeat, int? preferred) {
+  if (preferred == null || mySeat < 0) return 0;
+  final int n = seatColorValues.length;
+  if (n == 0) return 0;
+  for (int k = 0; k < n; k++) {
+    if (seatColorValues[(mySeat + k) % n] == preferred) return k;
+  }
+  return 0;
+}
+
 class BoardAnimation {
   const BoardAnimation(this.moves, this.progress);
 

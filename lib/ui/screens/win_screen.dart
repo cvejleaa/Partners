@@ -16,6 +16,17 @@ import '../../state/variant_card_rules_controller.dart';
 import '../widgets/card_mix_block.dart';
 import '../widgets/variant_badge.dart';
 
+/// Skal skærmen FEJRE — konfetti og fanfare?
+///
+/// BRUGERFUND: konfettien faldt også når man havde tabt, og sejrsfanfaren
+/// lød ubetinget. En fejring man ikke er med i er ikke bare overflødig; den
+/// gør nederlaget værre.
+///
+/// [viewerWon] null = seeren sad ikke med (tilskuer, eller et spil hvor
+/// pladsen ikke kunne bestemmes). Så er der stadig en vinder at fejre, bare
+/// ikke seeren selv — og en stille skærm ville se ud som en fejl.
+bool celebrateWin(bool? viewerWon) => viewerWon != false;
+
 class WinScreen extends ConsumerStatefulWidget {
   const WinScreen({
     super.key,
@@ -110,13 +121,19 @@ class _WinScreenState extends ConsumerState<WinScreen>
     _confetti = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 6),
-    )..repeat();
+    );
+    // Kører kun når der faktisk falder konfetti — ellers er det en evig
+    // animation ingen ser.
+    if (celebrateWin(widget.viewerWon)) _confetti.repeat();
     _loadRecords();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Fanfaren hører til ØJEBLIKKET. I arkivet ville den lyde hver gang man
-      // åbner en gammel rapport — også et TABT parti (lyden er ubetinget).
-      if (!widget.archived) ref.read(feedbackProvider).win();
+      // Fanfaren hører til ØJEBLIKKET (i arkivet ville den lyde hver gang man
+      // åbner en gammel rapport) — OG til en sejr. Den lød før ubetinget,
+      // også når man havde tabt.
+      if (!widget.archived && celebrateWin(widget.viewerWon)) {
+        ref.read(feedbackProvider).win();
+      }
     });
   }
 
@@ -199,8 +216,8 @@ class _WinScreenState extends ConsumerState<WinScreen>
           widget.variant?.tableColor ?? const Color(0xFF0E2A1A),
       body: Stack(
         children: <Widget>[
-          // Konfetti bag indholdet.
-          if (!reduceMotion)
+          // Konfetti bag indholdet — kun når der er noget at fejre.
+          if (!reduceMotion && celebrateWin(widget.viewerWon))
             Positioned.fill(
               child: AnimatedBuilder(
                 animation: _confetti,

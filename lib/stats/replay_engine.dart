@@ -25,6 +25,7 @@ class ReplayEvent {
     this.movedToHomeStretch = 0,
     this.movedFromStart = 0,
     this.passedCards = 0,
+    this.positionsBefore = const <String, PiecePosition>{},
   });
 
   final int player;
@@ -42,6 +43,14 @@ class ReplayEvent {
 
   /// Antal kort smidt på pass-event.
   final int passedCards;
+
+  /// Hvor ALLE brikker stod, lige FØR dette træk.
+  ///
+  /// Det er dét, en genindtræden skal kunne vise på brættet: stillingen som
+  /// den så ud dengang, ikke som den ser ud nu. Et map frem for en hel
+  /// GameState — kalderen har allerede spillernes navne og farver og skal kun
+  /// bruge brikkernes placering.
+  final Map<String, PiecePosition> positionsBefore;
 }
 
 enum ReplayKind { move, pass, exchange }
@@ -58,6 +67,28 @@ class ReplayResult {
 
 /// Replay et logget spil fra en frisk start.
 /// Returnerer alle hændelser inkl. capture-info som ikke står i råloggen.
+/// Stemmer rekonstruktionen med virkeligheden?
+///
+/// [replayGame] GENSKABER partiet ud fra træk-loggen på en frisk state. Den
+/// antager klassisk opsætning (se [_freshState]) og udleder slag af hvem der
+/// stod på feltet — så den KAN drive fra det spil der faktisk blev spillet,
+/// fx i en variant med anden geometri eller efter en defekt log.
+///
+/// Skærmen har den ÆGTE state fra Firestore ved hånden. Er de to ikke enige
+/// om hvor brikkerne står til sidst, må rekonstruktionen ikke bruges til at
+/// tegne et bræt: et forkert bræt er værre end intet bræt.
+bool replayMatches(ReplayResult result, GameState truth) {
+  final Map<String, PiecePosition> mine = <String, PiecePosition>{
+    for (final Piece p in result.finalState.allPieces) p.id: p.position,
+  };
+  final List<Piece> real = truth.allPieces.toList();
+  if (real.length != mine.length) return false;
+  for (final Piece p in real) {
+    if (mine[p.id] != p.position) return false;
+  }
+  return true;
+}
+
 ReplayResult replayGame({
   required List<String> playerNames,
   required List<bool> isHuman,
@@ -72,9 +103,14 @@ ReplayResult replayGame({
       cardRules: cardRules);
   final events = <ReplayEvent>[];
 
+  Map<String, PiecePosition> snapshot() => <String, PiecePosition>{
+        for (final Piece p in state.allPieces) p.id: p.position,
+      };
+
   for (final entry in log) {
     final int player = (entry['player'] as num).toInt();
     final type = entry['type'] as String? ?? 'move';
+    final Map<String, PiecePosition> before = snapshot();
 
     switch (type) {
       case 'pass':
@@ -82,6 +118,7 @@ ReplayResult replayGame({
           player: player,
           kind: ReplayKind.pass,
           passedCards: (entry['cardsDiscarded'] as num?)?.toInt() ?? 0,
+          positionsBefore: before,
         ));
         // I praksis kender vi ikke hånden ved replay (kort er ikke logget) →
         // vi simulerer "pass" som "drop hand" på den simulerede state.
@@ -96,6 +133,7 @@ ReplayResult replayGame({
           card: entry['card'] == null
               ? null
               : cardFromMap(Map<String, dynamic>.from(entry['card'] as Map)),
+          positionsBefore: before,
         ));
         continue;
       case 'move':
@@ -123,6 +161,7 @@ ReplayResult replayGame({
         kind: ReplayKind.move,
         card: card,
         captured: const <String>[],
+        positionsBefore: before,
       ));
       continue;
     }
@@ -188,6 +227,7 @@ ReplayResult replayGame({
       captured: captured,
       movedFromStart: fromStart,
       movedToHomeStretch: toHome,
+      positionsBefore: before,
     ));
   }
 

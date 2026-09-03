@@ -7,19 +7,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/ai/ai_player.dart';
 import '../../game/progress.dart';
+import '../../models/board.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
+import '../../models/piece.dart';
 import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
 import '../../online/replay_story.dart';
 import '../../online/serialize.dart';
 import '../../state/display_config.dart';
+import '../../state/settings_controller.dart';
+import '../../stats/replay_engine.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 import '../widgets/card_legend_sheet.dart';
+import '../widgets/board_view.dart';
 import '../widgets/game_play_view.dart';
+import '../widgets/replay_board_view.dart';
 import '../widgets/replay_step_view.dart';
 import '../widgets/variant_badge.dart';
 import 'online_screens.dart';
@@ -54,6 +60,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // De træk der vises i "mens du var væk"-replay'en, med utilsigtede dubletter
   // filtreret fra, samt den aktuelle position i den liste.
   List<Map<String, dynamic>> _replayItems = <Map<String, dynamic>>[];
+
+  /// Stillingen FØR hvert af de viste træk, i samme rækkefølge som
+  /// [_replayItems]. Tom = brættet vises ikke (se [_buildReplayBoards]).
+  List<Map<String, PiecePosition>> _replayBoards =
+      <Map<String, PiecePosition>>[];
+
+  /// Hvilket skridt brættet viser. Sættes til det første der rører MINE
+  /// brikker — det er dét man kom for.
+  int _replaySelected = 0;
 
   bool _statsRecomputed = false;
 
@@ -511,18 +526,28 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       // samme handling logget flere gange. Et ægte identisk træk kan ikke ske
       // to gange i samme hånd (kortet er unikt), så global de-dup er sikker.
       final List<Map<String, dynamic>> items = <Map<String, dynamic>>[];
+      // Log-indekset følger med: replay-motoren giver ét event pr. RÅ
+      // log-post, og listen her har dubletter filtreret fra — uden dette
+      // ville brættet vise et andet træk end teksten.
+      final List<int> rawIndexes = <int>[];
       for (int i = mySeen; i < log.length; i++) {
         final e = Map<String, dynamic>.from(log[i] as Map);
         if (items.any((Map<String, dynamic> x) => sameLoggedMove(e, x))) {
           continue;
         }
         items.add(e);
+        rawIndexes.add(i);
       }
       if (items.isEmpty) {
         // Alt var dubletter (bør ikke ske) — marker set (lokalt) og vis intet.
         _liveSeenAck = log.length;
         return;
       }
+      // Brættet pr. skridt beregnes ÉN gang her — ikke i build(). Skærmen
+      // bygger om ved hvert Firestore-snapshot og hvert heartbeat, og en
+      // genberegning derinde ville køre igen og igen under hele replayen.
+      final List<Map<String, PiecePosition>> boards =
+          _buildReplayBoards(log, rawIndexes, state);
       // _maybeStartReplay kaldes fra build() — setState må ikke kaldes midt i
       // en build. Udskyd til efter frame'en.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -530,6 +555,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         setState(() {
           _replayActive = true;
           _replayItems = items;
+          _replayBoards = boards;
+          _replaySelected = 0;
           _replayTarget = log.length;
         });
       });
@@ -540,6 +567,94 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     if (log.length > _liveSeenAck) {
       _liveSeenAck = log.length;
     }
+  }
+
+  /// Stillingen før hvert viste træk — eller en TOM liste, hvis
+  /// rekonstruktionen ikke kan stoles på.
+  ///
+  /// replayGame genskaber partiet fra træk-loggen på en frisk state og antager
+  /// klassisk opsætning. Skærmen har den ÆGTE state fra Firestore, så vi
+  /// spørger den: er de to enige om hvor brikkerne står til sidst? Er de ikke
+  /// det, tegnes der intet bræt. Et FORKERT bræt er værre end intet bræt —
+  /// og teksten står alligevel selv.
+  List<Map<String, PiecePosition>> _buildReplayBoards(
+      List log, List<int> rawIndexes, GameState state) {
+    try {
+      final ReplayResult r = replayGame(
+        playerNames: <String>[for (final Player p in state.players) p.name],
+        isHuman: <bool>[for (final Player p in state.players) p.isHuman],
+        playerColors: <int>[
+          for (final Player p in state.players) p.color.toARGB32(),
+        ],
+        cardRules: state.cardRules,
+        log: <Map<String, dynamic>>[
+          for (final dynamic e in log) Map<String, dynamic>.from(e as Map),
+        ],
+      );
+      if (!replayMatches(r, state)) return const <Map<String, PiecePosition>>[];
+      return <Map<String, PiecePosition>>[
+        for (final int i in rawIndexes)
+          if (i >= 0 && i < r.events.length)
+            r.events[i].positionsBefore
+          else
+            const <String, PiecePosition>{},
+      ];
+    } catch (_) {
+      // En defekt log må aldrig koste brugeren hele genindtrædelsen.
+      return const <Map<String, PiecePosition>>[];
+    }
+  }
+
+  /// En kopi af den levende state med brikkerne sat tilbage til [positions].
+  ///
+  /// Kopi, ikke mutation: den levende state tegner brættet nedenunder.
+  GameState _boardAt(GameState live, Map<String, PiecePosition> positions) {
+    final GameState copy = gameStateFromMap(gameStateToMap(live));
+    for (final Piece p in copy.allPieces) {
+      final PiecePosition? pos = positions[p.id];
+      if (pos != null) p.position = pos;
+    }
+    return copy;
+  }
+
+  /// Brættet for det valgte skridt.
+  Widget _replayBoard(GameState state, int mySeat) {
+    final int i = _replaySelected.clamp(0, _replayBoards.length - 1);
+    final Map<String, PiecePosition> before = _replayBoards[i];
+    final List<dynamic> raw =
+        (_replayItems[i]['steps'] as List?) ?? const <dynamic>[];
+    final moves = <String, ({PiecePosition from, PiecePosition to})>{};
+    final Set<String> highlight = <String>{};
+    for (final dynamic e in raw) {
+      final Map<String, dynamic> st = Map<String, dynamic>.from(e as Map);
+      final String id = st['pieceId'] as String;
+      // Ved flere steps med SAMME brik (fx +2−5) skal bevægelsen gå fra det
+      // FØRSTE fra-felt til det SIDSTE til-felt.
+      final PiecePosition from = moves[id]?.from ??
+          posFromMap(Map<String, dynamic>.from(st['from'] as Map));
+      moves[id] = (
+        from: from,
+        to: posFromMap(Map<String, dynamic>.from(st['to'] as Map)),
+      );
+      highlight.add(id);
+      final String? capId = st['capId'] as String?;
+      if (capId != null) highlight.add(capId);
+    }
+    final int? preferred =
+        ref.read(settingsProvider.select((s) => s.preferredColorValue));
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: ReplayBoardView(
+        board: _boardAt(state, before),
+        moves: moves,
+        highlight: highlight,
+        viewerIndex: mySeat,
+        colorOffset: colorOffsetFor(
+            <int>[for (final Player p in state.players) p.color.toARGB32()],
+            mySeat,
+            preferred),
+      ),
+    );
   }
 
   Future<void> _finishReplay() async {
@@ -608,20 +723,35 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                         ],
                       ),
                     ),
+                    if (_replayBoards.isNotEmpty) _replayBoard(state, mySeat),
                     Flexible(
                       child: ListView.separated(
                         shrinkWrap: true,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         itemCount: _replayItems.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (BuildContext context, int i) =>
-                            ReplayStepView(
-                          story: stories[i],
-                          card: _replayItems[i]['card'] == null
+                        itemBuilder: (BuildContext context, int i) => InkWell(
+                          // Tryk på et skridt for at se det på brættet.
+                          onTap: _replayBoards.isEmpty
                               ? null
-                              : cardFromMap(Map<String, dynamic>.from(
-                                  _replayItems[i]['card'] as Map)),
-                          rules: state.cardRules,
+                              : () => setState(() => _replaySelected = i),
+                          child: Container(
+                            color: (_replayBoards.isNotEmpty &&
+                                    i == _replaySelected)
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: 0.08)
+                                : null,
+                            child: ReplayStepView(
+                              story: stories[i],
+                              card: _replayItems[i]['card'] == null
+                                  ? null
+                                  : cardFromMap(Map<String, dynamic>.from(
+                                      _replayItems[i]['card'] as Map)),
+                              rules: state.cardRules,
+                            ),
+                          ),
                         ),
                       ),
                     ),
