@@ -15,13 +15,18 @@ class ReplayStepView extends StatelessWidget {
   const ReplayStepView({
     super.key,
     required this.story,
+    required this.rules,
     this.card,
-    this.rules,
   });
 
   final ReplayStory story;
+
+  /// Spillets opløste regler — kortet skal tegnes med de kort partiet
+  /// faktisk blev spillet med, ikke med klassiske.
+  final CardRules rules;
+
+  /// null for et pas (der blev ikke spillet et kort).
   final PlayingCard? card;
-  final CardRules? rules;
 
   @override
   Widget build(BuildContext context) {
