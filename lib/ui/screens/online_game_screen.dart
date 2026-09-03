@@ -568,9 +568,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         storyFor(m,
             mySeat: mySeat, names: names, geometry: state.variant.geometry),
     ];
-    final int hitsOnMe = stories
-        .where((ReplayStory s) => s.outcome == 'Slog din brik hjem')
-        .length;
+    // TM-fund: et EKSAKT strengmatch talte for lavt. Rammer ét træk mig to
+    // gange (fx +2−5-sekvensen), skriver storyFor "Slog din brik hjem (2 i
+    // alt)" — og den linje blev slet ikke talt med. Derfor præfiks-match,
+    // og tælleren spørger om ANTALLET, ikke om linjen.
+    final int hitsOnMe = stories.fold<int>(
+        0, (int n, ReplayStory s) => n + s.hitsOnMe);
     return Positioned.fill(
       child: Container(
         color: Colors.black.withValues(alpha: 0.7),

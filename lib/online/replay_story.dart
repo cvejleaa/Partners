@@ -41,6 +41,7 @@ class ReplayStory {
     this.outcome,
     this.tone = ReplayTone.neutral,
     this.byAi = false,
+    this.hitsOnMe = 0,
   });
 
   /// Hvem gjorde det — navnet, eller "Du".
@@ -53,6 +54,13 @@ class ReplayStory {
   final String? outcome;
 
   final ReplayTone tone;
+
+  /// Hvor mange af MINE brikker trækket sendte hjem.
+  ///
+  /// Et TAL, ikke en sætning: opsummeringen øverst i listen talte før ved at
+  /// sammenligne [outcome] med en fast streng, og et træk der ramte mig to
+  /// gange ("… (2 i alt)") blev slet ikke talt med (TM-fund).
+  final int hitsOnMe;
 
   /// Trækket blev lavet af AI'en for en fraværende spiller.
   ///
@@ -243,30 +251,34 @@ ReplayStory storyFor(
             : 'rykkede ${-adv} tilbage til $where';
   }
 
+  final int hitsOnMe =
+      mySeat < 0 ? 0 : hitOwners.where((int? o) => o == mySeat).length;
+
   String? outcome;
   ReplayTone tone = ReplayTone.neutral;
-  if (burned) {
+  if (hitOwners.isNotEmpty && hitsOnMe > 0) {
+    outcome = hitOwners.length == 1
+        ? 'Slog din brik hjem'
+        : 'Slog din brik hjem (${hitOwners.length} i alt)';
+    // Et træk kan BÅDE slå og brænde (fx +2−5, der sender to brikker hjem).
+    // Før overtrumfede brændingen slaget helt, så beskeden om DIN brik
+    // forsvandt (TM-fund).
+    if (burned) outcome = '$outcome — og brændte sin egen';
+    tone = ReplayTone.sad;
+  } else if (burned) {
     outcome = 'Brændte sin egen brik hjem';
   } else if (hitOwners.isNotEmpty) {
-    final bool hitMe = hitOwners.contains(mySeat);
-    if (hitMe) {
-      outcome = hitOwners.length == 1
-          ? 'Slog din brik hjem'
-          : 'Slog din brik hjem (${hitOwners.length} i alt)';
-      tone = ReplayTone.sad;
-    } else {
-      final int? victim = hitOwners.first;
-      final String who =
-          (victim != null && victim >= 0 && victim < names.length)
-              ? '${names[victim]}s'
-              : 'en';
-      outcome = hitOwners.length == 1
-          ? 'Slog $who brik hjem'
-          : 'Slog ${hitOwners.length} brikker hjem';
-      // Kun godt for mig, hvis det var MIT hold der slog — og aldrig som
-      // jubel over en navngiven modspiller, kun som en rolig markering.
-      if (seat % 2 == mySeat % 2 && mySeat >= 0) tone = ReplayTone.good;
-    }
+    final int? victim = hitOwners.first;
+    final String who =
+        (victim != null && victim >= 0 && victim < names.length)
+            ? '${names[victim]}s'
+            : 'en';
+    outcome = hitOwners.length == 1
+        ? 'Slog $who brik hjem'
+        : 'Slog ${hitOwners.length} brikker hjem';
+    // Kun godt for mig, hvis det var MIT hold der slog — og aldrig som
+    // jubel over en navngiven modspiller, kun som en rolig markering.
+    if (seat % 2 == mySeat % 2 && mySeat >= 0) tone = ReplayTone.good;
   } else if (to is HomeStretchPosition && owner == mySeat) {
     tone = ReplayTone.good;
   }
@@ -277,6 +289,7 @@ ReplayStory storyFor(
     outcome: outcome,
     tone: tone,
     byAi: byAi,
+    hitsOnMe: hitsOnMe,
   );
 }
 

@@ -223,6 +223,61 @@ void main() {
     });
   });
 
+  group('opsummeringens tæller er et TAL, ikke en sætning', () {
+    test('et træk der rammer mig to gange tælles som to', () {
+      // Overskriften "Dine brikker røg hjem N gange" talte før ved at
+      // sammenligne outcome med en fast streng — og et træk med
+      // "(2 i alt)" blev slet ikke talt med.
+      final ReplayStory s = _story(_move(
+          1,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(16),
+                to: const TrackPosition(20),
+                capId: 'p0.1'),
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(20),
+                to: const TrackPosition(18),
+                capId: 'p0.2'),
+          ]));
+      expect(s.hitsOnMe, 2);
+      expect(s.outcome, contains('(2 i alt)'));
+    });
+
+    test('et træk der ikke rammer mig tæller nul', () {
+      final ReplayStory s = _story(_move(
+          1,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(16),
+                to: const TrackPosition(20),
+                capId: 'p3.1'),
+          ]));
+      expect(s.hitsOnMe, 0);
+    });
+
+    test('slag OG brand i samme træk nævner begge dele', () {
+      // Før overtrumfede brændingen slaget helt, så beskeden om MIN brik
+      // forsvandt.
+      final ReplayStory s = _story(_move(
+          1,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(16),
+                to: const TrackPosition(20),
+                capId: 'p0.1',
+                burn: true),
+          ]));
+      expect(s.outcome, contains('Slog din brik hjem'));
+      expect(s.outcome, contains('brændte sin egen'));
+      expect(s.hitsOnMe, 1);
+    });
+  });
+
   group('byttet — retningen afgør tonen, ikke hvem der trykkede', () {
     /// [dest] er hvor MIN brik (p0.0) ender.
     Map<String, dynamic> swap(int by, int myFrom, int myTo) =>
@@ -237,11 +292,12 @@ void main() {
               to: TrackPosition(myTo)),
         ]);
 
+    // Jeg (plads 0) har indgang ved felt 0 og skal hele ringen rundt, så
+    // felt 31 ligger TÆTTERE på mit mål end felt 10. Felt 31 hører til
+    // Carins kvarter (31 ~/ 15 == 2), ikke Bos.
     test('min brik byttet LÆNGERE VÆK fra mål → ked af det', () {
-      // Felt 10 ligger tættere på mit mål end felt 31 (jeg starter i
-      // kvarter 0 og skal hele vejen rundt).
-      final ReplayStory s = _story(swap(1, 10, 31));
-      expect(s.action, 'byttede din brik fra dit felt 10 til Bos felt 1');
+      final ReplayStory s = _story(swap(1, 31, 10));
+      expect(s.action, 'byttede din brik fra Carins felt 1 til dit felt 10');
       expect(s.outcome, contains('længere væk'));
       expect(s.tone, ReplayTone.sad);
     });
@@ -250,7 +306,7 @@ void main() {
       // Den anden vej. En rød "ked af det"-stribe her ville være et falsk
       // signal: brikken kom nærmere mål. Afgøres tonen af HVEM der trak i
       // stedet for af retningen, bliver denne test rød.
-      final ReplayStory s = _story(swap(1, 31, 10));
+      final ReplayStory s = _story(swap(1, 10, 31));
       expect(s.outcome, contains('nærmere mål'));
       expect(s.tone, ReplayTone.good);
     });
