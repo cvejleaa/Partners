@@ -194,7 +194,7 @@ ReplayStory storyFor(
     final int? left = fieldsToFinishOrNull(geometry, mySeat, now);
     final int? before = fieldsToFinishOrNull(geometry, mySeat, was);
     final int? delta =
-        (left == null || before == null) ? null : before - left;
+        (left == null || before == null) ? null : left - before;
     String? outcome;
     ReplayTone tone = ReplayTone.neutral;
     if (delta != null && delta < 0) {
