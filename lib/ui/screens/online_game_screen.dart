@@ -66,9 +66,18 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   List<Map<String, PiecePosition>> _replayBoards =
       <Map<String, PiecePosition>>[];
 
-  /// Hvilket skridt brættet viser. Sættes til det første der rører MINE
-  /// brikker — det er dét man kom for.
+  /// Hvilket skridt brættet viser. Åbner på det første der rørte MINE
+  /// brikker — det er dét man kom for. Er der ingen, åbner den på det første
+  /// skridt.
   int _replaySelected = 0;
+
+  /// Memo for det viste bræt: en kopi af den levende state med brikkerne sat
+  /// tilbage. Nøglet på det VALGTE skridt, fordi overlayet bygges om ved
+  /// hvert Firestore-snapshot og hvert heartbeat — uden memoen ville hele
+  /// state'n blive serialiseret frem og tilbage ved hver eneste rebuild
+  /// (QC-fund).
+  int _replayBoardCacheFor = -1;
+  _ReplayBoard? _replayBoardCache;
 
   bool _statsRecomputed = false;
 
@@ -337,7 +346,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           // Intet "mens du var væk"-replay i et afsluttet spil: rapporten er
           // det man kom efter, og navigationen ville alligevel afbryde det.
           if (state.winningTeamIndex == null) {
-            _maybeStartReplay(state, log, mySeen);
+            _maybeStartReplay(state, log, mySeen, mySeat);
           } else if (!_archiveSeenMarked && mySeen < log.length) {
             // Men markér den så SET her — ellers ville "Ny slutrapport"-
             // mærket i arkivet aldrig kunne ryddes (replay'en er normalt den
@@ -513,7 +522,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // Catch-up replay
   // ---------------------------------------------------------------------------
 
-  void _maybeStartReplay(GameState state, List log, int mySeen) {
+  void _maybeStartReplay(
+      GameState state, List log, int mySeen, int mySeat) {
     if (_replayActive) return;
     if (log.length <= mySeen) {
       _initialReplayChecked = true;
@@ -548,6 +558,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       // genberegning derinde ville køre igen og igen under hele replayen.
       final List<Map<String, PiecePosition>> boards =
           _buildReplayBoards(log, rawIndexes, state);
+      // Åbn på det første skridt der rørte MINE brikker — hvad der skete med
+      // dem er dét man kom tilbage for. Findes ingen, står den på det første.
+      int selected = 0;
+      for (int k = 0; k < items.length; k++) {
+        if (touchesSeat(items[k], mySeat)) {
+          selected = k;
+          break;
+        }
+      }
       // _maybeStartReplay kaldes fra build() — setState må ikke kaldes midt i
       // en build. Udskyd til efter frame'en.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -556,7 +575,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           _replayActive = true;
           _replayItems = items;
           _replayBoards = boards;
-          _replaySelected = 0;
+          _replaySelected = selected;
+          _replayBoardCacheFor = -1;
           _replayTarget = log.length;
         });
       });
@@ -617,37 +637,36 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     return copy;
   }
 
-  /// Brættet for det valgte skridt.
-  Widget _replayBoard(GameState state, int mySeat) {
+  /// Brættet for det valgte skridt — bygget ÉN gang pr. valg.
+  ///
+  /// Overlayet bygges om ved hvert Firestore-snapshot og hvert heartbeat, og
+  /// kopien af state'n er en fuld serialiserings-rundtur. Uden memoen ville
+  /// den køre igen og igen for det samme skridt (QC-fund).
+  _ReplayBoard? _replayBoardFor(GameState state) {
+    if (_replayBoards.isEmpty) return null;
     final int i = _replaySelected.clamp(0, _replayBoards.length - 1);
-    final Map<String, PiecePosition> before = _replayBoards[i];
-    final List<dynamic> raw =
-        (_replayItems[i]['steps'] as List?) ?? const <dynamic>[];
-    final moves = <String, ({PiecePosition from, PiecePosition to})>{};
-    final Set<String> highlight = <String>{};
-    for (final dynamic e in raw) {
-      final Map<String, dynamic> st = Map<String, dynamic>.from(e as Map);
-      final String id = st['pieceId'] as String;
-      // Ved flere steps med SAMME brik (fx +2−5) skal bevægelsen gå fra det
-      // FØRSTE fra-felt til det SIDSTE til-felt.
-      final PiecePosition from = moves[id]?.from ??
-          posFromMap(Map<String, dynamic>.from(st['from'] as Map));
-      moves[id] = (
-        from: from,
-        to: posFromMap(Map<String, dynamic>.from(st['to'] as Map)),
-      );
-      highlight.add(id);
-      final String? capId = st['capId'] as String?;
-      if (capId != null) highlight.add(capId);
+    if (_replayBoardCacheFor == i && _replayBoardCache != null) {
+      return _replayBoardCache;
     }
+    final ReplayMoves m = movesOf(_replayItems[i]);
+    final _ReplayBoard built =
+        _ReplayBoard(_boardAt(state, _replayBoards[i]), m);
+    _replayBoardCacheFor = i;
+    _replayBoardCache = built;
+    return built;
+  }
+
+  Widget _replayBoard(GameState state, int mySeat) {
+    final _ReplayBoard? b = _replayBoardFor(state);
+    if (b == null) return const SizedBox.shrink();
     final int? preferred =
         ref.read(settingsProvider.select((s) => s.preferredColorValue));
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: ReplayBoardView(
-        board: _boardAt(state, before),
-        moves: moves,
-        highlight: highlight,
+        board: b.state,
+        moves: b.moves.moves,
+        highlight: b.moves.highlight,
         viewerIndex: mySeat,
         colorOffset: colorOffsetFor(
             <int>[for (final Player p in state.players) p.color.toARGB32()],
@@ -734,7 +753,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                           // Tryk på et skridt for at se det på brættet.
                           onTap: _replayBoards.isEmpty
                               ? null
-                              : () => setState(() => _replaySelected = i),
+                              : () => setState(() {
+                                    _replaySelected = i;
+                                    _replayBoardCacheFor = -1;
+                                  }),
                           child: Container(
                             color: (_replayBoards.isNotEmpty &&
                                     i == _replaySelected)
@@ -871,4 +893,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       }
     }
   }
+}
+
+/// Det færdigbyggede bræt for ét replay-skridt: stillingen dengang plus
+/// bevægelsen. Holdes samlet, så memoen har én ting at gemme.
+class _ReplayBoard {
+  const _ReplayBoard(this.state, this.moves);
+  final GameState state;
+  final ReplayMoves moves;
 }

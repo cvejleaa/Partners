@@ -300,3 +300,62 @@ int? fieldsToFinishOrNull(
   if (pos is StartPosition) return null;
   return fieldsToFinish(geometry, owner, pos);
 }
+
+/// Brikkernes bevægelse i ét logget træk — det brættet skal tegne.
+class ReplayMoves {
+  const ReplayMoves(this.moves, this.highlight);
+
+  /// pieceId → (fra, til).
+  final Map<String, ({PiecePosition from, PiecePosition to})> moves;
+
+  /// Brikker der skal fremhæves: dem der flyttede, og dem der blev slået hjem.
+  final Set<String> highlight;
+}
+
+/// Udled bevægelsen af ét logget træk.
+///
+/// Ved FLERE steps med samme brik (+2−5-sekvensen, eller en 7'er delt på
+/// samme brik) går bevægelsen fra det FØRSTE fra-felt til det SIDSTE til-felt.
+/// Bruges det seneste fra-felt i stedet, springer brikken kun det sidste
+/// stykke, og man ser ikke hvor den kom fra.
+///
+/// Defensiv: en uventet step-form giver en tom bevægelse i stedet for at
+/// kaste. Skærmen tegner så blot intet bræt — et crash midt i en
+/// genindtræden ville koste hele skærmen (QC-fund).
+ReplayMoves movesOf(Map<String, dynamic> entry) {
+  final moves = <String, ({PiecePosition from, PiecePosition to})>{};
+  final Set<String> highlight = <String>{};
+  final List<dynamic> raw = (entry['steps'] as List?) ?? const <dynamic>[];
+  for (final dynamic e in raw) {
+    if (e is! Map) continue;
+    final Map<String, dynamic> st = Map<String, dynamic>.from(e);
+    final Object? id = st['pieceId'];
+    if (id is! String) continue;
+    if (st['from'] is! Map || st['to'] is! Map) continue;
+    final PiecePosition from = moves[id]?.from ??
+        posFromMap(Map<String, dynamic>.from(st['from'] as Map));
+    moves[id] = (
+      from: from,
+      to: posFromMap(Map<String, dynamic>.from(st['to'] as Map)),
+    );
+    highlight.add(id);
+    final Object? capId = st['capId'];
+    if (capId is String) highlight.add(capId);
+  }
+  return ReplayMoves(moves, highlight);
+}
+
+/// Rørte dette træk [seat]s egne brikker?
+///
+/// Bruges til at åbne brættet på det skridt man kom tilbage for. Det er IKKE
+/// nok at spørge hvem der trak: en modstander der slår min brik hjem, eller
+/// bytter med den, rører den i høj grad.
+bool touchesSeat(Map<String, dynamic> entry, int seat) {
+  if (seat < 0) return false;
+  if ((entry['player'] as num?)?.toInt() == seat) return true;
+  final ReplayMoves m = movesOf(entry);
+  for (final String id in m.highlight) {
+    if (ownerOfPieceId(id) == seat) return true;
+  }
+  return false;
+}

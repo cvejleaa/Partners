@@ -116,6 +116,17 @@ void main() {
       );
       expect(replayMatches(r, truth), isFalse);
     });
+
+    test('ulige antal brikker → intet bræt (kun længde-tjekket fanger det)', () {
+      // Ingen af de resterende brikker er uenige om deres felt — kun
+      // ANTALLET er forskelligt. Uden længde-tjekket i replayMatches ville
+      // løkken, der kun ser på id'er den KENDER, ikke opdage forskellen: den
+      // "manglende" brik ville aldrig blive spurgt om.
+      final ReplayResult r = _replay(const <Map<String, dynamic>>[]);
+      final GameState truth = makeState();
+      truth.players[0].pieces.removeLast(); // 15 brikker i stedet for 16
+      expect(replayMatches(r, truth), isFalse);
+    });
   });
 
   group('positionsBefore — stillingen FØR trækket', () {
@@ -159,7 +170,10 @@ void main() {
     });
 
     test('tilskuer (plads -1) → ingen rotation', () {
-      expect(colorOffsetFor(colors, -1, 40), 0);
+      // NB: bevidst IKKE farve 40 (colors[3]) — (-1) % 4 == 3 i Dart, så det
+      // tal ville pege på colors[3] alligevel og skjule at mySeat<0-værnet
+      // var væk. 20 (colors[1]) rammer et andet indeks og fanger værnet.
+      expect(colorOffsetFor(colors, -1, 20), 0);
     });
   });
 }

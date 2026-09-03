@@ -554,4 +554,123 @@ void main() {
       expect(s.tone, ReplayTone.sad);
     });
   });
+
+  group('movesOf — bevægelsen brættet skal tegne', () {
+    test('flere steps med SAMME brik går fra FØRSTE fra til SIDSTE til', () {
+      // +2−5-sekvensen. Bruges det seneste fra-felt, springer brikken kun
+      // det sidste stykke, og man ser ikke hvor den kom fra.
+      final ReplayMoves m = movesOf(_move(1, <Map<String, dynamic>>[
+        _step(
+            pieceId: 'p1.0',
+            from: const TrackPosition(16),
+            to: const TrackPosition(18)),
+        _step(
+            pieceId: 'p1.0',
+            from: const TrackPosition(18),
+            to: const TrackPosition(13)),
+      ]));
+      expect(m.moves['p1.0']!.from, const TrackPosition(16));
+      expect(m.moves['p1.0']!.to, const TrackPosition(13));
+    });
+
+    test('to forskellige brikker giver to bevægelser', () {
+      final ReplayMoves m = movesOf(_move(1, <Map<String, dynamic>>[
+        _step(
+            pieceId: 'p1.0',
+            from: const TrackPosition(16),
+            to: const TrackPosition(17)),
+        _step(
+            pieceId: 'p1.1',
+            from: const TrackPosition(20),
+            to: const TrackPosition(21)),
+      ]));
+      expect(m.moves.length, 2);
+      expect(m.highlight, containsAll(<String>['p1.0', 'p1.1']));
+    });
+
+    test('den slåede brik fremhæves også', () {
+      final ReplayMoves m = movesOf(_move(1, <Map<String, dynamic>>[
+        _step(
+            pieceId: 'p1.0',
+            from: const TrackPosition(16),
+            to: const TrackPosition(20),
+            capId: 'p0.1'),
+      ]));
+      expect(m.highlight, containsAll(<String>['p1.0', 'p0.1']));
+    });
+
+    test('en vanformet step-liste giver en TOM bevægelse, ikke et crash', () {
+      // Skærmen tegner så blot intet bræt. Et crash midt i en genindtræden
+      // ville koste hele skærmen.
+      final ReplayMoves m = movesOf(<String, dynamic>{
+        'player': 1,
+        'type': 'move',
+        'steps': <dynamic>[
+          <String, dynamic>{'pieceId': 42},
+          <String, dynamic>{'pieceId': 'p1.0'},
+          'slet ikke et map',
+        ],
+      });
+      expect(m.moves, isEmpty);
+      expect(m.highlight, isEmpty);
+    });
+  });
+
+  group('touchesSeat — hvilket skridt kom jeg tilbage for', () {
+    test('mit eget træk rører mig', () {
+      expect(
+          touchesSeat(
+              _move(0, <Map<String, dynamic>>[
+                _step(
+                    pieceId: 'p0.0',
+                    from: const TrackPosition(3),
+                    to: const TrackPosition(7)),
+              ]),
+              0),
+          isTrue);
+    });
+
+    test('en modstander der SLÅR min brik rører mig', () {
+      // Det er ikke nok at spørge hvem der trak — det er netop dét skridt
+      // man kom tilbage for.
+      expect(
+          touchesSeat(
+              _move(1, <Map<String, dynamic>>[
+                _step(
+                    pieceId: 'p1.0',
+                    from: const TrackPosition(16),
+                    to: const TrackPosition(20),
+                    capId: 'p0.1'),
+              ]),
+              0),
+          isTrue);
+    });
+
+    test('et træk mellem to andre rører mig ikke', () {
+      expect(
+          touchesSeat(
+              _move(1, <Map<String, dynamic>>[
+                _step(
+                    pieceId: 'p1.0',
+                    from: const TrackPosition(16),
+                    to: const TrackPosition(20),
+                    capId: 'p3.1'),
+              ]),
+              0),
+          isFalse);
+    });
+
+    test('tilskuer (plads -1) rører intet', () {
+      expect(
+          touchesSeat(
+              _move(1, <Map<String, dynamic>>[
+                _step(
+                    pieceId: 'p1.0',
+                    from: const TrackPosition(16),
+                    to: const TrackPosition(20)),
+              ]),
+              -1),
+          isFalse);
+    });
+  });
 }

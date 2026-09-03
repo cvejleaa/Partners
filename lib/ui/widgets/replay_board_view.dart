@@ -94,7 +94,10 @@ class _ReplayBoardViewState extends State<ReplayBoardView>
           viewerIndex: widget.viewerIndex < 0 ? 0 : widget.viewerIndex,
           highlightedPieceIds: widget.highlight,
           colorOffset: widget.colorOffset,
-          quarterTurn: true,
+          // Samme drejning som det levende bræt nedenunder: siddende
+          // spillere ser brættet kvart-drejet, tilskueren gør ikke. Ellers
+          // står de to brætter en anelse skævt i forhold til hinanden.
+          quarterTurn: widget.viewerIndex >= 0,
           animation: widget.moves.isEmpty
               ? null
               : BoardAnimation(widget.moves, _anim.value),

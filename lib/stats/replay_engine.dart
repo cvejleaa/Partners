@@ -77,6 +77,13 @@ class ReplayResult {
 /// Skærmen har den ÆGTE state fra Firestore ved hånden. Er de to ikke enige
 /// om hvor brikkerne står til sidst, må rekonstruktionen ikke bruges til at
 /// tegne et bræt: et forkert bræt er værre end intet bræt.
+///
+/// GRÆNSEN, navngivet: dette beviser SLUTSTILLINGEN, ikke hvert mellemtrin.
+/// En fejl der tilfældigvis retter sig selv undervejs ville slippe igennem.
+/// Der findes ingen historik at måle mellemtrinene mod — Firestore gemmer kun
+/// nutids-stillingen — så det er den stærkeste kontrol der kan laves her.
+/// Kun POSITIONER sammenlignes, og det er nok: brættet tegner intet andet
+/// (hverken hænder, tur eller hasLeftStart).
 bool replayMatches(ReplayResult result, GameState truth) {
   final Map<String, PiecePosition> mine = <String, PiecePosition>{
     for (final Piece p in result.finalState.allPieces) p.id: p.position,
