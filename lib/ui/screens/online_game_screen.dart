@@ -619,8 +619,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           else
             const <String, PiecePosition>{},
       ];
-    } catch (_) {
-      // En defekt log må aldrig koste brugeren hele genindtrædelsen.
+    } catch (e) {
+      // En defekt log må aldrig koste brugeren hele genindtrædelsen — men
+      // den må heller ikke forsvinde sporløst. At brættet UDEBLIVER er en
+      // gyldig tilstand (se replayMatches); at det KASTEDE er en fejl, og
+      // den skal kunne findes i konsollen.
+      debugPrint('[replay] kunne ikke bygge brættet: $e');
       return const <Map<String, PiecePosition>>[];
     }
   }
