@@ -223,27 +223,40 @@ void main() {
     });
   });
 
-  group('byttet', () {
-    Map<String, dynamic> swap() => _move(2, <Map<String, dynamic>>[
+  group('byttet — retningen afgør tonen, ikke hvem der trykkede', () {
+    /// [dest] er hvor MIN brik (p0.0) ender.
+    Map<String, dynamic> swap(int by, int myFrom, int myTo) =>
+        _move(by, <Map<String, dynamic>>[
           _step(
-              pieceId: 'p2.0',
-              from: const TrackPosition(31),
-              to: const TrackPosition(10)),
+              pieceId: 'p$by.0',
+              from: TrackPosition(myTo),
+              to: TrackPosition(myFrom)),
           _step(
               pieceId: 'p0.0',
-              from: const TrackPosition(10),
-              to: const TrackPosition(31)),
+              from: TrackPosition(myFrom),
+              to: TrackPosition(myTo)),
         ]);
 
-    test('min brik byttet væk nævner hvor den STOD og hvor tæt den var', () {
-      final ReplayStory s = _story(swap());
-      expect(s.action, 'byttede din brik væk fra dit felt 10');
-      expect(s.outcome, contains('felter til mål'));
+    test('min brik byttet LÆNGERE VÆK fra mål → ked af det', () {
+      // Felt 10 ligger tættere på mit mål end felt 31 (jeg starter i
+      // kvarter 0 og skal hele vejen rundt).
+      final ReplayStory s = _story(swap(1, 10, 31));
+      expect(s.action, 'byttede din brik fra dit felt 10 til Bos felt 1');
+      expect(s.outcome, contains('længere væk'));
       expect(s.tone, ReplayTone.sad);
     });
 
+    test('min brik byttet FREM → godt, også når en modstander gjorde det', () {
+      // Den anden vej. En rød "ked af det"-stribe her ville være et falsk
+      // signal: brikken kom nærmere mål. Afgøres tonen af HVEM der trak i
+      // stedet for af retningen, bliver denne test rød.
+      final ReplayStory s = _story(swap(1, 31, 10));
+      expect(s.outcome, contains('nærmere mål'));
+      expect(s.tone, ReplayTone.good);
+    });
+
     test('et byt der ikke rører mig er neutralt og navnløst', () {
-      final ReplayStory s = _story(swap(), mySeat: 3);
+      final ReplayStory s = _story(swap(1, 10, 31), mySeat: 3);
       expect(s.action, 'byttede to brikker');
       expect(s.tone, ReplayTone.neutral);
       expect(s.outcome, isNull);
@@ -281,6 +294,55 @@ void main() {
     });
   });
 
+  group('flere brikker i ét træk', () {
+    test('to forskellige brikker nævnes som to brikker', () {
+      final ReplayStory s = _story(_move(
+          1,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(16),
+                to: const TrackPosition(17)),
+            _step(
+                pieceId: 'p1.1',
+                from: const TrackPosition(18),
+                to: const TrackPosition(19)),
+          ]));
+      expect(s.action, 'flyttede to brikker');
+    });
+
+    test('et delt kort nævner hvor mange brikker', () {
+      final ReplayStory s = _story(_move(
+          1,
+          <Map<String, dynamic>>[
+            for (int i = 0; i < 3; i++)
+              _step(
+                  pieceId: 'p1.$i',
+                  from: TrackPosition(16 + i * 2),
+                  to: TrackPosition(17 + i * 2)),
+          ]));
+      expect(s.action, 'delte kortet over 3 brikker');
+    });
+  });
+
+  group('afstand i en variant med 6 segmenter', () {
+    test('afstanden regnes med variantens segmenter, ikke med 4', () {
+      // fieldsToFinish brugte et hardkodet `len ~/ 4`. Med 78 felter og 6
+      // segmenter (13 pr. segment) ville det give segmentbredde 19 — og
+      // dermed forkert indgangsfelt og forkert "fremmed UD"-tjek for hver
+      // eneste spiller. Her skal afstanden falde med præcis de 4 felter der
+      // blev rykket.
+      const BoardGeometry six = BoardGeometry(trackLength: 78, segments: 6);
+      final int? adv = stepsAdvanced(
+        const TrackPosition(4),
+        const TrackPosition(8),
+        owner: 0,
+        geometry: six,
+      );
+      expect(adv, 4);
+    });
+  });
+
   group('pas', () {
     test('"sad over" er husets ord, og antallet nævnes', () {
       final ReplayStory s = _story(<String, dynamic>{
@@ -308,6 +370,132 @@ void main() {
       expect(ownerOfPieceId('x'), isNull);
       expect(ownerOfPieceId('px'), isNull);
       expect(ownerOfPieceId('p'), isNull);
+    });
+  });
+
+  // De følgende grupper lukker huller fundet ved test-manager-gennemgang af
+  // b1f8df8: grene i storyFor som ingen af de oprindelige 20 tests nåede.
+
+  group('tomt "move" — den samme "sad over" som pas, men uden kort', () {
+    test('steps er tom → "sad over", ikke en tom streng eller et kast', () {
+      final ReplayStory s = _story(_move(1, <Map<String, dynamic>>[]));
+      expect(s.action, 'sad over');
+    });
+  });
+
+  group('at komme IND i hjemstrækket — egen tekst, ikke "flyttede en brik"',
+      () {
+    test('ind i EGET hjemstræk: navngivet og "godt for os"', () {
+      final ReplayStory s = _story(_move(
+          0,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p0.0',
+                from: const TrackPosition(58),
+                to: const HomeStretchPosition(0, 0)),
+          ]));
+      expect(s.action, 'kom ind i dit hjemstræk');
+      expect(s.tone, ReplayTone.good);
+    });
+
+    test('ind i en ANDENS hjemstræk: neutral, ikke "godt for os"', () {
+      // Uden owner==mySeat-tjekket ville ENHVER indkomst i hus lyse grønt —
+      // også en modstanders.
+      final ReplayStory s = _story(_move(
+          1,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(29),
+                to: const HomeStretchPosition(1, 0)),
+          ]));
+      expect(s.action, 'kom ind i Bos hjemstræk');
+      expect(s.tone, ReplayTone.neutral);
+    });
+  });
+
+  group('split over flere brikker (ikke byt)', () {
+    test('to FORSKELLIGE brikker, ingen byt → "flyttede to brikker"', () {
+      final ReplayStory s = _story(_move(
+          0,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p0.0',
+                from: const TrackPosition(3),
+                to: const TrackPosition(5)),
+            _step(
+                pieceId: 'p0.1',
+                from: const TrackPosition(10),
+                to: const TrackPosition(12)),
+          ]));
+      expect(s.action, 'flyttede to brikker');
+    });
+
+    test('7\'eren delt over tre brikker → "delte kortet over 3 brikker"', () {
+      final ReplayStory s = _story(_move(
+          0,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p0.0',
+                from: const TrackPosition(3),
+                to: const TrackPosition(4)),
+            _step(
+                pieceId: 'p0.1',
+                from: const TrackPosition(10),
+                to: const TrackPosition(12)),
+            _step(
+                pieceId: 'p0.2',
+                from: const TrackPosition(20),
+                to: const TrackPosition(24)),
+          ]));
+      expect(s.action, 'delte kortet over 3 brikker');
+    });
+  });
+
+  group('samme brik, to steps (+2−5-typen) — nettoet, ikke "frem og tilbage"',
+      () {
+    test('frem 4 så tilbage 2 siges som ét netto-tal for HELE trækket', () {
+      // steps.length == 2 med SAMME pieceId er hverken byt (o0==o1, filtreret
+      // af isSwapLogSteps) eller split (pieceId'erne er ens) — den grene, der
+      // gik tabt sammen med det gamle describeReplayStep, var udækket her.
+      final ReplayStory s = _story(_move(
+          1,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(16),
+                to: const TrackPosition(20)),
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(20),
+                to: const TrackPosition(18)),
+          ]));
+      expect(s.action, 'rykkede 2 frem til Bos felt 3');
+    });
+  });
+
+  group('to slag i ét træk — begge skal tælle', () {
+    test('+2−5 der rammer MIG to gange siger "(2 i alt)", ikke bare "en"',
+        () {
+      // Med kun ét cap-eksempel i de oprindelige tests kunne
+      // "hitOwners.length == 1 ? ... : ..."-grenen ændres til altid at
+      // returnere ental uden at noget blev rødt.
+      final ReplayStory s = _story(_move(
+          1,
+          <Map<String, dynamic>>[
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(16),
+                to: const TrackPosition(20),
+                capId: 'p0.1'),
+            _step(
+                pieceId: 'p1.0',
+                from: const TrackPosition(20),
+                to: const TrackPosition(18),
+                capId: 'p0.2'),
+          ]));
+      expect(s.outcome, 'Slog din brik hjem (2 i alt)');
+      expect(s.tone, ReplayTone.sad);
     });
   });
 }

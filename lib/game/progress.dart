@@ -10,13 +10,18 @@ import '../models/player.dart';
 /// Bruges til margin-statistikken: "vundet/tabt med N felter".
 int fieldsToFinish(BoardGeometry geo, int owner, PiecePosition pos) {
   final int len = geo.trackLength;
-  final int quarter = len ~/ 4;
+  // Segmentbredden kommer fra GEOMETRIEN, ikke fra et hardkodet 4. For
+  // klassisk er de to ens (60/4), men Partners+ har 6 segmenter — og med et
+  // fast 4 ville BÅDE indgangsfeltet og "fremmed UD tæller ikke"-tjekket
+  // nedenfor pege forkert for hver eneste spiller (QC-fund).
+  final int quarter = len ~/ geo.segments;
   final int entry = (owner * quarter) % len;
 
   if (pos is HomeStretchPosition) return 0;
 
   // Fra eget UD hele ringen rundt (UD-felter tæller ikke) + 1 ind i hjem.
-  final int fromEntry = (len - 4) + 1; // 60-ring → 57
+  // Der er ét UD-felt pr. segment, så det er dem der trækkes fra.
+  final int fromEntry = (len - geo.segments) + 1; // 60-ring, 4 segm. → 57
 
   if (pos is StartPosition) {
     // Skal først ud af start (1) og derefter hele vejen rundt.

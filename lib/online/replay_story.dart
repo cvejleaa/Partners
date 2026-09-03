@@ -175,21 +175,41 @@ ReplayStory storyFor(
     }
     final Map<String, dynamic> s = steps[mineIdx];
     final PiecePosition was = posOf(s, 'from');
-    final String fromName = fieldName(was,
-        mySeat: mySeat, names: names, geometry: geometry);
-    final int? left = fieldsToFinishOrNull(geometry, mySeat, was);
+    final PiecePosition now = posOf(s, 'to');
+    final String fromName =
+        fieldName(was, mySeat: mySeat, names: names, geometry: geometry);
+    final String toName =
+        fieldName(now, mySeat: mySeat, names: names, geometry: geometry);
+    // RETNINGEN afgør tonen — ikke hvem der trykkede (QC-fund). Et byt der
+    // sender min brik FREM er godt for mig, også når en modstander gjorde
+    // det; en rød "ked af det"-stribe på dét ville være et falsk signal.
+    final int? left = fieldsToFinishOrNull(geometry, mySeat, now);
+    final int? before = fieldsToFinishOrNull(geometry, mySeat, was);
+    final int? delta =
+        (left == null || before == null) ? null : before - left;
+    String? outcome;
+    ReplayTone tone = ReplayTone.neutral;
+    if (delta != null && delta < 0) {
+      outcome = 'Din brik røg ${-delta} felter længere væk'
+          '${left == null ? '' : ' — nu $left fra mål'}';
+      tone = ReplayTone.sad;
+    } else if (delta != null && delta > 0) {
+      outcome = 'Din brik kom $delta felter nærmere mål';
+      tone = ReplayTone.good;
+    }
     return ReplayStory(
       actor: actor,
-      action: 'byttede din brik væk fra $fromName',
-      outcome: left == null
-          ? 'Din brik blev byttet væk'
-          : 'Din brik manglede $left felter til mål',
-      tone: mine ? ReplayTone.neutral : ReplayTone.sad,
+      action: 'byttede din brik fra $fromName til $toName',
+      outcome: outcome,
+      tone: tone,
       byAi: byAi,
     );
   }
 
   // ---- Slag og brand: 'capId' siger HVIS brik det gik ud over.
+  // Rammer ét træk BÅDE min og en modstanders brik (fx en delt 7'er), siger
+  // teksten kun det der gik ud over mig. Bevidst: det er dét man vil vide
+  // først, og en sætning der rummer begge dele bliver ulæselig.
   final List<int?> hitOwners = <int?>[
     for (final Map<String, dynamic> s in steps)
       if (s['cap'] == true) ownerOfPieceId(s['capId'] as String?),
