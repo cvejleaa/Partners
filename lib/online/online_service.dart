@@ -1021,6 +1021,11 @@ Map<String, dynamic> moveLogEntry(int seat, Move move) => <String, dynamic>{
                 // (fx +2−5's to hjemslag). Gamle entries uden feltet læses
                 // som "intet slag" (bagud-kompat).
                 if (s.capturedPieceId != null) 'cap': true,
+                // ... og HVIS brik det gik ud over. Motoren har altid vidst
+                // det (MoveStep.capturedPieceId); før blev navnet smidt væk
+                // her, så replayen kun kunne sige "slog en brik hjem" — ikke
+                // om det var din. `cap` bliver stående for de gamle entries.
+                if (s.capturedPieceId != null) 'capId': s.capturedPieceId,
                 if (s.burnsMover) 'burn': true,
               })
           .toList(),

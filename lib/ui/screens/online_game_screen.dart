@@ -13,13 +13,14 @@ import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
+import '../../online/replay_story.dart';
 import '../../online/serialize.dart';
 import '../../state/display_config.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 import '../widgets/card_legend_sheet.dart';
-import '../widgets/card_view.dart';
 import '../widgets/game_play_view.dart';
+import '../widgets/replay_step_view.dart';
 import '../widgets/variant_badge.dart';
 import 'online_screens.dart';
 import 'win_navigation.dart';
@@ -53,7 +54,6 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // De træk der vises i "mens du var væk"-replay'en, med utilsigtede dubletter
   // filtreret fra, samt den aktuelle position i den liste.
   List<Map<String, dynamic>> _replayItems = <Map<String, dynamic>>[];
-  int _replayPos = 0;
 
   bool _statsRecomputed = false;
 
@@ -453,7 +453,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                     lastPlayedCards: lastByPlayer,
                     onlineSeats: onlineSeats,
                   ),
-                  if (_replayActive) _replayOverlay(log, names, state),
+                  if (_replayActive) _replayOverlay(names, state, mySeat),
                 ],
               ),
             ),
@@ -530,7 +530,6 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         setState(() {
           _replayActive = true;
           _replayItems = items;
-          _replayPos = 0;
           _replayTarget = log.length;
         });
       });
@@ -556,62 +555,86 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     setState(() => _replayActive = false);
   }
 
-  Widget _replayOverlay(List log, List<String> names, GameState state) {
-    if (_replayPos >= _replayItems.length) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _finishReplay());
-      return const SizedBox.shrink();
-    }
-    final m = _replayItems[_replayPos];
-    final int seat = (m['player'] as num).toInt();
-    final PlayingCard? card = m['card'] == null
-        ? null
-        : cardFromMap(Map<String, dynamic>.from(m['card'] as Map));
-    final desc = describeReplayStep(m);
+  /// "Mens du var væk" som en RULBAR LISTE, ikke ti modale klik.
+  ///
+  /// Den gamle form viste ét skridt ad gangen med Næste/Spring over. En
+  /// genindtræden kan rumme 10+ skridt, og ti tryk før man må spille er en
+  /// afgift, alle betaler ved at trykke "Spring over" — hvorefter
+  /// informationen er væk for altid (markSeen). Nu kan man rulle listen
+  /// igennem på få sekunder og se alle kortene på én gang.
+  Widget _replayOverlay(List<String> names, GameState state, int mySeat) {
+    final List<ReplayStory> stories = <ReplayStory>[
+      for (final Map<String, dynamic> m in _replayItems)
+        storyFor(m,
+            mySeat: mySeat, names: names, geometry: state.variant.geometry),
+    ];
+    final int hitsOnMe = stories
+        .where((ReplayStory s) => s.outcome == 'Slog din brik hjem')
+        .length;
     return Positioned.fill(
       child: Container(
         color: Colors.black.withValues(alpha: 0.7),
-        child: Center(
-          child: Card(
-            margin: const EdgeInsets.all(24),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                      'Mens du var væk (${_replayPos + 1}/${_replayItems.length})',
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 8),
-                  Text(seat < names.length ? names[seat] : 'Spiller $seat',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  if (card != null)
-                    CardView(card: card, rules: state.cardRules, width: 70),
-                  const SizedBox(height: 10),
-                  Text(desc, textAlign: TextAlign.center),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      TextButton(
-                        onPressed: () {
-                          setState(() => _replayPos = _replayItems.length);
-                        },
-                        child: const Text('Spring over'),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Card(
+                margin: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                              'Mens du var væk — '
+                              '${_replayItems.length} træk',
+                              style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold)),
+                          // Det man faktisk vil vide, sagt ÉN gang øverst i
+                          // stedet for et udbrud ved hvert skridt.
+                          if (hitsOnMe > 0)
+                            Text(
+                                hitsOnMe == 1
+                                    ? 'Din brik røg hjem én gang.'
+                                    : 'Dine brikker røg hjem $hitsOnMe gange.',
+                                style: const TextStyle(fontSize: 13)),
+                        ],
                       ),
-                      FilledButton(
-                        onPressed: () {
-                          setState(() => _replayPos += 1);
-                        },
-                        child: Text(_replayPos + 1 >= _replayItems.length
-                            ? 'Færdig'
-                            : 'Næste'),
+                    ),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: _replayItems.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (BuildContext context, int i) =>
+                            ReplayStepView(
+                          story: stories[i],
+                          card: _replayItems[i]['card'] == null
+                              ? null
+                              : cardFromMap(Map<String, dynamic>.from(
+                                  _replayItems[i]['card'] as Map)),
+                          rules: state.cardRules,
+                        ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          // ignore: discarded_futures
+                          onPressed: _finishReplay,
+                          child: const Text('Videre'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -620,9 +643,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     );
   }
 
-  // _describeReplayStep flyttet til online/serialize.dart som en ren,
-  // top-level funktion (describeReplayStep) — så replay-teksten kan
-  // unit-testes direkte uden en widget-pumpe (se test/serialize_test.dart).
+  // Replay-teksten bor i online/replay_story.dart som rene funktioner
+  // (storyFor/fieldName/stepsAdvanced) — så ordvalget kan mutationstestes
+  // uden en widget-pumpe (se test/replay_story_test.dart).
 
   Map<int, PlayingCard> _parseLog(List log) {
     final out = <int, PlayingCard>{};
