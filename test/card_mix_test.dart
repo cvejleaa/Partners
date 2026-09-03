@@ -11,10 +11,12 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/game/card_rules.dart';
+import 'package:partners/models/board.dart';
 import 'package:partners/models/playing_card.dart';
 import 'package:partners/models/variant_config.dart';
 import 'package:partners/online/serialize.dart';
 import 'package:partners/stats/user_stats.dart';
+import 'package:partners/ui/widgets/card_mix_block.dart';
 
 Map<String, dynamic> _move(int player, PlayingCard card) => <String, dynamic>{
       'player': player,
@@ -311,6 +313,96 @@ void main() {
       // 0 ville stå på skærmen som "jeres snit er 0,0" — en påstand om noget
       // vi ikke har målt.
       expect(UserStats(uid: 'u', displayName: 'U').avgMyExitCards, isNull);
+    });
+  });
+
+  group('hjemslag pr. par', () {
+    /// Et træk med RIGTIGE positioner, så replay-motoren selv kan se hvem
+    /// der stod på feltet — samme kilde som profilens slagtal.
+    Map<String, dynamic> to(int seat, String pieceId, PiecePosition from,
+            PiecePosition dest) =>
+        <String, dynamic>{
+          'player': seat,
+          'type': 'move',
+          'card': cardToMap(_two),
+          'steps': <dynamic>[
+            <String, dynamic>{
+              'pieceId': pieceId,
+              'from': posToMap(from),
+              'to': posToMap(dest),
+            },
+          ],
+        };
+
+    test('holdets slåede brikker foldes til mit og deres', () {
+      // Plads 0+2 er ét hold, 1+3 det andet. Først stiller vi tre brikker
+      // ud, og derefter slås de hjem — så motoren SELV udleder slagene.
+      final Map<String, dynamic> g = _game(log: <Map<String, dynamic>>[
+        to(0, 'p0.1', const StartPosition(0, 1), const TrackPosition(20)),
+        to(2, 'p2.0', const StartPosition(2, 0), const TrackPosition(25)),
+        to(1, 'p1.0', const StartPosition(1, 0), const TrackPosition(40)),
+        // Modstanderne slår begge vores brikker hjem ...
+        to(1, 'p1.1', const StartPosition(1, 1), const TrackPosition(20)),
+        to(3, 'p3.0', const StartPosition(3, 0), const TrackPosition(25)),
+        // ... og vi slår én af deres.
+        to(0, 'p0.2', const StartPosition(0, 2), const TrackPosition(40)),
+      ]);
+      final UserStats s = _mixFor('u0', g);
+      expect(s.myPiecesSentHome, 2);
+      expect(s.oppPiecesSentHome, 1);
+      // Set fra den anden side er tallene byttet om — ellers ville en
+      // ombytning i foldningen være usynlig.
+      expect(_mixFor('u1', g).myPiecesSentHome, 1);
+      expect(_mixFor('u1', g).oppPiecesSentHome, 2);
+    });
+
+    test('sætningen siger hvem der pressede hvem', () {
+      final UserStats s = UserStats(
+        uid: 'u',
+        displayName: 'U',
+        cardMixGames: 1,
+        myPiecesSentHome: 3,
+        oppPiecesSentHome: 7,
+      );
+      expect(CardMixBlock.homeHitsLine(s),
+          'I sendte dem hjem 7 gange — de sendte jer hjem 3 gange.');
+    });
+
+    test('én gang bøjes, og en tom side udelades', () {
+      expect(
+          CardMixBlock.homeHitsLine(UserStats(
+              uid: 'u',
+              displayName: 'U',
+              cardMixGames: 1,
+              myPiecesSentHome: 1,
+              oppPiecesSentHome: 0)),
+          'De sendte jer hjem én gang.');
+      expect(
+          CardMixBlock.homeHitsLine(UserStats(
+              uid: 'u',
+              displayName: 'U',
+              cardMixGames: 1,
+              myPiecesSentHome: 0,
+              oppPiecesSentHome: 1)),
+          'I sendte dem hjem én gang.');
+    });
+
+    test('ingen hjemslag → ingen linje (ikke "0 gange")', () {
+      expect(
+          CardMixBlock.homeHitsLine(
+              UserStats(uid: 'u', displayName: 'U', cardMixGames: 1)),
+          isNull);
+    });
+
+    test('uden par-regnskab → ingen linje', () {
+      // Fx et solospil mod computeren: cardMixGames == 0.
+      expect(
+          CardMixBlock.homeHitsLine(UserStats(
+              uid: 'u',
+              displayName: 'U',
+              myPiecesSentHome: 3,
+              oppPiecesSentHome: 7)),
+          isNull);
     });
   });
 

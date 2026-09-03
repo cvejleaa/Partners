@@ -672,6 +672,13 @@ class _StatsBody extends StatelessWidget {
             _statRow('Sad over 😴', '${s.passCount} runder'),
           if (s.totalCardsDiscarded > 0)
             _statRow('Døde kort ☠️', '${s.totalCardsDiscarded} smidt'),
+          // Hjemslag pr. par — historien om spillet, ved siden af kortenes
+          // historie om heldet.
+          if (CardMixBlock.homeHitsLine(s) != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text('🏠 ${CardMixBlock.homeHitsLine(s)}'),
+            ),
           // Kortregnskabet pr. par. Kun i spil hvor alle fire pladser var
           // mennesker — se CardMixBlock.hasData.
           if (CardMixBlock.hasData(s)) ...<Widget>[

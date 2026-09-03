@@ -56,6 +56,26 @@ class CardMixBlock extends StatelessWidget {
   /// normale tekstfarve, hvilket er det rigtige på profilskærmen.
   final Color? color;
 
+  /// "I sendte dem hjem 7 gange — de sendte jer hjem 3."
+  ///
+  /// Står ALTID synligt, ikke bag en foldning: hjemslag er historien om
+  /// SPILLET (hvem pressede hvem), og det er dét man taler om ved bordet
+  /// bagefter. Kortene er historien om heldet, og den skal man selv bede om.
+  ///
+  /// null når der ikke er noget at fortælle (ingen brikker røg hjem, eller
+  /// partiet tæller ikke med på par-niveau).
+  static String? homeHitsLine(UserStats s) {
+    if (!hasData(s)) return null;
+    final int weSent = s.oppPiecesSentHome; // deres brikker, sendt hjem af os
+    final int theySent = s.myPiecesSentHome;
+    if (weSent == 0 && theySent == 0) return null;
+    String times(int n) => n == 1 ? 'én gang' : '$n gange';
+    if (weSent == 0) return 'De sendte jer hjem ${times(theySent)}.';
+    if (theySent == 0) return 'I sendte dem hjem ${times(weSent)}.';
+    return 'I sendte dem hjem ${times(weSent)} — '
+        'de sendte jer hjem ${times(theySent)}.';
+  }
+
   /// Har spillet/spillene overhovedet et kortregnskab? Kun spil hvor alle fire
   /// pladser er mennesker tælles med, så et solospil mod computeren har ingen
   /// (og et heldregnskab mod en maskine siger heller ikke noget).

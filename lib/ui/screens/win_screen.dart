@@ -275,6 +275,22 @@ class _WinScreenState extends ConsumerState<WinScreen>
                       for (final r in _records) _RecordBanner(record: r),
                     ],
                     if (widget.cardMix != null &&
+                        CardMixBlock.homeHitsLine(widget.cardMix!) !=
+                            null) ...<Widget>[
+                      const SizedBox(height: 14),
+                      // Hjemslag står ÅBENT: det er historien om spillet, og
+                      // den er der ingen grund til at gemme bag et tryk.
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 340),
+                        child: Text(
+                          '🏠 ${CardMixBlock.homeHitsLine(widget.cardMix!)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 14),
+                        ),
+                      ),
+                    ],
+                    if (widget.cardMix != null &&
                         CardMixBlock.hasData(widget.cardMix!)) ...<Widget>[
                       const SizedBox(height: 16),
                       _cardMixSection(widget.cardMix!),

@@ -14,6 +14,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../game/card_rules.dart';
 import '../game/progress.dart';
+import '../models/piece.dart';
 import '../models/playing_card.dart';
 import '../models/variant_config.dart';
 import '../online/serialize.dart';
@@ -66,6 +67,8 @@ class UserStats {
     this.oppPlainCards = 0,
     this.oppUnseenCards = 0,
     this.cardMixGames = 0,
+    this.myPiecesSentHome = 0,
+    this.oppPiecesSentHome = 0,
   })  : favoriteStarter = favoriteStarter ?? <String, int>{},
         partnerStats = partnerStats ?? <String, PairStats>{},
         rivalStats = rivalStats ?? <String, PairStats>{};
@@ -145,6 +148,13 @@ class UserStats {
   int oppPlainCards;
   int oppUnseenCards;
   int cardMixGames;
+
+  // Hjemslag pr. par: hvor mange af HOLDETS brikker der røg hjem. Det er
+  // historien om SPILLET (hvem pressede hvem), i modsætning til kortene, der
+  // er historien om heldet — og den kan man tale om ved bordet uden at nogen
+  // bliver sur.
+  int myPiecesSentHome;
+  int oppPiecesSentHome;
 
   /// Snittet pr. spil — ankeret et enkelt partis tal måles MOD. Uden det
   /// ligner en helt normal kortfordeling et overgreb.
@@ -256,6 +266,8 @@ class UserStats {
         'oppPlainCards': oppPlainCards,
         'oppUnseenCards': oppUnseenCards,
         'cardMixGames': cardMixGames,
+        'myPiecesSentHome': myPiecesSentHome,
+        'oppPiecesSentHome': oppPiecesSentHome,
         if (withTimestamp) 'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -334,6 +346,8 @@ class UserStats {
       oppPlainCards: (m['oppPlainCards'] as num?)?.toInt() ?? 0,
       oppUnseenCards: (m['oppUnseenCards'] as num?)?.toInt() ?? 0,
       cardMixGames: (m['cardMixGames'] as num?)?.toInt() ?? 0,
+      myPiecesSentHome: (m['myPiecesSentHome'] as num?)?.toInt() ?? 0,
+      oppPiecesSentHome: (m['oppPiecesSentHome'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -463,6 +477,7 @@ class _GameFacts {
     required this.cardsDiscardedBySeat,
     required this.protectionBySeat,
     required this.teamOfSeat,
+    required this.sentHomeByTeam,
     required this.exitByTeam,
     required this.specialByTeam,
     required this.plainByTeam,
@@ -494,6 +509,13 @@ class _GameFacts {
   /// tal ville være direkte forkert. [teamOfSeat] kommer fra variantens egen
   /// holdopstilling (VariantConfig.teamOf) — ikke fra endnu et `seat % 2`.
   final Map<int, int> teamOfSeat;
+  /// Hvor mange af HOLDETS brikker der blev sendt hjem i partiet.
+  ///
+  /// Samme kilde som de eksisterende pr-spiller-slagtal
+  /// ([captureReceivedBySeat]) — ÉN vagt, så slutrapporten og profilen ikke
+  /// kan komme til at fortælle to forskellige historier om samme parti.
+  final Map<int, int> sentHomeByTeam;
+
   final Map<int, int> exitByTeam;
   final Map<int, int> specialByTeam;
   final Map<int, int> plainByTeam;
@@ -578,8 +600,10 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
       homeStretchEntriesBySeat[ev.player] =
           (homeStretchEntriesBySeat[ev.player] ?? 0) + ev.movedToHomeStretch;
       for (final captured in ev.captured) {
-        // capturedPieceId formateres som p<owner>.<slot>
-        final owner = int.tryParse(captured.split('.').first.substring(1));
+        // ÉN vagt om id-formatet — se ownerOfPieceId i models/piece.dart.
+        // Den gamle inline-parsing (`substring(1)`) KASTEDE på et id uden
+        // punktum; det var kun skjult af try/catch'en om hele blokken.
+        final int? owner = ownerOfPieceId(captured);
         if (owner != null) {
           captureReceivedBySeat[owner] =
               (captureReceivedBySeat[owner] ?? 0) + 1;
@@ -727,6 +751,16 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
     }
   }
 
+  // Hjemslag pr. par: hvor mange af holdets brikker røg hjem. Foldes fra de
+  // pr-plads-tal statistikken allerede bruger, så tallet i slutrapporten er
+  // det SAMME som profilens.
+  final sentHomeByTeam = <int, int>{};
+  for (final e in captureReceivedBySeat.entries) {
+    final int? team = teamOfSeat[e.key];
+    if (team == null) continue;
+    sentHomeByTeam[team] = (sentHomeByTeam[team] ?? 0) + e.value;
+  }
+
   // (c) De ukendte: smidt ved et pas, rang aldrig logget.
   for (final e in cardsDiscardedBySeat.entries) {
     final int team = teamOfSeat.putIfAbsent(e.key, () => variant.teamOf(e.key));
@@ -754,6 +788,7 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
     cardsDiscardedBySeat: cardsDiscardedBySeat,
     protectionBySeat: protectionBySeat,
     teamOfSeat: teamOfSeat,
+    sentHomeByTeam: sentHomeByTeam,
     exitByTeam: exitByTeam,
     specialByTeam: specialByTeam,
     plainByTeam: plainByTeam,
@@ -886,6 +921,8 @@ void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
       s.oppSpecialCards += theirs(f.specialByTeam);
       s.oppPlainCards += theirs(f.plainByTeam);
       s.oppUnseenCards += theirs(f.unseenByTeam);
+      s.myPiecesSentHome += mine(f.sentHomeByTeam);
+      s.oppPiecesSentHome += theirs(f.sentHomeByTeam);
       s.cardMixGames += 1;
     }
 

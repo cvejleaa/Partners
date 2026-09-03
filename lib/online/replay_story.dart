@@ -12,6 +12,7 @@
 
 import '../game/progress.dart';
 import '../models/board.dart';
+import '../models/piece.dart';
 import 'serialize.dart';
 
 /// Hvor hårdt skridtet ramte MIG. Tonen bæres visuelt (farve/ikon) — ikke af
@@ -58,17 +59,6 @@ class ReplayStory {
   /// Uden det ville replayen rose MIG for et træk jeg ikke lavede (jeg var jo
   /// væk), og gøre mig vred på en ven, der sad i toget mens en bot spillede.
   final bool byAi;
-}
-
-/// Ejeren ud af et brik-id (`p<ejer>.<nummer>`).
-///
-/// ÉN vagt: statistikken parsede før den samme streng med
-/// `split('.').first.substring(1)`, som KASTER på et id uden 'p'/'.'. Her er
-/// den defensiv og returnerer null.
-int? ownerOfPieceId(String? id) {
-  if (id == null || id.length < 2 || !id.startsWith('p')) return null;
-  final int dot = id.indexOf('.');
-  return int.tryParse(dot < 0 ? id.substring(1) : id.substring(1, dot));
 }
 
 /// Feltets navn, som det står på brættet: "dit felt 8", "Carins UD-felt",
