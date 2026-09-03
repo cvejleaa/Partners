@@ -25,7 +25,7 @@ import '../widgets/variant_badge.dart';
 /// [viewerWon] null = seeren sad ikke med (tilskuer, eller et spil hvor
 /// pladsen ikke kunne bestemmes). Så er der stadig en vinder at fejre, bare
 /// ikke seeren selv — og en stille skærm ville se ud som en fejl.
-bool celebrateWin(bool? viewerWon) => viewerWon != false;
+bool celebrateWin(bool? viewerWon) => viewerWon == true;
 
 class WinScreen extends ConsumerStatefulWidget {
   const WinScreen({

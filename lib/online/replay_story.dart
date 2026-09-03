@@ -352,10 +352,5 @@ ReplayMoves movesOf(Map<String, dynamic> entry) {
 /// bytter med den, rører den i høj grad.
 bool touchesSeat(Map<String, dynamic> entry, int seat) {
   if (seat < 0) return false;
-  if ((entry['player'] as num?)?.toInt() == seat) return true;
-  final ReplayMoves m = movesOf(entry);
-  for (final String id in m.highlight) {
-    if (ownerOfPieceId(id) == seat) return true;
-  }
-  return false;
+  return (entry['player'] as num?)?.toInt() == seat;
 }
