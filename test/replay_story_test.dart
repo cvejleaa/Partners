@@ -10,6 +10,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/models/board.dart';
+import 'package:partners/models/piece.dart';
 import 'package:partners/online/replay_story.dart';
 import 'package:partners/online/serialize.dart';
 
