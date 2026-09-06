@@ -348,19 +348,19 @@ bool lobbyCanStart(
     List<dynamic> uids, List<dynamic> aiSeats, Map<String, dynamic> ready) {
   final int n = uids.length < 4 ? uids.length : 4;
   int filled = 0;
-  bool anyHuman = false;
   bool allHumansReady = true;
   for (int i = 0; i < n; i++) {
     final dynamic u = uids[i];
     final bool ai = i < aiSeats.length && aiSeats[i] == true;
     if (u != null || ai) filled++;
     if (u != null) {
-      anyHuman = true;
       if (ready['$u'] != true) allHumansReady = false;
     }
   }
-  // MUTATIONSTEST (Test Manager, midlertidig): anyHuman-vagten fjernet fra
-  // returværdien. Rulles tilbage.
+  // MUTATIONSTEST (Test Manager, midlertidig): anyHuman-vagten fjernet helt
+  // (variablen og dens tildeling), ikke kun fra returværdien — ellers fejler
+  // `flutter analyze` på en ubrugt lokal variabel FØR testene når at køre, og
+  // mutationen beviser ingenting (husets kendte fælde). Rulles tilbage.
   return filled >= 2 && allHumansReady;
 }
 
