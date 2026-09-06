@@ -217,7 +217,7 @@ Duration? waitedSince(int? lastActionAtMs, DateTime now) {
   if (lastActionAtMs == null) return null;
   final Duration d =
       now.difference(DateTime.fromMillisecondsSinceEpoch(lastActionAtMs));
-  return d.isNegative ? null : d;
+  return d.inSeconds <= 0 ? null : d;
 }
 
 /// "ventet 3 timer" — datid, og om SPILLET, ikke om personen.
@@ -230,7 +230,7 @@ String waitedLabel(Duration d) {
   final int days = d.inDays;
   if (days >= 1) return 'ventet $days ${days == 1 ? 'dag' : 'dage'}';
   final int hours = d.inHours;
-  if (hours >= 1) return 'ventet $hours ${hours == 1 ? 'time' : 'timer'}';
+  if (hours >= 2) return 'ventet $hours ${hours == 1 ? 'time' : 'timer'}';
   final int mins = d.inMinutes;
   if (mins >= 1) return 'ventet $mins min';
   return 'ventet under 1 min';
@@ -872,8 +872,12 @@ class OnlineService {
   /// En vagt på dét gjorde `since` null indtil første træk — og da
   /// overtagelsen kræver `since != null`, kunne et spil låse fast for evigt,
   /// hvis startspilleren forsvandt før sit første træk (QC-fund).
-  static Duration? timeSinceLastAction(Map<String, dynamic> d) =>
-      waitedSince(_tsMs(d['lastActionAt']), DateTime.now());
+  static Duration? timeSinceLastAction(Map<String, dynamic> d) {
+    final int? last = _tsMs(d['lastActionAt']);
+    final int? started = _tsMs(d['startedAt']);
+    if (last != null && started != null && last < started) return null;
+    return waitedSince(last, DateTime.now());
+  }
 
   GameState _initialState(List<String> names, List<int> colors, List uids,
       CardRules rules, VariantConfig variant) {
