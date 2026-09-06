@@ -126,7 +126,15 @@ class GameSummary {
       this.winningTeamIndex,
       this.mySeat = -1,
       this.unseen = false,
-      this.isAi = false});
+      this.isAi = false,
+      this.lastActionAtMs,
+      this.startedAtMs});
+  /// Hvornår der sidst skete noget i spillet, og hvornår det startede.
+  /// Sammen giver de ventetiden — se [waitedSince], som bruger [startedAtMs]
+  /// (serverens ur) til at afsløre et forkert klientur.
+  final int? lastActionAtMs;
+  final int? startedAtMs;
+
   final String code;
   final String hostName;
   final String status;
@@ -190,6 +198,77 @@ class GameSummary {
 /// er der ingen timeout overhovedet — der ventes på spilleren uanset hvor
 /// længe de er væk (håndhævet både i _maybeHostAct og i aiTakeoverMove).
 const Duration kAiTakeoverTimeout = Duration(seconds: 35);
+
+/// Hvornår ventetiden på et spil begynder at være værd at vise.
+///
+/// To forskellige tærskler, og forskellen er BEVIDST. Min egen tur er ren
+/// service ("nå, jeg har holdt spillet siden i morges"). En ANDENS tur er et
+/// tal med et menneskes navn ved siden af — og det bliver hurtigt et
+/// pressemiddel i et makkerspil, der ofte er hyggeligt netop fordi det er
+/// langsomt. Derfor tier appen om andres tur det første døgn.
+///
+/// Under tærsklen står der INGENTING — ikke "lige nu". En tom plads er
+/// roligere end en tom oplysning.
+///
+/// Tærsklen bærer også en teknisk beslutning: et stille spil sender ingen nye
+/// snapshots, så tallet på skærmen er fra sidste opdatering. Med enheder i
+/// timer og dage er et minuts forældelse usynlig — og så er der ingen grund
+/// til en timer, der bygger listen om og æder batteri.
+const Duration kWaitVisibleMine = Duration(hours: 1);
+const Duration kWaitVisibleOthers = Duration(days: 1);
+
+/// Over dette er et tal ikke længere en oplysning, men en mistanke om et
+/// forkert ur. Så siger vi det med ord i stedet.
+const Duration kWaitTooLong = Duration(days: 60);
+
+/// Hvor længe har spillet ligget stille? null = vis ingenting.
+///
+/// [lastActionAtMs] nulstilles ved HVER handling i spillet
+/// (`startGameFromLobby`, `mutate`, `_aiSeatMoveInternal`), og motoren
+/// afslutter altid turen ved et træk — så i play-fasen er dette PRÆCIS hvor
+/// længe den aktuelle spiller har været på uret. At kigge på spillet
+/// (`markSeen`, `heartbeat`) rører den ikke.
+///
+/// TO URE, navngivet: `lastActionAt` skrives med modspillerens
+/// `Timestamp.now()` og læses med mit eget. Derfor tre vagter — og hver af
+/// dem returnerer null frem for at pynte på et forkert tal:
+///  * intet felt (spil fra før feltet fandtes),
+///  * et tidsstempel i FREMTIDEN — det er et ur der er galt, ikke en handling
+///    der lige er sket,
+///  * `lastActionAt` FØR `startedAt`. Sidstnævnte skrives med serverens eget
+///    ur (`FieldValue.serverTimestamp()`), så den sammenligning beviser at
+///    klienturet er forkert.
+Duration? waitedSince(
+  int? lastActionAtMs,
+  int? startedAtMs,
+  DateTime now,
+) {
+  if (lastActionAtMs == null) return null;
+  if (startedAtMs != null && lastActionAtMs < startedAtMs) return null;
+  final Duration d =
+      now.difference(DateTime.fromMillisecondsSinceEpoch(lastActionAtMs));
+  if (d.isNegative) return null;
+  return d;
+}
+
+/// Skal ventetiden vises, når det er [mine] tur?
+bool waitIsWorthShowing(Duration? waited, {required bool mine}) {
+  if (waited == null) return false;
+  return waited >= (mine ? kWaitVisibleMine : kWaitVisibleOthers);
+}
+
+/// "ventet 3 timer" — datid, og om SPILLET, ikke om personen.
+///
+/// "venter i 3 timer" ville på dansk læses som resttid ("jeg venter tre timer
+/// endnu"), og "Carin har ikke spillet i 3 timer" flytter fra faktum til
+/// person. Begge dele undgås.
+String waitedLabel(Duration d) {
+  if (d >= kWaitTooLong) return 'ventet længe';
+  final int days = d.inDays;
+  if (days >= 1) return 'ventet $days ${days == 1 ? 'dag' : 'dage'}';
+  final int hours = d.inHours;
+  return 'ventet $hours ${hours == 1 ? 'time' : 'timer'}';
+}
 
 /// Hvor ofte en aktiv klient opdaterer sit "presence"-stempel. Holdes lavere
 /// end push-væk-grænsen (AWAY_MS i functions), så en aktiv spiller aldrig ser
@@ -817,11 +896,15 @@ class OnlineService {
   }
 
   /// Hjælper til UI: tid siden sidste handling i spillet (eller null).
-  static Duration? timeSinceLastAction(Map<String, dynamic> d) {
-    final ts = d['lastActionAt'];
-    if (ts is! Timestamp) return null;
-    return DateTime.now().difference(ts.toDate());
-  }
+  ///
+  /// Deler definition med ventetids-visningen i "Mine spil" — ÉN vagt, så en
+  /// mutation i [waitedSince] gør BEGGE røde. Klampningen er sikker for
+  /// AI-overtagelsen: hvor den før fik en negativ varighed (som alligevel er
+  /// under [kAiTakeoverTimeout]), får den nu null, og overtagelsen springes
+  /// over — fail-safe i samme retning.
+  static Duration? timeSinceLastAction(Map<String, dynamic> d) =>
+      waitedSince(_tsMs(d['lastActionAt']), _tsMs(d['startedAt']),
+          DateTime.now());
 
   GameState _initialState(List<String> names, List<int> colors, List uids,
       CardRules rules, VariantConfig variant) {
@@ -1137,6 +1220,8 @@ GameSummary gameSummaryFromDoc(
       mySeat: mySeat,
       unseen: status == 'over' && mySeen < logLen,
       isAi: d['mode'] == 'ai',
+      lastActionAtMs: _tsMs(d['lastActionAt']),
+      startedAtMs: _tsMs(d['startedAt']),
     );
   }
 

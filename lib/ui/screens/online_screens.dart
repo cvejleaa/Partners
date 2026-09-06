@@ -197,8 +197,28 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
   static const int _kArchivePreview = 5;
   bool _showAllArchive = false;
 
-  /// Grøn "det er din tur til at handle"-chip.
-  Widget _actionChip(String label) {
+  /// Grøn "det er din tur til at handle"-chip, evt. med ventetiden ved siden
+  /// af. Ventetiden står UDEN FOR chippen: den er en oplysning, ikke en del
+  /// af opfordringen — og [Flexible] er nødvendig, ellers flyder rækken ud
+  /// bag papirkurven i ListTile'ens trailing.
+  Widget _actionChip(String label, {String? trailing}) {
+    final Widget chip = _chipBody(label);
+    if (trailing == null) return chip;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        chip,
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(trailing,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13)),
+        ),
+      ],
+    );
+  }
+
+  Widget _chipBody(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -218,6 +238,15 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
         ],
       ),
     );
+  }
+
+  /// Dansk ejefald: navne der ender på s, x eller z får apostrof, ikke et
+  /// ekstra s. "Larss tur" har stået der siden listen blev bygget.
+  static String _possessive(String name) {
+    final String n = name.trim();
+    if (n.isEmpty) return n;
+    final String last = n.substring(n.length - 1).toLowerCase();
+    return (last == 's' || last == 'x' || last == 'z') ? "$n'" : '${n}s';
   }
 
   /// Række i arkivet. BEVIDST en anden — og kortere — række end de aktive:
@@ -276,7 +305,10 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     return t.year == DateTime.now().year ? base : '$base ${t.year}';
   }
 
-  Widget _gameTile(BuildContext context, WidgetRef ref, GameSummary g) {
+  /// [now] gives af kalderen, ikke læses her: to rækker bygget i samme frame
+  /// skal ikke kunne lande på hver sin side af en tærskel (QC-fund).
+  Widget _gameTile(
+      BuildContext context, WidgetRef ref, GameSummary g, DateTime now) {
     final user = FirebaseAuth.instance.currentUser;
     final bool canDelete =
         (user != null && g.hostUid == user.uid) || isAdmin(user);
@@ -292,16 +324,26 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     //  - play:     "Din tur" (grøn chip) / "<navn>s tur"
     //  - exchange: "Byt kort" (grøn chip) / "Venter på bytte"
     final bool needAct = g.isMyTurn || g.needsExchange;
+    // Ventetiden lægges på turn-linjen, ikke som en linje FOR SIG: rækken er
+    // en ListTile med isThreeLine, og et fjerde tekstniveau flyder over på en
+    // smal skærm i stedet for at se pænt ud (QC-fund).
+    final Duration? waited =
+        waitedSince(g.lastActionAtMs, g.startedAtMs, now);
+    final String? waitText = waitIsWorthShowing(waited, mine: needAct)
+        ? waitedLabel(waited!)
+        : null;
     Widget? turnLine;
     if (g.isPlaying) {
+      final String suffix = waitText == null ? '' : ' · $waitText';
       if (needAct) {
-        turnLine = _actionChip(g.isMyTurn ? 'Din tur' : 'Byt kort');
+        turnLine = _actionChip(g.isMyTurn ? 'Din tur' : 'Byt kort',
+            trailing: waitText);
       } else if (g.phase == 'play' && g.currentName != null) {
-        turnLine = Text('${g.currentName}s tur',
+        turnLine = Text('${_possessive(g.currentName!)} tur$suffix',
             style: const TextStyle(fontSize: 13));
       } else if (g.phase == 'exchange') {
-        turnLine =
-            const Text('Venter på bytte', style: TextStyle(fontSize: 13));
+        turnLine = Text('Venter på bytte$suffix',
+            style: const TextStyle(fontSize: 13));
       }
     }
 
@@ -479,6 +521,8 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                   final List<GameSummary> archive = _showAllArchive
                       ? archiveAll
                       : archiveAll.take(_kArchivePreview).toList();
+                  // ÉT nu for hele listen — se _gameTile.
+                  final DateTime now = DateTime.now();
                   // Tom-tilstanden måler på AKTIVE spil: har man kun et arkiv,
                   // skal opfordringen til at starte et spil stadig stå.
                   if (playing.isEmpty && lobbies.isEmpty && archive.isEmpty) {
@@ -493,7 +537,7 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
-                        for (final g in playing) _gameTile(context, ref, g),
+                        for (final g in playing) _gameTile(context, ref, g, now),
                         const SizedBox(height: 12),
                       ],
                       if (lobbies.isNotEmpty) ...<Widget>[
@@ -503,7 +547,7 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
-                        for (final g in lobbies) _gameTile(context, ref, g),
+                        for (final g in lobbies) _gameTile(context, ref, g, now),
                         const SizedBox(height: 12),
                       ],
                       if (archive.isNotEmpty) ...<Widget>[
