@@ -111,4 +111,86 @@ void main() {
       expect(d!.inMinutes, 2);
     });
   });
+
+  group('playingSorted — mine træk øverst, derefter længst ventende', () {
+    GameSummary g(String code,
+            {bool myTurn = false,
+            bool exchange = false,
+            Duration? waited,
+            String status = 'playing'}) =>
+        GameSummary(code, 'vært', status, const <String>['A', 'B', 'C', 'D'],
+            isMyTurn: myTurn,
+            needsExchange: exchange,
+            lastActionAtMs: waited == null ? null : _ms(waited));
+
+    List<String> codes(List<GameSummary> l) =>
+        <String>[for (final GameSummary x in l) x.code];
+
+    test('kun igangværende spil kommer med', () {
+      expect(
+          codes(playingSorted(<GameSummary>[
+            g('SPIL', waited: const Duration(hours: 1)),
+            g('LOBBY', status: 'lobby'),
+            g('SLUT', status: 'over'),
+          ])),
+          <String>['SPIL']);
+    });
+
+    test('spil hvor JEG skal handle ligger øverst — også de nyeste', () {
+      // Kernen: et spil der lige er blevet min tur skal STADIG ligge over et
+      // spil der har ventet i en uge på en anden. Sorteres der kun på
+      // ventetid, bliver denne test rød.
+      expect(
+          codes(playingSorted(<GameSummary>[
+            g('GAMMEL', waited: const Duration(days: 7)),
+            g('MIN', myTurn: true, waited: const Duration(minutes: 1)),
+          ])),
+          <String>['MIN', 'GAMMEL']);
+    });
+
+    test('byttefasen tæller også som "jeg skal handle"', () {
+      expect(
+          codes(playingSorted(<GameSummary>[
+            g('ANDRE', waited: const Duration(days: 2)),
+            g('BYT', exchange: true, waited: const Duration(minutes: 5)),
+          ])),
+          <String>['BYT', 'ANDRE']);
+    });
+
+    test('inden for hver gruppe ligger den længst ventende øverst', () {
+      expect(
+          codes(playingSorted(<GameSummary>[
+            g('NY', waited: const Duration(hours: 1)),
+            g('GAMMEL', waited: const Duration(days: 3)),
+            g('MELLEM', waited: const Duration(hours: 9)),
+          ])),
+          <String>['GAMMEL', 'MELLEM', 'NY']);
+    });
+
+    test('ukendt ventetid lægges SIDST, ikke øverst', () {
+      // Et spil fra før feltet fandtes har ingen ventetid. Behandles null som
+      // nul (eller som "meget gammel"), ville det springe forrest på et gæt.
+      expect(
+          codes(playingSorted(<GameSummary>[
+            g('UKENDT'),
+            g('KENDT', waited: const Duration(minutes: 5)),
+          ])),
+          <String>['KENDT', 'UKENDT']);
+    });
+
+    test('samme ventetid giver en ENTYDIG rækkefølge', () {
+      // Listen bygges om hvert halve minut af ventetællerens ur, og Darts
+      // sort er ikke stabil. Uden tie-break på koden kunne to rækker bytte
+      // plads mens man kigger på dem.
+      final List<GameSummary> input = <GameSummary>[
+        g('CCC', waited: const Duration(hours: 2)),
+        g('AAA', waited: const Duration(hours: 2)),
+        g('BBB', waited: const Duration(hours: 2)),
+      ];
+      expect(codes(playingSorted(input)), <String>['AAA', 'BBB', 'CCC']);
+      // Og igen, på en anden indgangsrækkefølge: samme svar.
+      expect(codes(playingSorted(input.reversed.toList())),
+          <String>['AAA', 'BBB', 'CCC']);
+    });
+  });
 }

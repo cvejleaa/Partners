@@ -220,6 +220,39 @@ Duration? waitedSince(int? lastActionAtMs, DateTime now) {
   return d.isNegative ? null : d;
 }
 
+/// De igangværende spil, sorteret som man leder efter dem.
+///
+/// To spørgsmål stilles til listen, og de har hver sit svar:
+///  1. "Hvad venter på MIG?" → spil hvor jeg skal handle ligger ØVERST.
+///  2. "Hvad er gået i stå?" → derefter det der har ventet længst.
+///
+/// Ventetælleren alene svarer kun på det andet, og kræver at man læser alle
+/// rækker og sammenligner tal i hovedet.
+///
+/// Rækkefølgen SKAL være entydig: listen bygges om hvert halve minut af
+/// ventetællerens ur, og Darts sort er ikke stabil — uden en sidste
+/// tie-break på koden kunne to rækker med samme ventetid bytte plads, mens
+/// man kigger på dem.
+///
+/// Spil uden [GameSummary.lastActionAtMs] (fra før feltet fandtes) har ingen
+/// kendt ventetid og lægges sidst i deres gruppe frem for at blive gættet
+/// øverst.
+List<GameSummary> playingSorted(List<GameSummary> all) {
+  final List<GameSummary> out =
+      all.where((GameSummary g) => g.isPlaying).toList();
+  int rank(GameSummary g) => (g.isMyTurn || g.needsExchange) ? 0 : 1;
+  out.sort((GameSummary a, GameSummary b) {
+    final int byAct = rank(a).compareTo(rank(b));
+    if (byAct != 0) return byAct;
+    // Ældste handling = længst ventetid = øverst. Manglende felt sidst.
+    final int am = a.lastActionAtMs ?? 1 << 62;
+    final int bm = b.lastActionAtMs ?? 1 << 62;
+    if (am != bm) return am.compareTo(bm);
+    return a.code.compareTo(b.code);
+  });
+  return out;
+}
+
 /// "ventet 3 timer" — datid, og om SPILLET, ikke om personen.
 ///
 /// "venter i 3 timer" ville på dansk læses som resttid ("jeg venter tre timer

@@ -536,7 +536,10 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                 data: (list) {
                   // Igangværende spil først (så man hurtigt kan genindtræde),
                   // dernæst lobbyer der venter, og til sidst arkivet.
-                  final playing = list.where((g) => g.isPlaying).toList();
+                  // Mine træk øverst, derefter længst ventende — se
+                  // playingSorted. Rå snapshot-orden er spilkode-orden,
+                  // altså vilkårlig.
+                  final playing = playingSorted(list);
                   final lobbies = list.where((g) => g.isLobby).toList();
                   // Arkivet: afsluttede ONLINE-spil, nyeste først. Solospil
                   // mod computeren holdes ude (de er i flertal og hører til i
