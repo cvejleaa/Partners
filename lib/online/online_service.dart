@@ -127,7 +127,11 @@ class GameSummary {
       this.mySeat = -1,
       this.unseen = false,
       this.isAi = false,
-      this.lastActionAtMs});
+      this.lastActionAtMs,
+      this.lobbyNeed,
+      this.openSeats = 0,
+      this.waitingForName,
+      this.createdAtMs});
   /// Hvornår der sidst skete noget i spillet. Sammen med nu giver det
   /// ventetiden — se [waitedSince].
   final int? lastActionAtMs;
@@ -179,12 +183,43 @@ class GameSummary {
   /// men hører hjemme i profilen — ikke i online-arkivet.
   final bool isAi;
 
+  /// Lobby-felter. Alle er null/0 for et spil, der IKKE er en lobby — de
+  /// beregnes kun inde i status=='lobby'-grenen, så ingen af dem kan bære et
+  /// tal, der er meningsløst for et spil i gang. (`ready`-mappet slettes fx
+  /// aldrig ved start, så "jeg er klar" ville stå true i et afsluttet spil.)
+
+  /// Hvad lobbyen venter på, set fra MIG. Rangklassen i [lobbiesSorted].
+  final LobbyNeed? lobbyNeed;
+
+  /// Antal pladser der hverken har et menneske eller er markeret som computer.
+  final int openSeats;
+
+  /// Navnet på den ENE spiller, der mangler at melde sig klar. Null når det er
+  /// nul eller flere end én — "Venter på Bo" kan man handle på, "Venter på 2"
+  /// kan man ikke.
+  final String? waitingForName;
+
+  /// Hvornår lobbyen blev oprettet. En lobby har ingen `lastActionAt`, så det
+  /// er dette stempel ventetiden på rækken kommer fra — se [createdLabel] for
+  /// hvorfor etiketten ikke må sige "ventet".
+  final int? createdAtMs;
+
   bool get isLobby => status == 'lobby';
   bool get isPlaying => status == 'playing';
 
-  /// Venter spillet på MIG? ÉN definition — både sorteringen og rækkens
-  /// grønne chip spørger om det samme, og to kopier kunne drive fra hinanden.
-  bool get needsMyAction => isMyTurn || needsExchange;
+  /// Venter spillet på MIG? ÉN definition — sorteringen, rækkens grønne chip
+  /// OG rækkens ikon spørger alle om det samme. Uden den fælles kilde fik
+  /// lobby-rækker grøn chip ved siden af et gråt ikon, mens de igangværende
+  /// havde begge dele grønne (QC-fund).
+  ///
+  /// For en lobby gælder det de to klasser, hvor jeg kan handle NU. En
+  /// invitation tæller IKKE med: den ligger nederst, og en grøn "det venter
+  /// på dig" på sidens sidste række ville modsige sig selv.
+  bool get needsMyAction =>
+      isMyTurn ||
+      needsExchange ||
+      lobbyNeed == LobbyNeed.canStart ||
+      lobbyNeed == LobbyNeed.notReady;
   bool get isOver => status == 'over';
 
   /// Vandt jeg? Null når det ikke kan afgøres (ukendt vinder eller jeg sad
@@ -267,20 +302,153 @@ List<GameSummary> playingSorted(List<GameSummary> all) {
   return out;
 }
 
+/// Hvad venter en lobby på? Rækkefølgen af værdierne ER rangordenen på
+/// "Mine spil": den første står øverst.
+///
+/// [invitation] ligger BEVIDST nederst. Den oprindelige plan havde den
+/// øverst (en ubesvaret invitation blokerer jo de andre), men brugeren valgte
+/// om: mine egne spil først — en invitation er endnu ikke mit spil. Det
+/// afværger samtidig, at en invitation man aldrig svarer på, ville sidde fast
+/// som sidens øverste række for evigt; der findes nemlig ingen måde at afvise
+/// en invitation på i dag (navngivet hul, ikke løst her).
+enum LobbyNeed {
+  /// Jeg er vært, og spillet kan startes NU. Ét tryk fra et spil.
+  canStart,
+
+  /// Jeg sidder med, men har ikke markeret mig klar. Ét tryk fra at frigive
+  /// de andre.
+  notReady,
+
+  /// Alle er klar — der ventes kun på at værten trykker start. Egen klasse,
+  /// fordi "Venter på at alle er klar" ville være direkte usandt her: alle
+  /// ER klar (QC-fund).
+  hostToStart,
+
+  /// Der ventes på andre: flere spillere, eller at nogen melder sig klar.
+  waiting,
+
+  /// Jeg er inviteret, men er ikke gået ind i lobbyen.
+  invitation,
+}
+
+/// Kan lobbyen startes? ÉN regel, kaldt BEGGE steder — lobby-skærmens
+/// Start-knap og listens rangordning må aldrig kunne være uenige om det.
+/// (To vagter om samme regel betyder, at den ene kan fjernes med grøn suite.)
+///
+/// [anyHuman] er ikke pynt: `.every` på en TOM liste er `true` i Dart, så en
+/// lobby uden et eneste menneske ville ellers regnes som "alle er klar" og
+/// kunne startes. Det kan ikke nås i dag (værten står altid i `uids`), men
+/// reglen genkendes på positiv tilstedeværelse frem for på fravær (QC-fund).
+///
+/// Robust over for skæve docs: listen læses kun så langt den rækker, og
+/// `aiSeats` må mangle. Lobby-skærmen indekserede hårdt `uids[i]` for i<4 —
+/// det var sikkert dér, men denne funktion kaldes for HVERT doc i
+/// "Mine spil"-forespørgslen, også gamle og skæve.
+bool lobbyCanStart(
+    List<dynamic> uids, List<dynamic> aiSeats, Map<String, dynamic> ready) {
+  final int n = uids.length < 4 ? uids.length : 4;
+  int filled = 0;
+  bool anyHuman = false;
+  bool allHumansReady = true;
+  for (int i = 0; i < n; i++) {
+    final dynamic u = uids[i];
+    final bool ai = i < aiSeats.length && aiSeats[i] == true;
+    if (u != null || ai) filled++;
+    if (u != null) {
+      anyHuman = true;
+      if (ready['$u'] != true) allHumansReady = false;
+    }
+  }
+  return anyHuman && filled >= 2 && allHumansReady;
+}
+
+/// Rangklassen for ét lobby-doc, set fra [uid]. Null når doc'et ikke er en
+/// lobby — genkendt på positiv tilstedeværelse af status 'lobby', så
+/// felterne aldrig bærer et tal, der er meningsløst for et spil i gang.
+LobbyNeed? lobbyNeedFromDoc(Map<String, dynamic> d, String uid) {
+  if ((d['status'] as String? ?? 'lobby') != 'lobby') return null;
+  final List<dynamic> uids = (d['uids'] as List?) ?? const <dynamic>[];
+  final List<dynamic> aiSeats = (d['aiSeats'] as List?) ?? const <dynamic>[];
+  final Map<String, dynamic> ready = d['ready'] is Map
+      ? Map<String, dynamic>.from(d['ready'] as Map)
+      : <String, dynamic>{};
+  // Sidder jeg overhovedet med? Ellers er det en invitation.
+  if (!uids.contains(uid)) return LobbyNeed.invitation;
+  final bool canStart = lobbyCanStart(uids, aiSeats, ready);
+  if (canStart && d['hostUid'] == uid) return LobbyNeed.canStart;
+  // Rækkefølgen her er ikke tilfældig: canStart kræver at ALLE mennesker er
+  // klar — mig selv iberegnet — så "jeg er ikke klar" og "kan startes" kan
+  // aldrig gælde samtidig.
+  if (ready['$uid'] != true) return LobbyNeed.notReady;
+  if (canStart) return LobbyNeed.hostToStart;
+  return LobbyNeed.waiting;
+}
+
+/// Lobbyerne på "Mine spil", mest presserende først.
+///
+/// Samme to principper som [playingSorted]: rangklassen først, derefter
+/// længst ventende (her: ældst oprettet), og til sidst en entydig tie-break
+/// på koden, fordi Darts sort ikke er stabil og listen bygges om hvert halve
+/// minut af ventetællerens ur.
+List<GameSummary> lobbiesSorted(List<GameSummary> all) {
+  final List<GameSummary> out =
+      all.where((GameSummary g) => g.isLobby).toList();
+  out.sort((GameSummary a, GameSummary b) {
+    final int byNeed = (a.lobbyNeed ?? LobbyNeed.waiting)
+        .index
+        .compareTo((b.lobbyNeed ?? LobbyNeed.waiting).index);
+    if (byNeed != 0) return byNeed;
+    // Ukendt oprettelsestid håndteres EKSPLICIT — ingen sentinel-værdi. Se
+    // den lange forklaring i playingSorted: på web regnes `1 << 62` i 32 bit.
+    // Her betyder null desuden noget ANDET end i playingSorted: `createdAt`
+    // er et serverTimestamp, så værtens eget lokale snapshot har feltet tomt
+    // i det sekund, før serveren svarer. Et doc uden stempel er altså det
+    // NYESTE — og nyest hører sidst, når vi sorterer ældste først. Rækken
+    // hopper derfor ikke, når stemplet lander: den lå allerede, hvor den
+    // skulle.
+    final int? am = a.createdAtMs;
+    final int? bm = b.createdAtMs;
+    if (am == null || bm == null) {
+      if (am != bm) return am == null ? 1 : -1; // ukendt = nyest = sidst
+    } else if (am != bm) {
+      return am.compareTo(bm); // ældst oprettet = længst ventet = øverst
+    }
+    return a.code.compareTo(b.code);
+  });
+  return out;
+}
+
 /// "ventet 3 timer" — datid, og om SPILLET, ikke om personen.
 ///
 /// "venter i 3 timer" ville på dansk læses som resttid ("jeg venter tre timer
 /// endnu"), og "Carin har ikke spillet i 3 timer" flytter fra faktum til
 /// person. Tælleren er til for at man kan drille hinanden med at være længe om
 /// at bestemme sig — så den skal beskrive brættet, ikke dømme spilleren.
-String waitedLabel(Duration d) {
+String waitedLabel(Duration d) => 'ventet ${durationLabel(d)}';
+
+/// "oprettet for 3 dage siden" — om en LOBBY, der aldrig har haft et træk.
+///
+/// Bevidst ikke "ventet 3 dage": en lobby har ingen `lastActionAt` (feltet
+/// skrives først ved start og ved hvert træk), så tallet kan kun komme fra
+/// `createdAt` — og `createdAt` rykker sig IKKE, når nogen tiltræder eller
+/// melder sig klar. Ordet "ventet" ville derfor betyde to forskellige ting på
+/// den samme skærm, 40 pixels fra hinanden: "siden sidste træk" på en
+/// igangværende række og "siden oprettelsen" på en lobby-række. Etiketten
+/// siger i stedet præcis dét, tallet er (QC-fund).
+String createdLabel(Duration d) => 'oprettet for ${durationLabel(d)} siden';
+
+/// "3 dage" / "2 timer" / "42 min" / "under 1 min".
+///
+/// ÉT formateringssted for begge etiketter ovenfor: to kopier kunne drive fra
+/// hinanden, og så ville den ene kunne ændres uden at nogen test blev rød.
+String durationLabel(Duration d) {
   final int days = d.inDays;
-  if (days >= 1) return 'ventet $days ${days == 1 ? 'dag' : 'dage'}';
+  if (days >= 1) return '$days ${days == 1 ? 'dag' : 'dage'}';
   final int hours = d.inHours;
-  if (hours >= 1) return 'ventet $hours ${hours == 1 ? 'time' : 'timer'}';
+  if (hours >= 1) return '$hours ${hours == 1 ? 'time' : 'timer'}';
   final int mins = d.inMinutes;
-  if (mins >= 1) return 'ventet $mins min';
-  return 'ventet under 1 min';
+  if (mins >= 1) return '$mins min';
+  return 'under 1 min';
 }
 
 /// Hvor ofte en aktiv klient opdaterer sit "presence"-stempel. Holdes lavere
@@ -1214,6 +1382,34 @@ GameSummary gameSummaryFromDoc(
     // "Så jeg slutningen?" — samme kilde som replay'en bruger: har jeg set
     // færre log-indlæg end der findes, sluttede spillet mens jeg var væk.
     final int logLen = (d['log'] as List?)?.length ?? 0;
+    // ÉN aflæsning af createdAt: den bruges både som arkivets fallback-dato og
+    // som lobbyens ventetid, og to aflæsninger kunne drive fra hinanden.
+    final int? createdAtMs = _tsMs(d['createdAt']);
+    // Lobby-afledningerne. Beregnes KUN for en lobby (positiv genkendelse) —
+    // for et spil i gang ville tallene være vildledende: `ready`-mappet
+    // slettes aldrig ved start, og tomme pladser bliver til AI i state'n uden
+    // at `uids`/`aiSeats` i doc'et røres.
+    final LobbyNeed? lobbyNeed = lobbyNeedFromDoc(d, uid);
+    int openSeats = 0;
+    String? waitingForName;
+    if (lobbyNeed != null) {
+      final List<dynamic> uidsL = (d['uids'] as List?) ?? const <dynamic>[];
+      final List<dynamic> aiL = (d['aiSeats'] as List?) ?? const <dynamic>[];
+      final Map<String, dynamic> ready = d['ready'] is Map
+          ? Map<String, dynamic>.from(d['ready'] as Map)
+          : <String, dynamic>{};
+      final List<String> notReady = <String>[];
+      final int n = uidsL.length < 4 ? uidsL.length : 4;
+      for (int i = 0; i < n; i++) {
+        final dynamic u = uidsL[i];
+        final bool ai = i < aiL.length && aiL[i] == true;
+        if (u == null && !ai) openSeats++;
+        if (u != null && ready['$u'] != true) {
+          notReady.add(i < names.length ? names[i] : '?');
+        }
+      }
+      if (notReady.length == 1) waitingForName = notReady.first;
+    }
     final dynamic seenRaw = d['seen'];
     final int mySeen = (seenRaw is Map && seenRaw[uid] is num)
         ? (seenRaw[uid] as num).toInt()
@@ -1231,12 +1427,16 @@ GameSummary gameSummaryFromDoc(
       variantId: variant.id,
       variantLabel: variantDisplayName(variant, d['cardRulesVariants']),
       variant: variant,
-      finishedAtMs: _tsMs(d['finishedAt']) ?? _tsMs(d['createdAt']),
+      finishedAtMs: _tsMs(d['finishedAt']) ?? createdAtMs,
       winningTeamIndex: winner,
       mySeat: mySeat,
       unseen: status == 'over' && mySeen < logLen,
       isAi: d['mode'] == 'ai',
       lastActionAtMs: _tsMs(d['lastActionAt']),
+      lobbyNeed: lobbyNeed,
+      openSeats: openSeats,
+      waitingForName: waitingForName,
+      createdAtMs: createdAtMs,
     );
   }
 

@@ -318,6 +318,13 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     );
   }
 
+  /// Almindelig (ikke-grøn) status-linje på en lobby-række. Samme typografi
+  /// som de igangværende spils "<navn>s tur", så sektionerne ligner hinanden.
+  static Widget _lobbyLine(String text) => Text(text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 13));
+
   /// "14. aug." / "14. aug. 2025" (år kun når det ikke er i år).
   static String _archiveDate(int? ms) {
     if (ms == null) return 'Ukendt dato';
@@ -371,6 +378,53 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13));
+      }
+    } else if (g.isLobby) {
+      // Lobby-rækken sagde før det samme på ALLE rækker ("Venter i lobby" —
+      // ordret sektionsoverskriften tre linjer over). Så var sorteringen
+      // uforklarlig: rækken røbede ikke, hvorfor den stod, hvor den stod.
+      // Ventetiden kommer fra createdAt og hedder derfor "oprettet for …
+      // siden", ikke "ventet …" — se createdLabel.
+      final Duration? age = waitedSince(g.createdAtMs, now);
+      final String suffix = age == null ? '' : ' · ${createdLabel(age)}';
+      final String host = g.hostName;
+      final String? ageText = age == null ? null : createdLabel(age);
+      final LobbyNeed need = g.lobbyNeed ?? LobbyNeed.waiting;
+      final bool iAmHost = g.hostUid != null && g.hostUid == user?.uid;
+      if (need == LobbyNeed.canStart) {
+        // Knappens egne ord ("Start spil"), så man leder efter det rigtige.
+        turnLine = _actionChip('Start spil', trailing: ageText);
+      } else if (need == LobbyNeed.notReady) {
+        turnLine = _actionChip('Marker klar', trailing: ageText);
+      } else if (need == LobbyNeed.hostToStart) {
+        turnLine = _lobbyLine('Venter på at $host starter$suffix');
+      } else if (need == LobbyNeed.invitation) {
+        // Samme ord som det grønne banner på forsiden, så de to overflader
+        // kendes som samme sag — og afsenderen NAVNGIVES: det er dét, der
+        // gør en invitation til en beslutning.
+        //
+        // Er der ingen ledig plads, er der ingen knap at trykke på inde i
+        // lobbyen ('Tag plads' kræver en fri, ikke-AI plads). Sig det på
+        // rækken frem for at sende folk ind i en blindgyde. NAVNGIVET, IKKE
+        // LØST: at en inviteret kan overtage en computer-plads er en
+        // selvstændig opgave.
+        turnLine = _lobbyLine(g.openSeats > 0
+            ? '$host inviterede dig$suffix'
+            : 'Inviteret · lobbyen er fuld$suffix');
+      } else if (g.openSeats > 0) {
+        // Værten VENTER ikke på en tom plads — værten kan fylde den med en
+        // computer og starte. At sige "venter" til netop den person, der kan
+        // gøre noget ved det, er forkert (QC-fund).
+        final String n =
+            '${g.openSeats} ${g.openSeats == 1 ? 'spiller' : 'spillere'}';
+        turnLine = _lobbyLine(iAmHost
+            ? 'Mangler $n — eller fyld med computer$suffix'
+            : 'Mangler $n$suffix');
+      } else {
+        // Én der mangler kan man skrive til; "2 mangler" kan man ikke.
+        turnLine = _lobbyLine(g.waitingForName == null
+            ? 'Venter på at alle er klar$suffix'
+            : 'Venter på at ${g.waitingForName} er klar$suffix');
       }
     }
 
@@ -540,7 +594,14 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                   // playingSorted. Rå snapshot-orden er spilkode-orden,
                   // altså vilkårlig.
                   final playing = playingSorted(list);
-                  final lobbies = list.where((g) => g.isLobby).toList();
+                  // Samme princip i lobby-sektionen: mest presserende først.
+                  // Sektionernes indbyrdes rækkefølge er derimod FAST (i gang
+                  // → lobby → arkiv) — et bevidst valg, ikke et oversete:
+                  // faste positioner er lettere at finde rundt i end en
+                  // rangordning på tværs af hele siden, og brugeren har
+                  // udtrykkeligt bedt om invitationer NEDERST, altså ikke om
+                  // at få dem løftet forbi de igangværende spil.
+                  final lobbies = lobbiesSorted(list);
                   // Arkivet: afsluttede ONLINE-spil, nyeste først. Solospil
                   // mod computeren holdes ude (de er i flertal og hører til i
                   // profilen). Ét sted: archiveOf i online_service.
@@ -573,7 +634,10 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                       if (lobbies.isNotEmpty) ...<Widget>[
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 4),
-                          child: Text('Venter i lobby',
+                          // Sektionen rummer nu også invitationer (rækker
+                          // for spil man IKKE er gået ind i endnu), så den
+                          // gamle overskrift ville stå forkert på dem.
+                          child: Text('Lobbyer & invitationer',
                               style: TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
@@ -694,19 +758,17 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           final bool iAmReady =
               svc.uid != null && (ready[svc.uid] as bool? ?? false);
 
-          // Antal optagne pladser (mennesker + AI-markerede).
-          final int filledSeats = <int>[
+          // ÉN regel, delt med "Mine spil"-listens rangordning: Start-knappen
+          // og listen må aldrig kunne være uenige om, at spillet kan startes.
+          // Reglen selv (og dens tests) ligger i online_service.
+          final bool canStart = lobbyCanStart(
+              uids, aiSeats, Map<String, dynamic>.from(ready));
+          final int openSeats = <int>[
             for (int i = 0; i < 4; i++)
-              if (uids[i] != null ||
-                  (i < aiSeats.length && aiSeats[i] == true))
+              if (uids[i] == null &&
+                  !(i < aiSeats.length && aiSeats[i] == true))
                 i,
           ].length;
-          // Alle menneskelige deltagere skal være klar før start.
-          final bool allHumansReady = <bool>[
-            for (int i = 0; i < 4; i++)
-              if (uids[i] != null) (ready[uids[i]] as bool? ?? false),
-          ].every((r) => r);
-          final bool canStart = filledSeats >= 2 && allHumansReady;
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -840,11 +902,11 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                     onPressed: canStart ? () => svc.startGameFromLobby(code) : null,
                     child: Text(canStart
                         ? 'Start spil'
-                        : (filledSeats < 2
+                        : (openSeats > 2
                             ? 'Mindst 2 pladser kræves'
                             : 'Venter på at alle er klar…')),
                   ),
-                if (isHost && filledSeats < 4)
+                if (isHost && openSeats > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
