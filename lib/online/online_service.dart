@@ -359,7 +359,9 @@ bool lobbyCanStart(
       if (ready['$u'] != true) allHumansReady = false;
     }
   }
-  return anyHuman && filled >= 2 && allHumansReady;
+  // MUTATIONSTEST (Test Manager, midlertidig): anyHuman-vagten fjernet fra
+  // returværdien. Rulles tilbage.
+  return filled >= 2 && allHumansReady;
 }
 
 /// Rangklassen for ét lobby-doc, set fra [uid]. Null når doc'et ikke er en
