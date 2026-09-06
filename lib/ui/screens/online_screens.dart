@@ -348,7 +348,7 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     // Status-linje for igangværende spil, korrekt pr. fase:
     //  - play:     "Din tur" (grøn chip) / "<navn>s tur"
     //  - exchange: "Byt kort" (grøn chip) / "Venter på bytte"
-    final bool needAct = g.isMyTurn || g.needsExchange;
+    final bool needAct = g.needsMyAction;
     // Ventetiden lægges på turn-linjen, ikke som en linje FOR SIG: rækken er
     // en ListTile med isThreeLine, og et fjerde tekstniveau flyder over på en
     // smal skærm i stedet for at se pænt ud (QC-fund). Beregnes kun for

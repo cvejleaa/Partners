@@ -181,6 +181,10 @@ class GameSummary {
 
   bool get isLobby => status == 'lobby';
   bool get isPlaying => status == 'playing';
+
+  /// Venter spillet på MIG? ÉN definition — både sorteringen og rækkens
+  /// grønne chip spørger om det samme, og to kopier kunne drive fra hinanden.
+  bool get needsMyAction => isMyTurn || needsExchange;
   bool get isOver => status == 'over';
 
   /// Vandt jeg? Null når det ikke kan afgøres (ukendt vinder eller jeg sad
@@ -240,14 +244,24 @@ Duration? waitedSince(int? lastActionAtMs, DateTime now) {
 List<GameSummary> playingSorted(List<GameSummary> all) {
   final List<GameSummary> out =
       all.where((GameSummary g) => g.isPlaying).toList();
-  int rank(GameSummary g) => (g.isMyTurn || g.needsExchange) ? 0 : 1;
+  int rank(GameSummary g) => g.needsMyAction ? 0 : 1;
   out.sort((GameSummary a, GameSummary b) {
     final int byAct = rank(a).compareTo(rank(b));
     if (byAct != 0) return byAct;
-    // Ældste handling = længst ventetid = øverst. Manglende felt sidst.
-    final int am = a.lastActionAtMs ?? 1 << 62;
-    final int bm = b.lastActionAtMs ?? 1 << 62;
-    if (am != bm) return am.compareTo(bm);
+    // Ukendt ventetid håndteres EKSPLICIT, ikke med en stor sentinel-værdi:
+    // appen kører på web, hvor heltal er JavaScript-tal, og et skift som
+    // `1 << 62` regnes i 32 bit. Sentinelen ville da blive LILLE — altså se
+    // ud som det ældste tidsstempel af alle — og sende netop de spil ØVERST
+    // i stedet for nederst. Og testene ville aldrig fange det, fordi de
+    // kører på Dart-VM'en med rigtige 64-bit heltal (QC-fund).
+    final int? am = a.lastActionAtMs;
+    final int? bm = b.lastActionAtMs;
+    if (am == null || bm == null) {
+      if (am != bm) return am == null ? 1 : -1; // ukendt sidst
+    } else if (am != bm) {
+      // Ældste handling = længst ventetid = øverst.
+      return am.compareTo(bm);
+    }
     return a.code.compareTo(b.code);
   });
   return out;

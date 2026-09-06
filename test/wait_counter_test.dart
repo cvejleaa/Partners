@@ -178,6 +178,28 @@ void main() {
           <String>['KENDT', 'UKENDT']);
     });
 
+    test('ukendt ventetid ligger sidst UANSET hvor gammelt det kendte er', () {
+      // Den tidligere udgave brugte en stor sentinel-værdi (1 << 62). På web
+      // regnes det skift i 32 bit, så sentinelen ville blive LILLE — altså se
+      // ud som det ældste tidsstempel af alle — og sende de ukendte ØVERST.
+      // Et rigtigt gammelt kendt spil er derfor det skarpeste prøvebillede.
+      expect(
+          codes(playingSorted(<GameSummary>[
+            g('UKENDT'),
+            g('MEGET_GAMMEL', waited: const Duration(days: 400)),
+          ])),
+          <String>['MEGET_GAMMEL', 'UKENDT']);
+    });
+
+    test('to ukendte har stadig en entydig rækkefølge', () {
+      expect(
+          codes(playingSorted(<GameSummary>[
+            g('BBB'),
+            g('AAA'),
+          ])),
+          <String>['AAA', 'BBB']);
+    });
+
     test('samme ventetid giver en ENTYDIG rækkefølge', () {
       // Listen bygges om hvert halve minut af ventetællerens ur, og Darts
       // sort er ikke stabil. Uden tie-break på koden kunne to rækker bytte
