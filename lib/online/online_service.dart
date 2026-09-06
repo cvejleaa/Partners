@@ -1408,7 +1408,9 @@ GameSummary gameSummaryFromDoc(
           notReady.add(i < names.length ? names[i] : '?');
         }
       }
-      if (notReady.length == 1) waitingForName = notReady.first;
+      // MUTATIONSTEST (Test Manager, midlertidig): navngiver nu selv når 2+
+      // mangler. Rulles tilbage.
+      if (notReady.isNotEmpty) waitingForName = notReady.first;
     }
     final dynamic seenRaw = d['seen'];
     final int mySeen = (seenRaw is Map && seenRaw[uid] is num)
