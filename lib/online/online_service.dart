@@ -409,7 +409,9 @@ List<GameSummary> lobbiesSorted(List<GameSummary> all) {
     final int? am = a.createdAtMs;
     final int? bm = b.createdAtMs;
     if (am == null || bm == null) {
-      if (am != bm) return am == null ? 1 : -1; // ukendt = nyest = sidst
+      // MUTATIONSTEST (Test Manager, midlertidig): vendt om, så ukendt
+      // oprettelsestid lægges FØRST i stedet for sidst. Rulles tilbage.
+      if (am != bm) return am == null ? -1 : 1;
     } else if (am != bm) {
       return am.compareTo(bm); // ældst oprettet = længst ventet = øverst
     }
