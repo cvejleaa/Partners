@@ -270,6 +270,123 @@ void main() {
   });
 
   // -------------------------------------------------------------------
+  // Ordvalget på rækken. Lå før inde i skærmen, hvor det ikke kunne
+  // unit-testes — og dér slap en fejl i prioriteringen igennem.
+  // -------------------------------------------------------------------
+  group('lobbyStatusText', () {
+    GameSummary g({
+      LobbyNeed need = LobbyNeed.waiting,
+      int openSeats = 0,
+      int notReadyCount = 0,
+      String? waitingForName,
+      String host = 'Bo',
+    }) =>
+        GameSummary('KODE', host, 'lobby', const <String>['A', 'B', 'C', 'D'],
+            lobbyNeed: need,
+            openSeats: openSeats,
+            notReadyCount: notReadyCount,
+            waitingForName: waitingForName);
+
+    test('chip-klasserne giver ingen tekst — de bruger chippen', () {
+      expect(lobbyStatusText(g(need: LobbyNeed.canStart), iAmHost: true),
+          isNull);
+      expect(lobbyStatusText(g(need: LobbyNeed.notReady), iAmHost: false),
+          isNull);
+    });
+
+    test('alle er klar → værten navngives, ikke "alle er klar"', () {
+      // Den hyppigste tilstand lige før spillet går i gang. "Venter på at alle
+      // er klar" ville være direkte usandt: alle ER klar.
+      final String? t =
+          lobbyStatusText(g(need: LobbyNeed.hostToStart), iAmHost: false);
+      expect(t, 'Venter på at Bo starter');
+      expect(t!.contains('alle er klar'), isFalse);
+    });
+
+    test('invitation navngiver afsenderen', () {
+      expect(
+          lobbyStatusText(g(need: LobbyNeed.invitation, openSeats: 2),
+              iAmHost: false),
+          'Bo inviterede dig');
+    });
+
+    test('invitation til FULD lobby siger det — ingen blindgyde', () {
+      // Inde i lobbyen ville der ikke være en eneste knap at trykke på:
+      // 'Tag plads' kræver en fri, ikke-AI plads.
+      expect(
+          lobbyStatusText(g(need: LobbyNeed.invitation, openSeats: 0),
+              iAmHost: false),
+          'Inviteret · lobbyen er fuld');
+    });
+
+    test('EN mangler klar SLÅR tomme pladser — og nævnes ved navn', () {
+      // KERNEN i QC-fundet. Vært klar, Bo tiltrådt men ikke klar, 2 tomme
+      // pladser: begge tilstande er sande samtidig (normaltilstanden lige
+      // efter nogen joiner, hvor joinGame sætter ready = false).
+      //
+      // FØR rettelsen stod der "Mangler 2 spillere — eller fyld med computer".
+      // Det fortav dét, der faktisk blokerer, OG gav et råd der beviseligt
+      // ikke virker: AI-pladser hæver `filled`, men `allHumansReady` er stadig
+      // falsk, så længe Bo ikke er klar.
+      final String? t = lobbyStatusText(
+          g(openSeats: 2, notReadyCount: 1, waitingForName: 'Bo'),
+          iAmHost: true);
+      expect(t, 'Venter på at Bo er klar');
+      expect(t!.contains('Mangler'), isFalse);
+      expect(t.contains('computer'), isFalse);
+    });
+
+    test('TO mangler klar slår også tomme pladser — med antal, uden navn', () {
+      // Uden et ANTAL ville denne falde tilbage til teksten om tomme pladser,
+      // altså samme fejl ét skridt længere inde: waitingForName sættes kun
+      // ved præcis én.
+      final String? t =
+          lobbyStatusText(g(openSeats: 1, notReadyCount: 2), iAmHost: true);
+      expect(t, 'Venter på at 2 spillere melder klar');
+      expect(t!.contains('Mangler'), isFalse);
+    });
+
+    test('kun tomme pladser: værten får et råd der VIRKER', () {
+      // Ingen tiltrådt er uklar, så det er reelt kun pladser der mangler —
+      // og dér gør en AI-plads faktisk `filled >= 2` opfyldt.
+      expect(
+          lobbyStatusText(g(openSeats: 3, notReadyCount: 0), iAmHost: true),
+          'Invitér nogen, eller fyld med computer');
+    });
+
+    test('kun tomme pladser: gæsten får tallet, ikke værtens råd', () {
+      // Gæsten kan ikke fylde pladser med computer — det kan kun værten.
+      final String? t =
+          lobbyStatusText(g(openSeats: 2, notReadyCount: 0), iAmHost: false);
+      expect(t, 'Mangler 2 spillere');
+      expect(t!.contains('computer'), isFalse);
+    });
+
+    test('ental/flertal på pladserne', () {
+      expect(lobbyStatusText(g(openSeats: 1), iAmHost: false),
+          'Mangler 1 spiller');
+      expect(lobbyStatusText(g(openSeats: 3), iAmHost: false),
+          'Mangler 3 spillere');
+    });
+
+    test('ingen lobby-tekst siger nogensinde "ventet"', () {
+      // "ventet" betyder "siden sidste træk" på de igangværende rækker 40
+      // pixels længere oppe. En lobby har ingen lastActionAt.
+      for (final String? t in <String?>[
+        lobbyStatusText(g(need: LobbyNeed.hostToStart), iAmHost: false),
+        lobbyStatusText(g(need: LobbyNeed.invitation, openSeats: 1),
+            iAmHost: false),
+        lobbyStatusText(g(openSeats: 2), iAmHost: true),
+        lobbyStatusText(g(notReadyCount: 1, waitingForName: 'Bo'),
+            iAmHost: false),
+      ]) {
+        expect(t, isNotNull);
+        expect(t!.contains('ventet'), isFalse);
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------
   // Etiketten på tallet.
   // -------------------------------------------------------------------
   group('createdLabel', () {

@@ -348,9 +348,11 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     final List<String> participants = g.playerNames
         .where((n) => n.trim().isNotEmpty && n != 'Åben')
         .toList();
-    final String status = g.isLobby
-        ? 'Venter i lobby'
-        : (g.isPlaying ? 'Tryk for at genindtræde' : 'I gang');
+    // Kun for spil der hverken er lobby eller i gang: en lobby faar ALTID en
+    // linje fra lobbyStatusText/chippen nedenfor, saa en 'Venter i lobby'-
+    // gren her ville vaere doed kode (QC-fund).
+    final String status =
+        g.isPlaying ? 'Tryk for at genindtræde' : 'I gang';
 
     // Status-linje for igangværende spil, korrekt pr. fase:
     //  - play:     "Din tur" (grøn chip) / "<navn>s tur"
@@ -383,48 +385,25 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
       // Lobby-rækken sagde før det samme på ALLE rækker ("Venter i lobby" —
       // ordret sektionsoverskriften tre linjer over). Så var sorteringen
       // uforklarlig: rækken røbede ikke, hvorfor den stod, hvor den stod.
+      //
+      // Selve ordvalget ligger i lobbyStatusText (ren funktion, testbar).
+      // Det lå før her, hvor det ikke kunne unit-testes — og netop dét lod en
+      // fejl i prioriteringen slippe igennem.
+      //
       // Ventetiden kommer fra createdAt og hedder derfor "oprettet for …
       // siden", ikke "ventet …" — se createdLabel.
       final Duration? age = waitedSince(g.createdAtMs, now);
-      final String suffix = age == null ? '' : ' · ${createdLabel(age)}';
-      final String host = g.hostName;
       final String? ageText = age == null ? null : createdLabel(age);
-      final LobbyNeed need = g.lobbyNeed ?? LobbyNeed.waiting;
-      final bool iAmHost = g.hostUid != null && g.hostUid == user?.uid;
-      if (need == LobbyNeed.canStart) {
-        // Knappens egne ord ("Start spil"), så man leder efter det rigtige.
-        turnLine = _actionChip('Start spil', trailing: ageText);
-      } else if (need == LobbyNeed.notReady) {
-        turnLine = _actionChip('Marker klar', trailing: ageText);
-      } else if (need == LobbyNeed.hostToStart) {
-        turnLine = _lobbyLine('Venter på at $host starter$suffix');
-      } else if (need == LobbyNeed.invitation) {
-        // Samme ord som det grønne banner på forsiden, så de to overflader
-        // kendes som samme sag — og afsenderen NAVNGIVES: det er dét, der
-        // gør en invitation til en beslutning.
-        //
-        // Er der ingen ledig plads, er der ingen knap at trykke på inde i
-        // lobbyen ('Tag plads' kræver en fri, ikke-AI plads). Sig det på
-        // rækken frem for at sende folk ind i en blindgyde. NAVNGIVET, IKKE
-        // LØST: at en inviteret kan overtage en computer-plads er en
-        // selvstændig opgave.
-        turnLine = _lobbyLine(g.openSeats > 0
-            ? '$host inviterede dig$suffix'
-            : 'Inviteret · lobbyen er fuld$suffix');
-      } else if (g.openSeats > 0) {
-        // Værten VENTER ikke på en tom plads — værten kan fylde den med en
-        // computer og starte. At sige "venter" til netop den person, der kan
-        // gøre noget ved det, er forkert (QC-fund).
-        final String n =
-            '${g.openSeats} ${g.openSeats == 1 ? 'spiller' : 'spillere'}';
-        turnLine = _lobbyLine(iAmHost
-            ? 'Mangler $n — eller fyld med computer$suffix'
-            : 'Mangler $n$suffix');
+      final String? line = lobbyStatusText(g,
+          iAmHost: g.hostUid != null && g.hostUid == user?.uid);
+      if (line == null) {
+        // Chip-klasserne: knappernes egne ord, så man leder efter det rigtige.
+        turnLine = _actionChip(
+            g.lobbyNeed == LobbyNeed.canStart ? 'Start spil' : 'Marker klar',
+            trailing: ageText);
       } else {
-        // Én der mangler kan man skrive til; "2 mangler" kan man ikke.
-        turnLine = _lobbyLine(g.waitingForName == null
-            ? 'Venter på at alle er klar$suffix'
-            : 'Venter på at ${g.waitingForName} er klar$suffix');
+        turnLine =
+            _lobbyLine(ageText == null ? line : '$line · $ageText');
       }
     }
 

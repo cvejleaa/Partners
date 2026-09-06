@@ -130,6 +130,7 @@ class GameSummary {
       this.lastActionAtMs,
       this.lobbyNeed,
       this.openSeats = 0,
+      this.notReadyCount = 0,
       this.waitingForName,
       this.createdAtMs});
   /// Hvornår der sidst skete noget i spillet. Sammen med nu giver det
@@ -193,6 +194,14 @@ class GameSummary {
 
   /// Antal pladser der hverken har et menneske eller er markeret som computer.
   final int openSeats;
+
+  /// Hvor mange tiltrådte spillere der mangler at melde sig klar.
+  ///
+  /// Nødvendigt ved siden af [waitingForName]: navnet sættes kun når der er
+  /// PRÆCIS én, og uden et antal ville "to mangler at melde klar" falde
+  /// tilbage til teksten om tomme pladser — altså samme fejl som den, denne
+  /// rettelse handler om, blot ét skridt længere inde.
+  final int notReadyCount;
 
   /// Navnet på den ENE spiller, der mangler at melde sig klar. Null når det er
   /// nul eller flere end én — "Venter på Bo" kan man handle på, "Venter på 2"
@@ -416,6 +425,68 @@ List<GameSummary> lobbiesSorted(List<GameSummary> all) {
     return a.code.compareTo(b.code);
   });
   return out;
+}
+
+/// Teksten på en lobby-række, når den ikke er en grøn chip. Null betyder
+/// "brug chippen" — de to klasser hvor man kan handle NU.
+///
+/// Ren funktion med vilje: den lå før inde i skærmens `_gameTile`, hvor den
+/// var utestbar (den første linje dér kalder FirebaseAuth), og netop dét lod
+/// en fejl slippe igennem — se prioriteringen nedenfor.
+///
+/// [age] hægtes IKKE på her; kalderen føjer den til. Så kan teksten
+/// efterprøves for sig, og chippen kan bære tiden i sin trailing i stedet for
+/// midt i en sætning.
+String? lobbyStatusText(GameSummary g, {required bool iAmHost}) {
+  final LobbyNeed need = g.lobbyNeed ?? LobbyNeed.waiting;
+  if (need == LobbyNeed.canStart || need == LobbyNeed.notReady) return null;
+  if (need == LobbyNeed.hostToStart) {
+    return 'Venter på at ${g.hostName} starter';
+  }
+  if (need == LobbyNeed.invitation) {
+    // Samme ord som det grønne banner på forsiden, så de to overflader kendes
+    // som samme sag — og afsenderen NAVNGIVES: det er dét, der gør en
+    // invitation til en beslutning.
+    //
+    // Er der ingen ledig plads, er der ingen knap at trykke på inde i lobbyen
+    // ('Tag plads' kræver en fri, ikke-AI plads). Sig det på rækken frem for
+    // at sende folk ind i en blindgyde. NAVNGIVET, IKKE LØST: at en inviteret
+    // kan overtage en computer-plads er en selvstændig opgave.
+    return g.openSeats > 0
+        ? '${g.hostName} inviterede dig'
+        : 'Inviteret · lobbyen er fuld';
+  }
+  // En tiltrådt spiller, der mangler at melde sig klar, VINDER over tomme
+  // pladser — og rækkefølgen her er hele pointen (QC-fund):
+  //
+  // De to tilstande udelukker ikke hinanden. "Vært klar + Bo tiltrådt men
+  // ikke klar + to tomme pladser" er normaltilstanden lige efter nogen
+  // joiner (joinGame sætter udtrykkeligt ready.$uid = false). Blev de tomme
+  // pladser nævnt først, sagde rækken "Mangler 2 spillere — eller fyld med
+  // computer": den fortav det, der FAKTISK blokerer, og gav et råd, der
+  // beviseligt ikke virker — AI-pladser hæver `filled`, men `allHumansReady`
+  // er stadig falsk, så længe Bo ikke er klar. Værten ville følge rådet og se
+  // ingenting ske.
+  if (g.notReadyCount == 1 && g.waitingForName != null) {
+    // Én, man kan skrive til. Det er det handlingsanvisende.
+    return 'Venter på at ${g.waitingForName} er klar';
+  }
+  if (g.notReadyCount > 1) {
+    return 'Venter på at ${g.notReadyCount} spillere melder klar';
+  }
+  if (g.openSeats > 0) {
+    // Herunder er ingen tiltrådt uklar, så det ER kun pladser der mangler —
+    // og dér virker computer-rådet faktisk: med alle klar gør en AI-plads
+    // `filled >= 2` opfyldt, og spillet kan startes.
+    //
+    // Værten "venter" ikke: værten kan handle. Gæsten kan kun se tallet.
+    return iAmHost
+        ? 'Invitér nogen, eller fyld med computer'
+        : 'Mangler ${g.openSeats} ${g.openSeats == 1 ? 'spiller' : 'spillere'}';
+  }
+  // Alle pladser fyldt og ingen uklar ville betyde canStart — så hertil når
+  // man ikke i praksis. Står som et ærligt fald tilbage, ikke som en påstand.
+  return 'Venter på at alle er klar';
 }
 
 /// "ventet 3 timer" — datid, og om SPILLET, ikke om personen.
@@ -1391,6 +1462,7 @@ GameSummary gameSummaryFromDoc(
     // at `uids`/`aiSeats` i doc'et røres.
     final LobbyNeed? lobbyNeed = lobbyNeedFromDoc(d, uid);
     int openSeats = 0;
+    int notReadyCount = 0;
     String? waitingForName;
     if (lobbyNeed != null) {
       final List<dynamic> uidsL = (d['uids'] as List?) ?? const <dynamic>[];
@@ -1408,6 +1480,7 @@ GameSummary gameSummaryFromDoc(
           notReady.add(i < names.length ? names[i] : '?');
         }
       }
+      notReadyCount = notReady.length;
       if (notReady.length == 1) waitingForName = notReady.first;
     }
     final dynamic seenRaw = d['seen'];
@@ -1435,6 +1508,7 @@ GameSummary gameSummaryFromDoc(
       lastActionAtMs: _tsMs(d['lastActionAt']),
       lobbyNeed: lobbyNeed,
       openSeats: openSeats,
+      notReadyCount: notReadyCount,
       waitingForName: waitingForName,
       createdAtMs: createdAtMs,
     );
