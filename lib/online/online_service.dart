@@ -467,13 +467,6 @@ String? lobbyStatusText(GameSummary g, {required bool iAmHost}) {
   // beviseligt ikke virker — AI-pladser hæver `filled`, men `allHumansReady`
   // er stadig falsk, så længe Bo ikke er klar. Værten ville følge rådet og se
   // ingenting ske.
-  if (g.notReadyCount == 1 && g.waitingForName != null) {
-    // Én, man kan skrive til. Det er det handlingsanvisende.
-    return 'Venter på at ${g.waitingForName} er klar';
-  }
-  if (g.notReadyCount > 1) {
-    return 'Venter på at ${g.notReadyCount} spillere melder klar';
-  }
   if (g.openSeats > 0) {
     // Herunder er ingen tiltrådt uklar, så det ER kun pladser der mangler —
     // og dér virker computer-rådet faktisk: med alle klar gør en AI-plads
@@ -483,6 +476,12 @@ String? lobbyStatusText(GameSummary g, {required bool iAmHost}) {
     return iAmHost
         ? 'Invitér nogen, eller fyld med computer'
         : 'Mangler ${g.openSeats} ${g.openSeats == 1 ? 'spiller' : 'spillere'}';
+  }
+  if (g.notReadyCount == 1 && g.waitingForName != null) {
+    return 'Venter på at ${g.waitingForName} er klar';
+  }
+  if (g.notReadyCount > 1) {
+    return 'Venter på at ${g.notReadyCount} spillere melder klar';
   }
   // Alle pladser fyldt og ingen uklar ville betyde canStart — så hertil når
   // man ikke i praksis. Står som et ærligt fald tilbage, ikke som en påstand.
