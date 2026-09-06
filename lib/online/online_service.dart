@@ -257,7 +257,7 @@ List<GameSummary> playingSorted(List<GameSummary> all) {
     final int? am = a.lastActionAtMs;
     final int? bm = b.lastActionAtMs;
     if (am == null || bm == null) {
-      if (am != bm) return am == null ? 1 : -1; // ukendt sidst
+      if (am != bm) return am == null ? -1 : 1; // ukendt sidst
     } else if (am != bm) {
       // Ældste handling = længst ventetid = øverst.
       return am.compareTo(bm);
