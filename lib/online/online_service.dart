@@ -413,9 +413,7 @@ List<GameSummary> lobbiesSorted(List<GameSummary> all) {
     } else if (am != bm) {
       return am.compareTo(bm); // ældst oprettet = længst ventet = øverst
     }
-    // MUTATIONSTEST (Test Manager, midlertidig): tie-break på koden fjernet.
-    // Rulles tilbage.
-    return 0;
+    return a.code.compareTo(b.code);
   });
   return out;
 }
