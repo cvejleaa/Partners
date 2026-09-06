@@ -197,6 +197,31 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
   static const int _kArchivePreview = 5;
   bool _showAllArchive = false;
 
+  /// Uret bag ventetælleren.
+  ///
+  /// Et stille spil sender INGEN nye Firestore-snapshots — så uden dette ur
+  /// ville "ventet 3 min" stå frosset, indtil nogen trak et kort. Tælleren
+  /// skal tælle OP, så listen bygges om selv.
+  ///
+  /// Et halvt minut: teksten skifter kun i minut-skridt, så tættere ville
+  /// være ren strøm uden en eneste synlig ændring. Stoppes i dispose.
+  static const Duration _kTick = Duration(seconds: 30);
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(_kTick, (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
   /// Grøn "det er din tur til at handle"-chip, evt. med ventetiden ved siden
   /// af. Ventetiden står UDEN FOR chippen: den er en oplysning, ikke en del
   /// af opfordringen — og [Flexible] er nødvendig, ellers flyder rækken ud
@@ -326,23 +351,25 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     final bool needAct = g.isMyTurn || g.needsExchange;
     // Ventetiden lægges på turn-linjen, ikke som en linje FOR SIG: rækken er
     // en ListTile med isThreeLine, og et fjerde tekstniveau flyder over på en
-    // smal skærm i stedet for at se pænt ud (QC-fund).
-    final Duration? waited =
-        waitedSince(g.lastActionAtMs, g.startedAtMs, now);
-    final String? waitText = waitIsWorthShowing(waited, mine: needAct)
-        ? waitedLabel(waited!)
-        : null;
+    // smal skærm i stedet for at se pænt ud (QC-fund). Beregnes kun for
+    // igangværende spil — lobbyer og arkiv har ingen tur at vente på.
     Widget? turnLine;
     if (g.isPlaying) {
+      final Duration? waited = waitedSince(g.lastActionAtMs, now);
+      final String? waitText = waited == null ? null : waitedLabel(waited);
       final String suffix = waitText == null ? '' : ' · $waitText';
       if (needAct) {
         turnLine = _actionChip(g.isMyTurn ? 'Din tur' : 'Byt kort',
             trailing: waitText);
       } else if (g.phase == 'play' && g.currentName != null) {
         turnLine = Text('${_possessive(g.currentName!)} tur$suffix',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13));
       } else if (g.phase == 'exchange') {
         turnLine = Text('Venter på bytte$suffix',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13));
       }
     }

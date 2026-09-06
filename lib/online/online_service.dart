@@ -127,13 +127,10 @@ class GameSummary {
       this.mySeat = -1,
       this.unseen = false,
       this.isAi = false,
-      this.lastActionAtMs,
-      this.startedAtMs});
-  /// Hvornår der sidst skete noget i spillet, og hvornår det startede.
-  /// Sammen giver de ventetiden — se [waitedSince], som bruger [startedAtMs]
-  /// (serverens ur) til at afsløre et forkert klientur.
+      this.lastActionAtMs});
+  /// Hvornår der sidst skete noget i spillet. Sammen med nu giver det
+  /// ventetiden — se [waitedSince].
   final int? lastActionAtMs;
-  final int? startedAtMs;
 
   final String code;
   final String hostName;
@@ -199,75 +196,44 @@ class GameSummary {
 /// længe de er væk (håndhævet både i _maybeHostAct og i aiTakeoverMove).
 const Duration kAiTakeoverTimeout = Duration(seconds: 35);
 
-/// Hvornår ventetiden på et spil begynder at være værd at vise.
-///
-/// To forskellige tærskler, og forskellen er BEVIDST. Min egen tur er ren
-/// service ("nå, jeg har holdt spillet siden i morges"). En ANDENS tur er et
-/// tal med et menneskes navn ved siden af — og det bliver hurtigt et
-/// pressemiddel i et makkerspil, der ofte er hyggeligt netop fordi det er
-/// langsomt. Derfor tier appen om andres tur det første døgn.
-///
-/// Under tærsklen står der INGENTING — ikke "lige nu". En tom plads er
-/// roligere end en tom oplysning.
-///
-/// Tærsklen bærer også en teknisk beslutning: et stille spil sender ingen nye
-/// snapshots, så tallet på skærmen er fra sidste opdatering. Med enheder i
-/// timer og dage er et minuts forældelse usynlig — og så er der ingen grund
-/// til en timer, der bygger listen om og æder batteri.
-const Duration kWaitVisibleMine = Duration(hours: 1);
-const Duration kWaitVisibleOthers = Duration(days: 1);
-
-/// Over dette er et tal ikke længere en oplysning, men en mistanke om et
-/// forkert ur. Så siger vi det med ord i stedet.
-const Duration kWaitTooLong = Duration(days: 60);
-
-/// Hvor længe har spillet ligget stille? null = vis ingenting.
+/// Hvor længe har turen ligget hos den aktuelle spiller?
 ///
 /// [lastActionAtMs] nulstilles ved HVER handling i spillet
 /// (`startGameFromLobby`, `mutate`, `_aiSeatMoveInternal`), og motoren
-/// afslutter altid turen ved et træk — så i play-fasen er dette PRÆCIS hvor
-/// længe den aktuelle spiller har været på uret. At kigge på spillet
-/// (`markSeen`, `heartbeat`) rører den ikke.
+/// afslutter altid turen ved et træk — så i play-fasen er nu minus
+/// lastActionAt PRÆCIS hvor længe turen har ligget hos den spiller, det er
+/// tur for. At kigge på spillet (`markSeen`, `heartbeat`) rører den ikke.
 ///
-/// TO URE, navngivet: `lastActionAt` skrives med modspillerens
-/// `Timestamp.now()` og læses med mit eget. Derfor tre vagter — og hver af
-/// dem returnerer null frem for at pynte på et forkert tal:
-///  * intet felt (spil fra før feltet fandtes),
-///  * et tidsstempel i FREMTIDEN — det er et ur der er galt, ikke en handling
-///    der lige er sket,
-///  * `lastActionAt` FØR `startedAt`. Sidstnævnte skrives med serverens eget
-///    ur (`FieldValue.serverTimestamp()`), så den sammenligning beviser at
-///    klienturet er forkert.
-Duration? waitedSince(
-  int? lastActionAtMs,
-  int? startedAtMs,
-  DateTime now,
-) {
+/// null = vis ingenting: enten mangler feltet (spil fra før det fandtes),
+/// eller også ligger tidsstemplet i fremtiden. Det sidste er ikke en
+/// mistanke om forkerte ure — det er bare, at et negativt tal ikke er en
+/// ventetid og ikke skal på skærmen.
+///
+/// NAVNGIVET GRÆNSE, byttefasen: der ventes på op til fire spillere samtidig,
+/// og `lastActionAt` er ét felt for hele spillet. Tallet er derfor "siden
+/// nogen sidst bød ind", ikke "siden DU fik bolden". Et pr-sæde-stempel ville
+/// kræve en ny skrivning ved hvert bytte.
+Duration? waitedSince(int? lastActionAtMs, DateTime now) {
   if (lastActionAtMs == null) return null;
-  if (startedAtMs != null && lastActionAtMs < startedAtMs) return null;
   final Duration d =
       now.difference(DateTime.fromMillisecondsSinceEpoch(lastActionAtMs));
-  if (d.isNegative) return null;
-  return d;
-}
-
-/// Skal ventetiden vises, når det er [mine] tur?
-bool waitIsWorthShowing(Duration? waited, {required bool mine}) {
-  if (waited == null) return false;
-  return waited >= (mine ? kWaitVisibleMine : kWaitVisibleOthers);
+  return d.isNegative ? null : d;
 }
 
 /// "ventet 3 timer" — datid, og om SPILLET, ikke om personen.
 ///
 /// "venter i 3 timer" ville på dansk læses som resttid ("jeg venter tre timer
 /// endnu"), og "Carin har ikke spillet i 3 timer" flytter fra faktum til
-/// person. Begge dele undgås.
+/// person. Tælleren er til for at man kan drille hinanden med at være længe om
+/// at bestemme sig — så den skal beskrive brættet, ikke dømme spilleren.
 String waitedLabel(Duration d) {
-  if (d >= kWaitTooLong) return 'ventet længe';
   final int days = d.inDays;
   if (days >= 1) return 'ventet $days ${days == 1 ? 'dag' : 'dage'}';
   final int hours = d.inHours;
-  return 'ventet $hours ${hours == 1 ? 'time' : 'timer'}';
+  if (hours >= 1) return 'ventet $hours ${hours == 1 ? 'time' : 'timer'}';
+  final int mins = d.inMinutes;
+  if (mins >= 1) return 'ventet $mins min';
+  return 'ventet under 1 min';
 }
 
 /// Hvor ofte en aktiv klient opdaterer sit "presence"-stempel. Holdes lavere
@@ -898,13 +864,16 @@ class OnlineService {
   /// Hjælper til UI: tid siden sidste handling i spillet (eller null).
   ///
   /// Deler definition med ventetids-visningen i "Mine spil" — ÉN vagt, så en
-  /// mutation i [waitedSince] gør BEGGE røde. Klampningen er sikker for
-  /// AI-overtagelsen: hvor den før fik en negativ varighed (som alligevel er
-  /// under [kAiTakeoverTimeout]), får den nu null, og overtagelsen springes
-  /// over — fail-safe i samme retning.
+  /// mutation i [waitedSince] gør BEGGE røde.
+  ///
+  /// Den må ALDRIG sammenligne med `startedAt`: `lastActionAt` skrives med
+  /// klientens ur FØR netværksturen, mens `startedAt` sættes af serveren
+  /// EFTER den, så "handling før start" er det normale udfald ved spilstart.
+  /// En vagt på dét gjorde `since` null indtil første træk — og da
+  /// overtagelsen kræver `since != null`, kunne et spil låse fast for evigt,
+  /// hvis startspilleren forsvandt før sit første træk (QC-fund).
   static Duration? timeSinceLastAction(Map<String, dynamic> d) =>
-      waitedSince(_tsMs(d['lastActionAt']), _tsMs(d['startedAt']),
-          DateTime.now());
+      waitedSince(_tsMs(d['lastActionAt']), DateTime.now());
 
   GameState _initialState(List<String> names, List<int> colors, List uids,
       CardRules rules, VariantConfig variant) {
@@ -1221,7 +1190,6 @@ GameSummary gameSummaryFromDoc(
       unseen: status == 'over' && mySeen < logLen,
       isAi: d['mode'] == 'ai',
       lastActionAtMs: _tsMs(d['lastActionAt']),
-      startedAtMs: _tsMs(d['startedAt']),
     );
   }
 
