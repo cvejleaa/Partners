@@ -295,4 +295,96 @@ void main() {
       expect(durationLabel(const Duration(hours: 1)), '1 time');
     });
   });
+
+  // -------------------------------------------------------------------
+  // openSeats/waitingForName — DATAEN bag rækkens tekst i _gameTile.
+  //
+  // lobby_sort_test.dart dækkede før kun klassen (LobbyNeed) og
+  // rækkefølgen — ikke de to felter, teksten selv læser navnet/tallet fra.
+  // De beregnes i en EGEN løkke i gameSummaryFromDoc (ikke i
+  // lobbyNeedFromDoc/lobbyCanStart), og var uden test: en mutation i den
+  // løkke ville have været usynlig for hele resten af suiten, ligesom
+  // arkiv-feltbugs var det (se archive_summary_test.dart).
+  //
+  // Bruger den TOP-LEVEL gameSummaryFromDoc (samme som online_service selv
+  // bygger listen af) i stedet for lobbyNeedFromDoc direkte, for at bevise
+  // at felterne faktisk NÅR frem til GameSummary — ikke kun at den
+  // isolerede hjælpefunktion regner rigtigt.
+  // -------------------------------------------------------------------
+  group('gameSummaryFromDoc — openSeats/waitingForName', () {
+    test('openSeats tæller kun tomme, IKKE-AI pladser', () {
+      final GameSummary g = gameSummaryFromDoc(
+          'G',
+          _doc(
+              uids: <dynamic>['u0', null, null, null],
+              aiSeats: <dynamic>[false, false, true, false],
+              ready: <String, dynamic>{'u0': true}),
+          'u0');
+      // 4 pladser - 1 menneske - 1 AI = 2 åbne (indeks 1 og 3).
+      expect(g.openSeats, 2);
+    });
+
+    test('waitingForName navngiver PRÆCIS én mangler-klar spiller', () {
+      // Ingen mangler → intet navn at pege på.
+      expect(
+          gameSummaryFromDoc(
+                  'G1',
+                  _doc(
+                      uids: <dynamic>['u0', 'u1', null, null],
+                      ready: <String, dynamic>{'u0': true, 'u1': true}),
+                  'u0')
+              .waitingForName,
+          isNull);
+
+      // Præcis én (u1, navn 'B' i _doc's faste names) → navngivet.
+      expect(
+          gameSummaryFromDoc(
+                  'G2',
+                  _doc(
+                      uids: <dynamic>['u0', 'u1', null, null],
+                      ready: <String, dynamic>{'u0': true}),
+                  'u0')
+              .waitingForName,
+          'B');
+
+      // To mangler (u1 OG u2) → "2 mangler" kan man ikke skrive til, derfor
+      // null (samme regel som kommentaren i lobbyNeedFromDoc: "Én der
+      // mangler kan man skrive til; '2 mangler' kan man ikke").
+      expect(
+          gameSummaryFromDoc(
+                  'G3',
+                  _doc(
+                      uids: <dynamic>['u0', 'u1', 'u2', null],
+                      ready: <String, dynamic>{'u0': true}),
+                  'u0')
+              .waitingForName,
+          isNull);
+    });
+
+    test(
+        'QC-scenarie: åbne pladser OG én navngivet mangler-klar samtidig — '
+        'begge felter skal være sande på ÉN gang, for at rækken kan vælge '
+        'rigtigt', () {
+      // Vært (u0) er selv klar, u1 er tiltrådt men IKKE klar, og der er 2
+      // åbne pladser. "Fyld med computer" løser IKKE at u1 mangler at melde
+      // klar (lobbyCanStart kræver allHumansReady, uanset AI-pladser) — så
+      // rækken må ikke vise "Mangler 2 spillere — eller fyld med computer"
+      // her; den skal navngive u1. Denne test dokumenterer at DATAEN til at
+      // vælge rigtigt findes; hvilken tekst _gameTile faktisk vælger imellem
+      // dem er udenfor unit-testens rækkevidde (se rapportens afsnit om
+      // Firebase-koblingen i _gameTile).
+      final GameSummary g = gameSummaryFromDoc(
+          'G4',
+          _doc(
+              uids: <dynamic>['u0', 'u1', null, null],
+              aiSeats: <dynamic>[false, false, false, false],
+              ready: <String, dynamic>{'u0': true}),
+          'u0');
+      expect(g.openSeats, 2);
+      expect(g.waitingForName, 'B');
+      // Og klassen er 'waiting', ikke 'canStart' — bekræfter at
+      // allHumansReady rent faktisk blokerer, uanset de åbne pladser.
+      expect(g.lobbyNeed, LobbyNeed.waiting);
+    });
+  });
 }
