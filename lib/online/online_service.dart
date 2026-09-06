@@ -312,9 +312,8 @@ List<GameSummary> playingSorted(List<GameSummary> all) {
 /// som sidens øverste række for evigt; der findes nemlig ingen måde at afvise
 /// en invitation på i dag (navngivet hul, ikke løst her).
 enum LobbyNeed {
-  /// MUTATIONSTEST (Test Manager, midlertidig): byttet med canStart for at
-  /// vende rangordenen om og se rækkefølge-testen blive rød. Rulles tilbage.
-  invitation,
+  /// Jeg er vært, og spillet kan startes NU. Ét tryk fra et spil.
+  canStart,
 
   /// Jeg sidder med, men har ikke markeret mig klar. Ét tryk fra at frigive
   /// de andre.
@@ -328,8 +327,8 @@ enum LobbyNeed {
   /// Der ventes på andre: flere spillere, eller at nogen melder sig klar.
   waiting,
 
-  /// Jeg er vært, og spillet kan startes NU. Ét tryk fra et spil.
-  canStart,
+  /// Jeg er inviteret, men er ikke gået ind i lobbyen.
+  invitation,
 }
 
 /// Kan lobbyen startes? ÉN regel, kaldt BEGGE steder — lobby-skærmens
