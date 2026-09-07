@@ -87,9 +87,9 @@ void main() {
     });
 
     test('KRYMPET log → cachen bygges forfra af den korte log, ikke fra sublist', () {
-      // MUTATION: fjern `log.length < previousLen`-værnet → sublist(2) på en
-      // log med ét element kaster RangeError. Og resultatet må ikke huske
-      // spiller 1, som ikke findes i den nye log.
+      // MUTATION: fjern `log.length < previousLen`-værnet → `from` bliver
+      // stående på 2 > log.length, folden kører aldrig, og den GAMLE cache
+      // (med spiller 1, som ikke findes i den nye log) returneres uændret.
       final cache = <int, PlayingCard>{0: _fourHearts, 1: _kingSpades};
       final log1 = <Map<String, dynamic>>[_move(0, _aceClubs)];
       final r = advanceLogCache(log1, cache, 2);
