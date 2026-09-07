@@ -41,13 +41,8 @@ String danishPeriod(int fromMs, int toMs, DateTime now) {
   if (a.year == b.year && a.month == b.month && a.day == b.day) {
     return danishDate(toMs, now);
   }
-  if (a.year != b.year) {
-    // Årstal i BEGGE ender. "28. dec. 2025 – 6. jan." lader læseren gætte på,
-    // hvilket år den anden ende er.
-    return '${_dayMonth(a)} ${a.year} – ${_dayMonth(b)} ${b.year}';
-  }
-  // Samme år: årstallet skrives ÉN gang, til sidst — og kun når det ikke er
-  // indeværende år ("3.–9. nov. 2025").
+  // MUTATION (e): årsskifte-branchen fjernet — "samme måned" ignorerer nu
+  // året, så et årsskifte kan gemme sig i en tæt tankestreg.
   final String year = a.year == now.year ? '' : ' ${a.year}';
   if (a.month == b.month) {
     // Måneden skrives én gang. Kræver samme år, hvilket er sikret ovenfor:

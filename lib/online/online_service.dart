@@ -442,27 +442,17 @@ String archiveRowDate(GameSummary g, DateTime now) {
 /// sorterede liste: ét dokument uden dato ligger sidst i sorteringen og ville
 /// ellers slukke etiketten for alle de øvrige (QC-fund).
 String? archivePeriodLabel(List<GameSummary> archive, DateTime now) {
-  int? oldest;
-  int? newest;
-  bool oldestApprox = false;
-  bool newestApprox = false;
-  for (final GameSummary g in archive) {
-    final int? ms = g.finishedAtMs;
-    if (ms == null) continue;
-    final bool approx = g.finishedAtExactMs == null;
-    if (oldest == null || ms < oldest) {
-      oldest = ms;
-      oldestApprox = approx;
-    }
-    if (newest == null || ms > newest) {
-      newest = ms;
-      newestApprox = approx;
-    }
-  }
+  // MUTATION (f): læser enderne af den (allerede newest-først sorterede)
+  // liste i stedet for at regne min/max over de kendte datoer.
+  if (archive.isEmpty) return null;
+  final GameSummary newestGame = archive.first;
+  final GameSummary oldestGame = archive.last;
+  final int? newest = newestGame.finishedAtMs;
+  final int? oldest = oldestGame.finishedAtMs;
   if (oldest == null || newest == null) return null;
-  // "ca." kun når et ENDEPUNKT er omtrentligt — det er enderne, etiketten
-  // påstår noget om.
-  final String prefix = (oldestApprox || newestApprox) ? 'ca. ' : '';
+  final bool prefixApprox =
+      newestGame.finishedAtExactMs == null || oldestGame.finishedAtExactMs == null;
+  final String prefix = prefixApprox ? 'ca. ' : '';
   return '$prefix${danishPeriod(oldest, newest, now)}';
 }
 
