@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -112,6 +113,16 @@ List<GameSummary> archiveOf(List<GameSummary> all) {
     ..sort((GameSummary a, GameSummary b) =>
         (b.finishedAtMs ?? 0).compareTo(a.finishedAtMs ?? 0));
 }
+
+/// Slår "aktive" og "afsluttede for nylig"-listerne bag [myGamesFor] sammen
+/// til visningslisten — ren funktion (ingen Firestore), så selve
+/// sammenlægningen kan unit-testes uden emulator. Rækkefølgen her er
+/// ligegyldig: [archiveOf]/UI-laget sorterer og filtrerer selv videre.
+List<GameSummary> combineMyGames(
+  List<GameSummary> active,
+  List<GameSummary> recentlyOver,
+) =>
+    <GameSummary>[...active, ...recentlyOver];
 
 class GameSummary {
   GameSummary(this.code, this.hostName, this.status, this.playerNames,
@@ -604,10 +615,14 @@ String durationLabel(Duration d) {
   return 'under 1 min';
 }
 
-/// Hvor ofte en aktiv klient opdaterer sit "presence"-stempel. Holdes lavere
-/// end push-væk-grænsen (AWAY_MS i functions), så en aktiv spiller aldrig ser
-/// "væk" ud og fejlagtigt får en tur-notifikation.
-const Duration kPresenceInterval = Duration(seconds: 7);
+/// Hvor ofte en aktiv klient opdaterer sit "presence"-stempel. Bruges kun til
+/// (a) "online"-markøren pr. sæde i UI'en og (b) AI-overtagelse efter
+/// [kAiTakeoverTimeout] (35s) — "din tur"-push sendes i dag ubetinget ved
+/// hvert tur-skift uden at kigge på presence (se onGameTurn i functions),
+/// så intervallet behøver IKKE være kortere end det. 12s giver stadig ~3
+/// udeblevne heartbeats af margin før AI-overtagelse (mod 5 ved 7s), mens det
+/// skærer presence-writes/reads med knap 40% (forbrugs-fund #19/#50).
+const Duration kPresenceInterval = Duration(seconds: 12);
 
 /// Heuristisk AI til at drive computer-pladser fra værtens enhed.
 final HeuristicAi onlineAi = HeuristicAi();
@@ -1052,20 +1067,7 @@ class OnlineService {
     int attempt = 0;
     while (true) {
       try {
-        yield* _games
-            .where('members', arrayContains: uid)
-            .snapshots()
-            // BEMÆRK: afsluttede spil filtreres IKKE længere fra — arkiv-
-            // sektionen viser dem (archiveOf sorterer og afgrænser). Det
-            // koster ingen ekstra læsninger: forespørgslen hentede dem
-            // allerede, filteret smed dem bare væk.
-            // NAVNGIVET GRÆNSE: forespørgslen er stadig ubundet (alle spil
-            // man er medlem af). At binde den kræver et sammensat indeks
-            // (status + finishedAt), og der findes ingen firestore.indexes.json
-            // i repoet endnu — det er en selvstændig opgave.
-            .map((q) => q.docs
-                .map((d) => _summaryFromDoc(d.id, d.data(), uid))
-                .toList());
+        yield* _myGamesBounded(uid);
         return; // snapshots() afsluttes normalt aldrig.
       } on FirebaseException catch (e) {
         if (e.code == 'permission-denied' && attempt < 3) {
@@ -1073,10 +1075,98 @@ class OnlineService {
           await Future<void>.delayed(const Duration(milliseconds: 400));
           continue; // forbigående lige efter login — abonnér igen.
         }
+        if (e.code == 'failed-precondition') {
+          // Det sammensatte indeks (members, status, finishedAt) findes
+          // endnu ikke/er ikke færdigbygget — `firebase deploy` opretter
+          // indekset, men BYGNINGEN sker asynkront efter deploy. Fald
+          // tilbage til den gamle, ubundne forespørgsel (samme data, bare
+          // uden 14-dages-afgrænsningen), så "Mine spil" ikke går i stykker
+          // i det vindue. Selvhelbredende: næste gang skærmen abonnerer
+          // (fx efter et app-genstart), er indekset typisk klart.
+          yield* _myGamesUnbounded(uid);
+          return;
+        }
         rethrow;
       }
     }
   }
+
+  /// Hvor langt tilbage AFSLUTTEDE spil vises i "Mine spil"-arkivet.
+  /// Aktive spil (lobby/playing) er uberørt — de er i forvejen få og
+  /// selv-begrænsede i tid. Uden dette loft henter/genabonnerer forespørgslen
+  /// på ALLE spil en bruger nogensinde har afsluttet, hver gang appen åbnes
+  /// (forbrugs-fund #18/#52).
+  static const Duration kMyGamesArchiveWindow = Duration(days: 14);
+
+  /// To simple forespørgsler slået sammen client-side, i stedet for én stor
+  /// ubundet forespørgsel: (a) aktive spil, uanset alder, og (b) afsluttede
+  /// spil inden for [kMyGamesArchiveWindow]. Kræver et sammensat indeks pr.
+  /// forespørgsel (se firestore.indexes.json) — `myGamesFor` falder tilbage
+  /// til [_myGamesUnbounded], hvis et indeks endnu ikke er klart.
+  ///
+  /// NAVNGIVET FORUDSÆTNING (QC-fund ved commit cb1286f): Firestores
+  /// range-filter på `finishedAt` matcher kun dokumenter hvor feltet
+  /// FINDES. `finishedAt` blev først indført 2026-08-21 (commit 2cf06df) —
+  /// et `status: 'over'`-spil fra FØR den dato uden feltet er derfor
+  /// usynligt for BEGGE forespørgsler herunder (hverken aktivt eller inden
+  /// for arkiv-vinduet) og forsvinder stille fra "Mine spil". Alle
+  /// nuværende skrive-stier sætter status+finishedAt atomart sammen, så
+  /// INGEN NY skrivning kan skabe hullet — kun spil afsluttet før 21/8 er
+  /// ramt. Engangs-oprydning: `functions/scripts/backfill_finished_at.js`
+  /// (dry-run som default, kræver produktions-adgang, IKKE kørt endnu).
+  Stream<List<GameSummary>> _myGamesBounded(String uid) {
+    final Timestamp cutoff = Timestamp.fromDate(
+        DateTime.now().toUtc().subtract(kMyGamesArchiveWindow));
+    final Stream<QuerySnapshot<Map<String, dynamic>>> activeStream = _games
+        .where('members', arrayContains: uid)
+        .where('status', whereIn: <String>['lobby', 'playing'])
+        .snapshots();
+    final Stream<QuerySnapshot<Map<String, dynamic>>> recentlyOverStream =
+        _games
+            .where('members', arrayContains: uid)
+            .where('status', isEqualTo: 'over')
+            .where('finishedAt', isGreaterThanOrEqualTo: cutoff)
+            .snapshots();
+
+    final controller = StreamController<List<GameSummary>>();
+    QuerySnapshot<Map<String, dynamic>>? active;
+    QuerySnapshot<Map<String, dynamic>>? recentlyOver;
+    void emit() {
+      // Vent på begge sider, så listen ikke først vises ufuldstændig.
+      if (active == null || recentlyOver == null) return;
+      controller.add(combineMyGames(
+        <GameSummary>[
+          for (final d in active!.docs) _summaryFromDoc(d.id, d.data(), uid),
+        ],
+        <GameSummary>[
+          for (final d in recentlyOver!.docs)
+            _summaryFromDoc(d.id, d.data(), uid),
+        ],
+      ));
+    }
+
+    final subA = activeStream.listen((s) {
+      active = s;
+      emit();
+    }, onError: controller.addError);
+    final subB = recentlyOverStream.listen((s) {
+      recentlyOver = s;
+      emit();
+    }, onError: controller.addError);
+    controller.onCancel = () {
+      unawaited(subA.cancel());
+      unawaited(subB.cancel());
+    };
+    return controller.stream;
+  }
+
+  /// Den oprindelige, ubundne forespørgsel — kun brugt som fallback mens et
+  /// nyt sammensat indeks bygger færdigt (se `myGamesFor`).
+  Stream<List<GameSummary>> _myGamesUnbounded(String uid) => _games
+      .where('members', arrayContains: uid)
+      .snapshots()
+      .map((q) =>
+          q.docs.map((d) => _summaryFromDoc(d.id, d.data(), uid)).toList());
 
   Future<void> start(String code) => startGameFromLobby(code);
 

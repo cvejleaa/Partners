@@ -40,9 +40,11 @@ kalder FCM Admin SDK med modtagerens tokens via hjælperen `pushToUser`:
   push når man bliver inviteret til et spil.
 - **`onGameTurn`** — lytter på opdateringer af `games/{code}` og sender en
   "din tur"-push når det bliver en spillers tur i play-fasen. Springer over
-  hvis pladsen er en AI, eller hvis spilleren er aktiv på brættet (deres
-  `presence`-stempel er nyere end `AWAY_MS` = 20 s). Bruger notifikations-tag
-  `turn-<code>`, så en ny tur-besked erstatter den forrige for samme spil.
+  hvis pladsen er en AI. Sendes altid ved et ægte tur-skift, uanset presence
+  — browseren/FCM ruter selv beskeden (synlig fane vs. systemnotifikation).
+  Samme funktion markerer også deltagernes statistik som forældet ved
+  spil-slut (tidligere en separat `onGameOver`-function — slået sammen så
+  hver skrivning til `games/{code}` kun udløser én invocation, ikke to).
 
 CI deployer begge automatisk efter hosting (`firebase deploy --only
 functions` i `.github/workflows/deploy.yml`). Kræver Blaze-plan.

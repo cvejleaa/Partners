@@ -53,7 +53,8 @@ jobs:
         run: |
           node --check functions/index.js
           node --check functions/game_over.js
-          node --test functions-tests/game_over.test.mjs
+          node --check functions/game_turn.js
+          node --test functions-tests/game_over.test.mjs functions-tests/game_turn.test.mjs
 
       - name: Firestore-regeltests (emulator)
         # Angriber firestore.rules i emulatoren (@firebase/rules-unit-testing).

@@ -424,9 +424,37 @@ class PartitionedStats {
 /// ([_deriveGame]) og anvendes derefter på både total-spanden og spillets
 /// variant-spand ([_applyGame]). Kronologien (streaks) bevares, fordi begge
 /// spande fyldes i samme sorterede gennemløb.
-PartitionedStats computePartitionedStats(List<Map<String, dynamic>> games) {
-  final total = <String, UserStats>{};
-  final byVariant = <String, Map<String, UserStats>>{};
+///
+/// [seedTotal]/[seedByVariant] lader kaldere FORTSÆTTE en tidligere
+/// beregning i stedet for at starte forfra: [_applyGame] finder den
+/// eksisterende [UserStats]-post via `putIfAbsent` og akkumulerer VIDERE på
+/// den (streaks, summer, min/max), præcis som når [games] i forvejen
+/// indeholdt flere spil for samme bruger. `games` skal her kun være de spil
+/// der IKKE allerede indgår i seedet — brugt af
+/// `StatsRepository.recomputeAndSaveOwn` til at undgå at genlæse en brugers
+/// FULDE historik ved hver opdatering (forbrugs-fund #17). Uden et seed
+/// (default) er resultatet uændret ift. før.
+///
+/// Ren funktion også MED seed: seed-objekterne klones (JSON-round-trip) før
+/// [_applyGame] akkumulerer på dem, så kalderens egne [UserStats]-instanser
+/// aldrig muteres (QC-fund — kontrakten håndhæves her, ikke af en kommentar).
+PartitionedStats computePartitionedStats(
+  List<Map<String, dynamic>> games, {
+  Map<String, UserStats>? seedTotal,
+  Map<String, Map<String, UserStats>>? seedByVariant,
+}) {
+  UserStats clone(UserStats s) => UserStats.fromJson(s.toJson(withTimestamp: false));
+  final total = <String, UserStats>{
+    for (final e in (seedTotal ?? const <String, UserStats>{}).entries)
+      e.key: clone(e.value),
+  };
+  final byVariant = <String, Map<String, UserStats>>{
+    for (final e in (seedByVariant ?? const <String, Map<String, UserStats>>{})
+        .entries)
+      e.key: <String, UserStats>{
+        for (final v in e.value.entries) v.key: clone(v.value),
+      },
+  };
 
   // Sortér kronologisk så win-streaks beregnes i rigtig rækkefølge.
   final ordered = List<Map<String, dynamic>>.from(games);
