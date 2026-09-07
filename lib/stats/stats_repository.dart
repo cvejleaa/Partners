@@ -42,31 +42,70 @@ int? _tsMsOf(dynamic v) {
   return null;
 }
 
-/// Den nye cursor-værdi for [StatsRepository.recomputeAndSaveOwn]'s
-/// inkrementelle sti (forbrugs-fund #17): det seneste af enten den forrige
-/// cursor eller det nyeste af de netop talte [newGames]. Ren funktion,
-/// testbar uden Firestore — kernen i at cursoren aldrig kan REGRESSERE
-/// (hvilket ville få allerede talte spil til at blive talt med igen).
-int nextStatsCursorMs(int previousCursorMs, List<Map<String, dynamic>> newGames) {
-  if (newGames.isEmpty) return previousCursorMs;
-  final int newestNewGameMs =
-      newGames.map(gameTimeMs).reduce((a, b) => a > b ? a : b);
-  return newestNewGameMs > previousCursorMs ? newestNewGameMs : previousCursorMs;
+/// Cursor-feltet på `userStats/{uid}` bag den inkrementelle stats-opdatering
+/// (forbrugs-fund #17, se [StatsRepository.recomputeAndSaveOwn]): det
+/// seneste `finishedAt` blandt de spil der allerede er talt med. Gemmes som
+/// en fuld Firestore-[Timestamp], IKKE i millisekunder: `serverTimestamp`
+/// har mikrosekund-opløsning, så en ms-afrundet cursor (fx 1000 for et spil
+/// afsluttet 1000,5 ms) ville lade grænse-spillet matche `finishedAt >
+/// cursor` IGEN ved næste kørsel — og blive talt to gange (QC-fund).
+const String kStatsCursorField = 'lastCountedFinishedAt';
+
+/// Sentinel for "cursoren ER etableret, men intet talt spil havde et
+/// finishedAt" — kun muligt for spil fra før 2026-08-21 (feltet findes ikke
+/// på dem; se den navngivne forudsætning ved `_myGamesBounded` i
+/// online_service.dart). Skelnes fra "cursor findes ikke" (null), som betyder
+/// at den fulde bootstrap-genberegning endnu ikke er kørt.
+final Timestamp kStatsCursorEpoch = Timestamp.fromMillisecondsSinceEpoch(0);
+
+/// Cursoren i et `userStats`-doc: null når feltet ikke findes (→ bootstrap).
+Timestamp? statsCursorOf(Map<String, dynamic>? data) {
+  if (data == null || !data.containsKey(kStatsCursorField)) return null;
+  final dynamic v = data[kStatsCursorField];
+  return v is Timestamp ? v : kStatsCursorEpoch;
 }
 
-/// Er cursoren PRÆCIS den vi baserede en inkrementel opdatering på? Bruges
-/// inde i den beskyttende Firestore-transaktion i
-/// [StatsRepository.recomputeAndSaveOwn]: er den IKKE, har et andet
-/// samtidigt kald for samme uid allerede talt de samme spil med, og
-/// opdateringen skal springes over i stedet for at dobbelttælle. Ren
-/// funktion, testbar uden Firestore/transaktion.
-bool statsCursorUnchanged({
-  required bool freshHasCursor,
-  required int freshCursorMs,
-  required bool expectedHasCursor,
-  required int expectedCursorMs,
-}) =>
-    freshHasCursor == expectedHasCursor && freshCursorMs == expectedCursorMs;
+/// Spillets `finishedAt` med fuld præcision (int-ms accepteres for
+/// test-fixtures). null når feltet mangler — sådan et spil kan aldrig blive
+/// cursor, kun tælles med i en bootstrap.
+Timestamp? _finishedAtOf(Map<String, dynamic> game) {
+  final dynamic v = game['finishedAt'];
+  if (v is Timestamp) return v;
+  if (v is int) return Timestamp.fromMillisecondsSinceEpoch(v);
+  return null;
+}
+
+/// Den nye cursor efter at [newGames] er talt med: det seneste af den
+/// forrige cursor og spillenes `finishedAt`. Ren funktion — kernen i at
+/// cursoren aldrig REGRESSERER (ellers ville allerede talte spil blive talt
+/// igen) og aldrig afrundes (se [kStatsCursorField]).
+Timestamp nextStatsCursor(
+    Timestamp previous, List<Map<String, dynamic>> newGames) {
+  Timestamp best = previous;
+  for (final Map<String, dynamic> g in newGames) {
+    final Timestamp? t = _finishedAtOf(g);
+    if (t != null && t.compareTo(best) > 0) best = t;
+  }
+  return best;
+}
+
+/// Cursor pr. deltager efter en FULD genberegning ([StatsRepository
+/// .recomputeAndSave]). Uden dette ville admin-"genberegn alt" skrive alle
+/// docs UDEN cursor-feltet og sende samtlige brugere tilbage til en
+/// bootstrap ved deres næste opdatering (QC-fund).
+Map<String, Timestamp> statsCursorsByUid(List<Map<String, dynamic>> games) {
+  final out = <String, Timestamp>{};
+  for (final Map<String, dynamic> g in games) {
+    final Timestamp? t = _finishedAtOf(g);
+    if (t == null) continue;
+    for (final dynamic u in (g['uids'] as List?) ?? const <dynamic>[]) {
+      if (u is! String) continue;
+      final Timestamp? prev = out[u];
+      if (prev == null || t.compareTo(prev) > 0) out[u] = t;
+    }
+  }
+  return out;
+}
 
 /// Spillene "som verden så ud, da [code] blev spillet": alle spil afsluttet
 /// FØR det, plus spillet selv. Bruges til at genskabe en gammel slutrapport
@@ -178,19 +217,26 @@ class StatsRepository {
         .toList();
   }
 
-  /// Som [_ownFinishedGames], men kun spil afsluttet EFTER [cursorMs] —
-  /// bruger af den inkrementelle sti i [recomputeAndSaveOwn] (forbrugs-fund
-  /// #17). Kræver et sammensat indeks (`uids` arrayContains + `finishedAt`
-  /// range, se firestore.indexes.json); kaster `failed-precondition` videre
-  /// hvis det ikke er klar, så kalderen kan falde tilbage til en fuld
+  /// Som [_ownFinishedGames], men kun spil afsluttet EFTER [cursor] —
+  /// den inkrementelle sti i [recomputeAndSaveOwn] (forbrugs-fund #17).
+  /// Kræver et sammensat indeks (`uids` arrayContains + `finishedAt` range,
+  /// se firestore.indexes.json); kaster `failed-precondition` videre hvis
+  /// det ikke er klart, så kalderen kan falde tilbage til en fuld
   /// genberegning.
+  ///
+  /// Deler forudsætning med `_myGamesBounded` i online_service.dart: et
+  /// range-filter på `finishedAt` matcher KUN docs hvor feltet findes, og
+  /// spil fra før 2026-08-21 har det ikke. Det er trygt HER, fordi de spil
+  /// altid tælles med i bootstrap'en ([_ownFinishedGames] filtrerer ikke
+  /// på feltet) FØR cursoren etableres — og et nyt spil får altid feltet
+  /// sat sammen med `status: 'over'`. Ændres dén skrive-sti, rammer det
+  /// begge steder.
   Future<List<Map<String, dynamic>>> _ownFinishedGamesSince(
-      String uid, int cursorMs) async {
-    final cutoff = Timestamp.fromMillisecondsSinceEpoch(cursorMs);
+      String uid, Timestamp cursor) async {
     final snap = await _db
         .collection('games')
         .where('uids', arrayContains: uid)
-        .where('finishedAt', isGreaterThan: cutoff)
+        .where('finishedAt', isGreaterThan: cursor)
         .get();
     return snap.docs
         .map((d) => <String, dynamic>{...d.data(), 'code': d.id})
@@ -260,9 +306,13 @@ class StatsRepository {
     // ÉN beregning fodrer begge dokumenter: den private (fuld form) og den
     // offentlige (slank byVariant). De to talte før hvert sit sæt spil.
     final combined = computePartitionedStats(games);
+    // Cursoren skal med her også — set() uden merge ville ellers slette den
+    // for ALLE brugere og sende dem tilbage til bootstrap (QC-fund).
+    final Map<String, Timestamp> cursors = statsCursorsByUid(games);
     await _saveAllTo('userStats', <String, Map<String, dynamic>>{
       for (final s in combined.total.values)
-        s.uid: docJsonFor(s, combined.byVariant, slim: false),
+        s.uid: docJsonFor(s, combined.byVariant, slim: false)
+          ..[kStatsCursorField] = cursors[s.uid] ?? kStatsCursorEpoch,
     });
     await _saveAllTo('userStatsOnline', <String, Map<String, dynamic>>{
       for (final s in combined.total.values)
@@ -273,8 +323,8 @@ class StatsRepository {
 
   /// Genberegn og gem KUN [uid]'s egen stats-doc — ud fra brugerens EGNE spil.
   ///
-  /// INKREMENTEL (forbrugs-fund #17): en cursor (`lastCountedFinishedAtMs`,
-  /// gemt på selve userStats-doc'et) husker hvor langt brugerens historik
+  /// INKREMENTEL (forbrugs-fund #17): en cursor ([kStatsCursorField], en
+  /// Timestamp på selve userStats-doc'et) husker hvor langt brugerens historik
   /// allerede er talt med. Findes cursoren, hentes KUN spil afsluttet SIDEN
   /// (typisk præcis ét — det der lige sluttede) via [_ownFinishedGamesSince],
   /// og [computePartitionedStats] FORTSÆTTER fra den cachede [UserStats] i
@@ -289,60 +339,39 @@ class StatsRepository {
   /// app-genstart" i et snævert tidsvindue): skriver kun hvis cursoren stadig
   /// er den vi læste — er den rykket af et andet kald i mellemtiden, har det
   /// kald allerede talt de samme spil med, og denne opdatering springes over.
+  ///
+  /// Pris: to små doc-læsninger af `userStats/{uid}` (én for at vælge sti,
+  /// én inde i transaktionen) i stedet for N spil-læsninger. For en bruger
+  /// med få spil er det nul-sum; gevinsten ligger hos de tunge brugere,
+  /// hvis historik ellers voksede for evigt.
   Future<void> recomputeAndSaveOwn(String uid) async {
     final userStatsRef = _db.collection('userStats').doc(uid);
-    final cachedSnap = await userStatsRef.get();
-    final cachedData = cachedSnap.data();
-    final bool hasCursor = cachedData != null &&
-        cachedData.containsKey('lastCountedFinishedAtMs');
-    final int cursorMs = hasCursor
-        ? (cachedData!['lastCountedFinishedAtMs'] as num).toInt()
-        : 0;
+    final Map<String, dynamic>? cachedData = (await userStatsRef.get()).data();
+    final Timestamp? cursor = statsCursorOf(cachedData);
 
-    List<Map<String, dynamic>> newGames;
-    bool bootstrapped = !hasCursor;
-    if (hasCursor) {
-      try {
-        newGames = await _ownFinishedGamesSince(uid, cursorMs);
-      } on FirebaseException catch (e) {
-        if (e.code != 'failed-precondition') rethrow;
-        newGames = await _ownFinishedGames(uid);
-        bootstrapped = true;
-      }
-    } else {
-      newGames = await _ownFinishedGames(uid);
-    }
+    final (List<Map<String, dynamic>> newGames, UserStatsDoc? cachedDoc) =
+        await _newGamesFor(uid, cursor, cachedData);
 
-    // Kun brugt som seed når vi REELT fortsætter en tidligere beregning —
-    // en bootstrap (ny cursor eller manglende indeks) tæller ALT forfra via
-    // [_ownFinishedGames], og skal ikke også seedes (ville dobbelttælle).
-    final UserStatsDoc? cachedDoc =
-        (hasCursor && !bootstrapped) ? UserStatsDoc.fromJson(cachedData!) : null;
-    final seedTotal = <String, UserStats>{
+    final combined = computePartitionedStats(newGames, seedTotal: {
       if (cachedDoc != null) uid: cachedDoc.total,
-    };
-    final seedByVariant = <String, Map<String, UserStats>>{
+    }, seedByVariant: {
       if (cachedDoc != null)
         for (final e in cachedDoc.byVariant.entries) e.key: {uid: e.value},
-    };
-
-    final combined = computePartitionedStats(newGames,
-        seedTotal: seedTotal, seedByVariant: seedByVariant);
-    final UserStats? own = combined.total[uid];
+    });
     // Den offentlige rangliste bygger på PRÆCIS samme tal som profilen —
     // kun formen er slankere. Har brugeren ingen spil (hverken nye eller
     // cachede), skrives 0-stats (med rigtigt navn), så gamle tal ryddes og
     // ingen bliver hængende på ranglisten.
-    final UserStats ownOrEmpty =
-        own ?? cachedDoc?.total ?? UserStats(uid: uid, displayName: 'Spiller');
-
-    final int newCursorMs = nextStatsCursorMs(cursorMs, newGames);
+    final UserStats own = combined.total[uid] ??
+        cachedDoc?.total ??
+        UserStats(uid: uid, displayName: 'Spiller');
 
     final Map<String, dynamic> ownJson =
-        docJsonFor(ownOrEmpty, combined.byVariant, slim: false);
-    ownJson['lastCountedFinishedAtMs'] = newCursorMs;
+        docJsonFor(own, combined.byVariant, slim: false)
+          ..[kStatsCursorField] =
+              nextStatsCursor(cursor ?? kStatsCursorEpoch, newGames);
     final Map<String, dynamic> onlineJson =
-        docJsonFor(ownOrEmpty, combined.byVariant, slim: true);
+        docJsonFor(own, combined.byVariant, slim: true);
 
     // ÉN transaktion for BEGGE dokumenter (QC-fund) + cursor-tjekket: det er
     // userStats-skrivningen der rydder `staleSince`-markøren. Skrives den
@@ -352,23 +381,31 @@ class StatsRepository {
     // fremprovokeres ved at markere nogen og derefter slette spillet). Derfor
     // skriver vi ALTID, også når newGames er tom — kun VÆRDIEN uændret.
     await _db.runTransaction((tx) async {
-      final freshSnap = await tx.get(userStatsRef);
-      final freshData = freshSnap.data();
-      final bool freshHasCursor = freshData != null &&
-          freshData.containsKey('lastCountedFinishedAtMs');
-      final int freshCursor = freshHasCursor
-          ? (freshData!['lastCountedFinishedAtMs'] as num).toInt()
-          : 0;
-      if (!statsCursorUnchanged(
-          freshHasCursor: freshHasCursor,
-          freshCursorMs: freshCursor,
-          expectedHasCursor: hasCursor,
-          expectedCursorMs: cursorMs)) {
+      final Timestamp? fresh = statsCursorOf((await tx.get(userStatsRef)).data());
+      // Timestamp har værdi-lighed; null == null dækker "stadig ingen cursor".
+      if (fresh != cursor) {
         return; // et andet samtidigt kald vandt kapløbet — lad det stå.
       }
       tx.set(userStatsRef, ownJson);
       tx.set(_db.collection('userStatsOnline').doc(uid), onlineJson);
     });
+  }
+
+  /// De spil der endnu ikke er talt med, plus den cachede doc der skal
+  /// seedes fra. Doc'en er null når vi BOOTSTRAPPER — ingen cursor endnu,
+  /// eller det bundne indeks er ikke klart — fordi en bootstrap tæller ALT
+  /// forfra via [_ownFinishedGames] og derfor IKKE må seedes oveni (det
+  /// ville dobbelttælle hele historikken).
+  Future<(List<Map<String, dynamic>>, UserStatsDoc?)> _newGamesFor(
+      String uid, Timestamp? cursor, Map<String, dynamic>? cachedData) async {
+    if (cursor == null) return (await _ownFinishedGames(uid), null);
+    try {
+      final games = await _ownFinishedGamesSince(uid, cursor);
+      return (games, UserStatsDoc.fromJson(cachedData!));
+    } on FirebaseException catch (e) {
+      if (e.code != 'failed-precondition') rethrow;
+      return (await _ownFinishedGames(uid), null);
+    }
   }
 
   /// Selvhelbredelse ved app-start: ét dokument-læs, og kun en genberegning

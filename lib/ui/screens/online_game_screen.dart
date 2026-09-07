@@ -836,9 +836,13 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // uden en widget-pumpe (se test/replay_story_test.dart).
 
   /// Opdaterer [_lastByPlayer] med kun de NYE log-indlæg siden sidste build
-  /// (se [foldLogTail]) i stedet for at genscanne hele [log]. Krymper loggen
-  /// uventet (fx et helt andet spil genbruger samme State-instans), starter
-  /// cachen forfra i stedet for at ramme et negativt sublist-interval.
+  /// (se [foldLogTail]) i stedet for at genscanne hele [log].
+  ///
+  /// Loggen er append-only (skrives kun via `arrayUnion`, og skærmen
+  /// oprettes frisk pr. spilkode), så den kan ikke krympe i dag. Værnet
+  /// herunder er kun et sikkerhedsnet mod et negativt sublist-interval,
+  /// hvis dén antagelse nogensinde brydes — det starter cachen forfra frem
+  /// for at kaste.
   Map<int, PlayingCard> _updateLastByPlayer(List log) {
     if (log.length < _lastByPlayerLogLen) {
       _lastByPlayer = <int, PlayingCard>{};

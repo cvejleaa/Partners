@@ -435,19 +435,25 @@ class PartitionedStats {
 /// FULDE historik ved hver opdatering (forbrugs-fund #17). Uden et seed
 /// (default) er resultatet uændret ift. før.
 ///
-/// BIVIRKNING: de [UserStats]-OBJEKTER i seedet muteres i place (samme måde
-/// som et objekt der først blev oprettet af et tidligere spil i [games]) —
-/// kald med en FRISK-deserialiseret kopi (fx via [UserStatsDoc.fromJson]),
-/// aldrig med en reference andre steder i koden stadig holder på.
+/// Ren funktion også MED seed: seed-objekterne klones (JSON-round-trip) før
+/// [_applyGame] akkumulerer på dem, så kalderens egne [UserStats]-instanser
+/// aldrig muteres (QC-fund — kontrakten håndhæves her, ikke af en kommentar).
 PartitionedStats computePartitionedStats(
   List<Map<String, dynamic>> games, {
   Map<String, UserStats>? seedTotal,
   Map<String, Map<String, UserStats>>? seedByVariant,
 }) {
-  final total = <String, UserStats>{...?seedTotal};
+  UserStats clone(UserStats s) => UserStats.fromJson(s.toJson(withTimestamp: false));
+  final total = <String, UserStats>{
+    for (final e in (seedTotal ?? const <String, UserStats>{}).entries)
+      e.key: clone(e.value),
+  };
   final byVariant = <String, Map<String, UserStats>>{
-    for (final e in (seedByVariant ?? const <String, Map<String, UserStats>>{}).entries)
-      e.key: <String, UserStats>{...e.value},
+    for (final e in (seedByVariant ?? const <String, Map<String, UserStats>>{})
+        .entries)
+      e.key: <String, UserStats>{
+        for (final v in e.value.entries) v.key: clone(v.value),
+      },
   };
 
   // Sortér kronologisk så win-streaks beregnes i rigtig rækkefølge.

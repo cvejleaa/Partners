@@ -12,6 +12,7 @@
 // seedede med de rå UserStats-objekter ville ikke fange et felt der glemtes
 // i toJson()/fromJson().
 
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/game/card_rules.dart';
 import 'package:partners/stats/stats_repository.dart';
@@ -148,62 +149,119 @@ void main() {
       final result = _continueFrom(seeded, 'u0', const <Map<String, dynamic>>[]);
       expect(result.total['u0']!.toJson(), seeded.total['u0']!.toJson());
     });
+
+    test('seedet muteres IKKE — kalderens objekter er urørte bagefter', () {
+      // QC-fund: kontrakten "ren funktion" håndhæves af klonen i
+      // computePartitionedStats, ikke af en kommentar. MUTATION: fjern
+      // klonen (brug seed-objekterne direkte) → seed.gamesPlayed bliver 2.
+      final first = computePartitionedStats(<Map<String, dynamic>>[
+        _game(uids: uids, names: names, winningTeam: 0, hands: 5, finishedMs: 100),
+      ]);
+      final UserStats seed = first.total['u0']!;
+      computePartitionedStats(
+        <Map<String, dynamic>>[
+          _game(uids: uids, names: names, winningTeam: 1, hands: 4, finishedMs: 200),
+        ],
+        seedTotal: <String, UserStats>{'u0': seed},
+      );
+      expect(seed.gamesPlayed, 1);
+      expect(seed.currentWinStreak, 1);
+    });
   });
 
-  group('nextStatsCursorMs — cursor-fremrykning', () {
+  group('nextStatsCursor — cursor-fremrykning', () {
+    final Timestamp t500 = Timestamp.fromMillisecondsSinceEpoch(500);
+
     test('ingen nye spil → cursor uændret', () {
-      expect(nextStatsCursorMs(500, const <Map<String, dynamic>>[]), 500);
+      expect(nextStatsCursor(t500, const <Map<String, dynamic>>[]), t500);
     });
 
-    test('nye spil → cursor rykker til det NYESTE, ikke det seneste i listen', () {
+    test('nye spil → cursor rykker til det NYESTE, ikke det sidste i listen', () {
       // MUTATION: brug games.last i stedet for max → forkert hvis listen ikke
       // allerede er sorteret.
       final games = <Map<String, dynamic>>[
         _game(uids: uids, names: names, winningTeam: 0, hands: 1, finishedMs: 900),
         _game(uids: uids, names: names, winningTeam: 0, hands: 1, finishedMs: 700),
       ];
-      expect(nextStatsCursorMs(500, games), 900);
+      expect(nextStatsCursor(t500, games),
+          Timestamp.fromMillisecondsSinceEpoch(900));
     });
 
-    test('cursoren regresserer aldrig, selv med en (unormal) ældre dato i listen', () {
+    test('cursoren regresserer aldrig, selv med en (unormal) ældre dato', () {
       final games = <Map<String, dynamic>>[
         _game(uids: uids, names: names, winningTeam: 0, hands: 1, finishedMs: 100),
       ];
-      expect(nextStatsCursorMs(500, games), 500);
+      expect(nextStatsCursor(t500, games), t500);
+    });
+
+    test('FULD præcision bevares — ingen afrunding til millisekunder', () {
+      // Selve fejlen QC fandt: serverTimestamp har mikrosekunder. Afrundes
+      // cursoren til ms (1000), matcher et spil afsluttet 1000,5 ms
+      // `finishedAt > 1000 ms` IGEN næste gang og tælles to gange.
+      // MUTATION: gå via millisecondsSinceEpoch → nanosekunderne tabes → rød.
+      final Timestamp halfMs = Timestamp(1, 500000); // 1 s + 0,5 ms
+      final game = _game(uids: uids, names: names, winningTeam: 0, hands: 1);
+      game['finishedAt'] = halfMs;
+      final Timestamp cursor =
+          nextStatsCursor(Timestamp.fromMillisecondsSinceEpoch(0), [game]);
+      expect(cursor, halfMs);
+      expect(cursor.nanoseconds, 500000);
+    });
+
+    test('spil UDEN finishedAt kan aldrig blive cursor', () {
+      // Spil fra før 2026-08-21 har ikke feltet — de tælles i bootstrap'en,
+      // men må ikke skubbe cursoren (createdAt er IKKE forespørgslens felt).
+      final game = _game(
+          uids: uids, names: names, winningTeam: 0, hands: 1, createdMs: 999);
+      expect(nextStatsCursor(t500, [game]), t500);
     });
   });
 
-  group('statsCursorUnchanged — kapløbs-beskyttelsen', () {
-    test('samme cursor-tilstand → true (skriv)', () {
-      expect(
-          statsCursorUnchanged(
-              freshHasCursor: true,
-              freshCursorMs: 200,
-              expectedHasCursor: true,
-              expectedCursorMs: 200),
-          isTrue);
+  group('statsCursorOf — læsning af cursor-feltet', () {
+    test('mangler feltet → null (bootstrap)', () {
+      expect(statsCursorOf(null), isNull);
+      expect(statsCursorOf(<String, dynamic>{'gamesPlayed': 3}), isNull);
     });
 
-    test('cursor-VÆRDIEN har ændret sig → false (spring over)', () {
-      // MUTATION: sammenlign kun expectedHasCursor/freshHasCursor → et andet
-      // kalds nyere cursor ville ikke blive opdaget.
-      expect(
-          statsCursorUnchanged(
-              freshHasCursor: true,
-              freshCursorMs: 300,
-              expectedHasCursor: true,
-              expectedCursorMs: 200),
-          isFalse);
+    test('findes feltet → dets Timestamp', () {
+      final t = Timestamp(12, 34);
+      expect(statsCursorOf(<String, dynamic>{kStatsCursorField: t}), t);
     });
 
-    test('cursoren findes nu, men gjorde ikke da vi læste → false (spring over)', () {
-      expect(
-          statsCursorUnchanged(
-              freshHasCursor: true,
-              freshCursorMs: 0,
-              expectedHasCursor: false,
-              expectedCursorMs: 0),
-          isFalse);
+    test('Timestamp har værdi-lighed — kapløbs-tjekket sammenligner værdier', () {
+      // recomputeAndSaveOwn afgør "vandt et andet kald kapløbet?" med
+      // `fresh != cursor`. Var Timestamp identitets-lignet, ville tjekket
+      // ALTID slå fejl og ingen opdatering nogensinde blive skrevet.
+      expect(Timestamp(12, 34) == Timestamp(12, 34), isTrue);
+      expect(Timestamp(12, 34) == Timestamp(12, 35), isFalse);
+      expect(statsCursorOf(null) == statsCursorOf(null), isTrue);
+    });
+  });
+
+  group('statsCursorsByUid — cursor efter en fuld admin-genberegning', () {
+    test('hver deltager får det nyeste finishedAt blandt SINE spil', () {
+      // QC-fund: uden dette sletter "genberegn alt" cursoren for alle og
+      // sender dem tilbage til bootstrap. MUTATION: returnér {} → rød.
+      final games = <Map<String, dynamic>>[
+        _game(uids: uids, names: names, winningTeam: 0, hands: 1, finishedMs: 100),
+        _game(
+            uids: <String>['u0', 'x1', 'x2', 'x3'],
+            names: names,
+            winningTeam: 0,
+            hands: 1,
+            finishedMs: 300),
+      ];
+      final cursors = statsCursorsByUid(games);
+      expect(cursors['u0'], Timestamp.fromMillisecondsSinceEpoch(300));
+      expect(cursors['u1'], Timestamp.fromMillisecondsSinceEpoch(100));
+      expect(cursors['x1'], Timestamp.fromMillisecondsSinceEpoch(300));
+    });
+
+    test('spil uden finishedAt bidrager ikke (deltageren får ingen cursor)', () {
+      final games = <Map<String, dynamic>>[
+        _game(uids: uids, names: names, winningTeam: 0, hands: 1),
+      ];
+      expect(statsCursorsByUid(games), isEmpty);
     });
   });
 }
