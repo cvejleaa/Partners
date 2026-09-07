@@ -490,8 +490,8 @@ String archiveHeaderLabel(
   final String? period = archivePeriodLabel(archive, now);
   if (period == null) return 'Afsluttede spil';
   final int cutoff = now.subtract(window).millisecondsSinceEpoch;
-  final bool allWithinWindow = archive.every(
-      (GameSummary g) => g.finishedAtMs == null || g.finishedAtMs! >= cutoff);
+  // MUTATION (g): allWithinWindow er altid sand — ignorerer cutoff helt.
+  final bool allWithinWindow = cutoff is int;
   if (allWithinWindow) {
     return 'Afsluttede spil · seneste ${window.inDays} dage';
   }
