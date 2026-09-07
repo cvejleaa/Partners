@@ -490,10 +490,13 @@ String archiveHeaderLabel(
   final String? period = archivePeriodLabel(archive, now);
   if (period == null) return 'Afsluttede spil';
   final int cutoff = now.subtract(window).millisecondsSinceEpoch;
+  // MUTATION (i): streng kant (> i stedet for >=) — et spil PRÆCIS på kanten
+  // af vinduet regnes nu som UDENFOR.
   final bool allWithinWindow = archive.every(
-      (GameSummary g) => g.finishedAtMs == null || g.finishedAtMs! >= cutoff);
+      (GameSummary g) => g.finishedAtMs == null || g.finishedAtMs! > cutoff);
   if (allWithinWindow) {
-    return 'Afsluttede spil · seneste ${window.inDays} dage';
+    // MUTATION (h): dagtallet er hardkodet til 14 i stedet for window.inDays.
+    return 'Afsluttede spil · seneste 14 dage';
   }
   return 'Afsluttede spil · $period';
 }
