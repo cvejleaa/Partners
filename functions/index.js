@@ -12,7 +12,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {initializeApp} = require("firebase-admin/app");
 const {FieldValue} = require("firebase-admin/firestore");
-const {isGameOverTransition, staleTargets} = require("./game_over");
+const {handleGameTurnUpdate} = require("./game_turn");
 
 initializeApp();
 const db = getFirestore("partners");
@@ -108,6 +108,33 @@ exports.onInboxCreate = onDocumentCreated(
 ///    Genberegningen overskriver dokumentet uden markøren, så den rydder
 ///    sig selv.
 
+// Selve gren-logikken (hvem skal have en "din tur"-push, hvornår skal stats
+// markeres forældet) bor i game_turn.js — udskilt så den kan unit-testes med
+// `node --test` UDEN emulator (se functions-tests/game_turn.test.mjs). Kun
+// selve Firestore/FCM-arbejdet (markStale herunder, pushToUser ovenfor)
+// lever her, hvor firebase-admin er initialiseret.
+async function markStale(staleUids) {
+  // allSettled, ikke all: én afvist skrivning må ikke koste de ØVRIGE
+  // deltagere deres markering (og dermed deres opdaterede statistik).
+  const results = await Promise.allSettled(
+    staleUids.map((uid) =>
+      db
+        .collection("userStats")
+        .doc(uid)
+        .set({staleSince: FieldValue.serverTimestamp()}, {merge: true})
+    )
+  );
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      // Synlig i Cloud Functions-loggen — ellers kunne markeringen kun
+      // fejle tavst.
+      console.error(
+        `[onGameTurn:stats] kunne ikke markere ${staleUids[i]}: ${r.reason}`
+      );
+    }
+  });
+}
+
 exports.onGameTurn = onDocumentUpdated(
   {
     document: "games/{code}",
@@ -119,71 +146,11 @@ exports.onGameTurn = onDocumentUpdated(
     timeoutSeconds: 30,
     maxInstances: 20,
   },
-  async (event) => {
-    const before = event.data.before.data() || {};
-    const after = event.data.after.data() || {};
-
-    // -- 1. "Din tur"-push. --------------------------------------------
-    if (after.status === "playing") {
-      const aState = after.state || {};
-      const bState = before.state || {};
-      // Kun ægte turn-skift: currentPlayerIndex eller hånd ændret.
-      const sameTurn =
-        aState.cp === bState.cp && aState.hn === bState.hn;
-      if (aState.ph === "play" && !sameTurn) {
-        const seat = aState.cp;
-        const seatUids = after.uids || [];
-        const turnUid = seatUids[seat];
-        if (turnUid) { // ellers AI-plads
-          // Vi undertrykker IKKE ud fra vores eget presence-gæt (en
-          // baggrunds-PWA kunne blive ved med at melde "aktiv", så push'en
-          // udeblev eller kom for sent). I stedet sender vi altid ved
-          // tur-skift og lader browseren/FCM selv route: er fanen SYNLIG
-          // lander beskeden i appen (onMessage) uden systemnotifikation; er
-          // den i baggrunden/lukket viser service-workeren en
-          // systemnotifikation. Det er den pålidelige mekanisme.
-          const code = event.params.code;
-          // DATA-only: service-workeren viser notifikationen (én gang) og
-          // håndterer klik → åbner selve spillet (/?game=<code>).
-          await pushToUser(turnUid, {
-            data: {
-              type: "turn",
-              gameCode: code,
-              title: "Partners — din tur",
-              body: `Det er din tur i spil ${code}`,
-            },
-            webpush: {headers: {Urgency: "high", TTL: "300"}},
-          });
-        }
-      }
-    }
-
-    // -- 2. Stats-forældelse ved spil-slut. merge:true, så vi kun rører --
-    // -- 'staleSince' og aldrig kan ødelægge tal. -----------------------
-    if (isGameOverTransition(before, after)) {
-      const staleUids = staleTargets(after);
-      if (staleUids.length) {
-        // allSettled, ikke all: én afvist skrivning må ikke koste de
-        // ØVRIGE deltagere deres markering (og dermed deres opdaterede
-        // statistik).
-        const results = await Promise.allSettled(
-          staleUids.map((uid) =>
-            db
-              .collection("userStats")
-              .doc(uid)
-              .set({staleSince: FieldValue.serverTimestamp()}, {merge: true})
-          )
-        );
-        results.forEach((r, i) => {
-          if (r.status === "rejected") {
-            // Synlig i Cloud Functions-loggen — ellers kunne markeringen
-            // kun fejle tavst.
-            console.error(
-              `[onGameTurn] kunne ikke markere ${staleUids[i]}: ${r.reason}`
-            );
-          }
-        });
-      }
-    }
-  }
+  (event) => handleGameTurnUpdate({
+    before: event.data.before.data() || {},
+    after: event.data.after.data() || {},
+    code: event.params.code,
+    pushToUser,
+    markStale,
+  })
 );

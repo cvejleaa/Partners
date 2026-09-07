@@ -156,6 +156,16 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Cloud Functions-enhedstests (rene helpers, ingen emulator)
+        # Var IKKE en del af deploy-gaten før (kun test:rules herunder kørte)
+        # — game_over.test.mjs gav derfor reelt INGEN beskyttelse ved deploy,
+        # kun ved PR/dispatch (tests.yml). Rettet: samme trin her.
+        run: |
+          node --check functions/index.js
+          node --check functions/game_over.js
+          node --check functions/game_turn.js
+          node --test functions-tests/game_over.test.mjs functions-tests/game_turn.test.mjs
+
       - name: Firestore-regeltests (emulator — sikkerheds-gate)
         # ANGRIBER de faktiske firestore.rules i Firestore-emulatoren
         # (@firebase/rules-unit-testing). Deterministisk og sikkerhedskritisk →
@@ -234,12 +244,17 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
 
       - name: Deploy Firestore-indekser til navngivet database 'partners'
+        id: indexes_deploy
         # Nye/ændrede indekser BYGGER asynkront efter deploy (kan tage et
         # øjeblik) — hosting (ovenfor) kan derfor nå at servere kode, der
         # forudsætter et indeks, FØR det er klart. myGamesFor() i
         # online_service.dart har et selvhelbredende fallback for netop
         # dette (failed-precondition → ubunden forespørgsel), så trinnet må
-        # gerne fejle uden at fælde resten af udrulningen.
+        # gerne fejle uden at fælde resten af udrulningen. MEN: et
+        # efterfølgende trin gør en VEDVARENDE fejl synlig (advarsel +
+        # job-summary), så den ikke bare forsvinder i en grøn kørsel — uden
+        # det ville "Mine spil" for evigt køre på den ubundne fallback
+        # (hele perf-gevinsten fra #18/#52 tabt) uden at nogen opdagede det.
         continue-on-error: true
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
         run: |
@@ -249,6 +264,18 @@ jobs:
             --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
+
+      - name: Advar hvis Firestore-indeks-deploy fejlede
+        if: steps.indexes_deploy.outcome == 'failure'
+        run: |
+          echo "::warning title=Firestore-indeks-deploy fejlede::Det sammensatte indeks til \"Mine spil\" (members+status+finishedAt) blev IKKE deployet. myGamesFor() falder tilbage til den gamle ubundne forespørgsel (virker, men uden 14-dages-afgrænsningen) — perf-gevinsten fra #18/#52 er tabt indtil dette rettes."
+          {
+            echo "## ⚠️ Firestore-indeks-deploy FEJLEDE"
+            echo ""
+            echo "\"Mine spil\" virker stadig (selvhelbredende fallback i myGamesFor()), men uden 14-dages-afgrænsningen — reads pr. app-åbning er tilbage til at vokse med brugerens fulde spilhistorik."
+            echo "- Tjek logs for trinet 'Deploy Firestore-indekser til navngivet database partners'."
+            echo "- Tjek Firebase-konsollen → Firestore → Indexes for fejlbeskeden."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Installér Cloud Functions deps
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)

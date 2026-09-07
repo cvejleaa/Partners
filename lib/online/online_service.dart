@@ -1021,6 +1021,17 @@ class OnlineService {
   /// spil inden for [kMyGamesArchiveWindow]. Kræver et sammensat indeks pr.
   /// forespørgsel (se firestore.indexes.json) — `myGamesFor` falder tilbage
   /// til [_myGamesUnbounded], hvis et indeks endnu ikke er klart.
+  ///
+  /// NAVNGIVET FORUDSÆTNING (QC-fund ved commit cb1286f): Firestores
+  /// range-filter på `finishedAt` matcher kun dokumenter hvor feltet
+  /// FINDES. `finishedAt` blev først indført 2026-08-21 (commit 2cf06df) —
+  /// et `status: 'over'`-spil fra FØR den dato uden feltet er derfor
+  /// usynligt for BEGGE forespørgsler herunder (hverken aktivt eller inden
+  /// for arkiv-vinduet) og forsvinder stille fra "Mine spil". Alle
+  /// nuværende skrive-stier sætter status+finishedAt atomart sammen, så
+  /// INGEN NY skrivning kan skabe hullet — kun spil afsluttet før 21/8 er
+  /// ramt. Engangs-oprydning: `functions/scripts/backfill_finished_at.js`
+  /// (dry-run som default, kræver produktions-adgang, IKKE kørt endnu).
   Stream<List<GameSummary>> _myGamesBounded(String uid) {
     final Timestamp cutoff = Timestamp.fromDate(
         DateTime.now().toUtc().subtract(kMyGamesArchiveWindow));
