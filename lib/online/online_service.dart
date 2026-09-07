@@ -444,25 +444,22 @@ String archiveRowDate(GameSummary g, DateTime now) {
 String? archivePeriodLabel(List<GameSummary> archive, DateTime now) {
   int? oldest;
   int? newest;
-  bool oldestApprox = false;
-  bool newestApprox = false;
   for (final GameSummary g in archive) {
     final int? ms = g.finishedAtMs;
     if (ms == null) continue;
-    final bool approx = g.finishedAtExactMs == null;
     if (oldest == null || ms < oldest) {
       oldest = ms;
-      oldestApprox = approx;
     }
     if (newest == null || ms > newest) {
       newest = ms;
-      newestApprox = approx;
     }
   }
   if (oldest == null || newest == null) return null;
-  // "ca." kun når et ENDEPUNKT er omtrentligt — det er enderne, etiketten
-  // påstår noget om.
-  final String prefix = (oldestApprox || newestApprox) ? 'ca. ' : '';
+  // MUTATION (c): "ca." sættes nu hvis NOGET spil (også midt i listen) er
+  // omtrentligt, ikke kun ved et endepunkt.
+  final bool anyApprox = archive.any((GameSummary g) =>
+      g.finishedAtMs != null && g.finishedAtExactMs == null);
+  final String prefix = anyApprox ? 'ca. ' : '';
   return '$prefix${danishPeriod(oldest, newest, now)}';
 }
 
