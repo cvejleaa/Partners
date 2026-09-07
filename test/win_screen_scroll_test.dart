@@ -124,4 +124,18 @@ void main() {
     final ScrollableState scrollable = tester.state(find.byType(Scrollable));
     expect(scrollable.position.maxScrollExtent, greaterThan(0));
   });
+
+  testWidgets(
+      'E: spilletidspunktet viser ÅRSTAL, selv når det er indeværende år '
+      '(alwaysYear — Test Manager-fund: ingen test kaldte danishDate med '
+      'alwaysYear, hverken direkte eller via denne skærm)',
+      (WidgetTester tester) async {
+    // playedAt er 25. aug. 2026 — danishDate uden alwaysYear ville skrive
+    // "25. aug." (uden årstal), fordi funktionen ikke kan vide at "nu" i
+    // denne test-kørsel ikke er 2026. alwaysYear: true er det, der tvinger
+    // årstallet med. SingleChildScrollView bygger hele sit barn uanset
+    // rullePosition (se test B), så teksten står i træet uden at rulle.
+    await pumpReport(tester);
+    expect(find.text('25. aug. 2026 kl. 11.04'), findsOneWidget);
+  });
 }
