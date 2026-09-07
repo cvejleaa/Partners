@@ -150,6 +150,95 @@ void main() {
       expect(result.total['u0']!.toJson(), seeded.total['u0']!.toJson());
     });
 
+    test('ALLE felter overlever JSON-round-trippet seedingen bygger på', () {
+      // Test Manager-fund: equivalence-testene ovenfor har tomme logs, så ca.
+      // halvdelen af UserStats' felter er altid 0 dér — et glemt felt i
+      // fromJson() ville ikke gøre dem røde. Her har HVERT felt en værdi
+      // forskellig fra sin default. MUTATION: fjern en linje i fromJson() →
+      // round-trip'et taber feltet → rød. Fjern en linje i toJson() →
+      // nøgle-tjekket nederst → rød (dét fanger equivalence-testene aldrig,
+      // fordi begge sider går gennem samme toJson()).
+      final full = UserStats(
+        uid: 'u0',
+        displayName: 'Alice',
+        gamesPlayed: 11,
+        gamesWon: 7,
+        shortestWin: 3,
+        totalCaptures: 21,
+        captureGames: 10,
+        maxCapturesInGame: 5,
+        timesCaptured: 13,
+        split7Count: 4,
+        solid7Count: 6,
+        swapCount: 2,
+        protectionCount: 8,
+        homeStretchEntries: 9,
+        favoriteStarter: <String, int>{'A': 3, 'K': 1},
+        handsPerWinSum: 40,
+        gamesAsHost: 5,
+        gamesOnline: 8,
+        gamesAiOnly: 3,
+        partnerStats: <String, PairStats>{
+          'u2': PairStats(displayName: 'Carol', games: 6, wins: 4),
+        },
+        rivalStats: <String, PairStats>{
+          'u1': PairStats(displayName: 'Bob', games: 5, wins: 2),
+        },
+        totalThinkSeconds: 123.5,
+        thinkCount: 77,
+        fastestThinkSeconds: 0.8,
+        passCount: 4,
+        totalCardsDiscarded: 12,
+        totalMinutesPlayed: 310.25,
+        playedGamesWithDuration: 9,
+        currentWinStreak: 2,
+        longestWinStreak: 4,
+        winMarginSum: 17,
+        winMarginGames: 6,
+        lossMarginSum: 9,
+        lossMarginGames: 3,
+        maxWinMargin: 6,
+        minWinMargin: 1,
+        myExitCards: 14,
+        mySpecialCards: 15,
+        myPlainCards: 16,
+        myUnseenCards: 17,
+        oppExitCards: 18,
+        oppSpecialCards: 19,
+        oppPlainCards: 20,
+        oppUnseenCards: 22,
+        cardMixGames: 10,
+        myPiecesSentHome: 23,
+        oppPiecesSentHome: 24,
+      );
+      final Map<String, dynamic> json = full.toJson(withTimestamp: false);
+      final Map<String, dynamic> roundTripped =
+          UserStats.fromJson(json).toJson(withTimestamp: false);
+      expect(roundTripped, json);
+
+      // Bevidst dubleret feltliste: den ENESTE måde at fange et felt der
+      // aldrig SKRIVES (toJson) — round-trip'et ovenfor ser kun det der
+      // både skrives og læses.
+      const fields = <String>[
+        'uid', 'displayName', 'gamesPlayed', 'gamesWon', 'shortestWin',
+        'totalCaptures', 'captureGames', 'maxCapturesInGame', 'timesCaptured',
+        'split7Count', 'solid7Count', 'swapCount', 'protectionCount',
+        'homeStretchEntries', 'favoriteStarter', 'handsPerWinSum',
+        'gamesAsHost', 'gamesOnline', 'gamesAiOnly', 'partnerStats',
+        'rivalStats', 'totalThinkSeconds', 'thinkCount', 'fastestThinkSeconds',
+        'passCount', 'totalCardsDiscarded', 'totalMinutesPlayed',
+        'playedGamesWithDuration', 'currentWinStreak', 'longestWinStreak',
+        'winMarginSum', 'winMarginGames', 'lossMarginSum', 'lossMarginGames',
+        'maxWinMargin', 'minWinMargin', 'myExitCards', 'mySpecialCards',
+        'myPlainCards', 'myUnseenCards', 'oppExitCards', 'oppSpecialCards',
+        'oppPlainCards', 'oppUnseenCards', 'cardMixGames', 'myPiecesSentHome',
+        'oppPiecesSentHome',
+      ];
+      for (final f in fields) {
+        expect(json.containsKey(f), isTrue, reason: 'toJson mangler $f');
+      }
+    });
+
     test('seedet muteres IKKE — kalderens objekter er urørte bagefter', () {
       // QC-fund: kontrakten "ren funktion" håndhæves af klonen i
       // computePartitionedStats, ikke af en kommentar. MUTATION: fjern

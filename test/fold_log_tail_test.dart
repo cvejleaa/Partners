@@ -61,4 +61,40 @@ void main() {
       expect(foldLogTail(<Map<String, dynamic>>[], previous), previous);
     });
   });
+
+  group('advanceLogCache — skærmens cache-beslutning (Test Manager-fund)', () {
+    final log2 = <Map<String, dynamic>>[_move(0, _fourHearts), _move(1, _kingSpades)];
+
+    test('første build folder hele loggen fra 0', () {
+      final r = advanceLogCache(log2, <int, PlayingCard>{}, 0);
+      expect(r.lastByPlayer, <int, PlayingCard>{0: _fourHearts, 1: _kingSpades});
+      expect(r.logLen, 2);
+    });
+
+    test('samme længde → identisk cache tilbage, ingen ny fold', () {
+      final cache = <int, PlayingCard>{0: _fourHearts, 1: _kingSpades};
+      final r = advanceLogCache(log2, cache, 2);
+      expect(identical(r.lastByPlayer, cache), isTrue);
+      expect(r.logLen, 2);
+    });
+
+    test('vokset log → kun halen foldes oven på cachen', () {
+      final cache = <int, PlayingCard>{0: _fourHearts, 1: _kingSpades};
+      final log3 = <Map<String, dynamic>>[...log2, _move(0, _aceClubs)];
+      final r = advanceLogCache(log3, cache, 2);
+      expect(r.lastByPlayer, <int, PlayingCard>{0: _aceClubs, 1: _kingSpades});
+      expect(r.logLen, 3);
+    });
+
+    test('KRYMPET log → cachen bygges forfra af den korte log, ikke fra sublist', () {
+      // MUTATION: fjern `log.length < previousLen`-værnet → sublist(2) på en
+      // log med ét element kaster RangeError. Og resultatet må ikke huske
+      // spiller 1, som ikke findes i den nye log.
+      final cache = <int, PlayingCard>{0: _fourHearts, 1: _kingSpades};
+      final log1 = <Map<String, dynamic>>[_move(0, _aceClubs)];
+      final r = advanceLogCache(log1, cache, 2);
+      expect(r.lastByPlayer, <int, PlayingCard>{0: _aceClubs});
+      expect(r.logLen, 1);
+    });
+  });
 }

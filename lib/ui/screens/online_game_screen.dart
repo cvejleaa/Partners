@@ -53,6 +53,30 @@ Map<int, PlayingCard> foldLogTail(
   return out;
 }
 
+/// Ren kerne bag skærmens log-cache: givet den aktuelle [log], det forrige
+/// resultat og hvor langt det rakte, returnér det opdaterede resultat og den
+/// nye længde. Kun halen siden [previousLen] foldes ind; er loggen krympet
+/// (kan ikke ske i dag — den er append-only — men værnet er billigt),
+/// bygges cachen forfra i stedet for at ramme et negativt sublist-interval.
+/// Udskilt fra State-objektet så begge grene kan testes uden widget-pumpe
+/// (Test Manager-fund).
+({Map<int, PlayingCard> lastByPlayer, int logLen}) advanceLogCache(
+  List log,
+  Map<int, PlayingCard> previous,
+  int previousLen,
+) {
+  Map<int, PlayingCard> result = previous;
+  int from = previousLen;
+  if (log.length < previousLen) {
+    result = <int, PlayingCard>{};
+    from = 0;
+  }
+  if (log.length > from) {
+    result = foldLogTail(log.sublist(from), result);
+  }
+  return (lastByPlayer: result, logLen: log.length);
+}
+
 /// Online-skærm. Selve UI-laget (tap, valg, split-7, byt, paneler, board)
 /// kommer fra den fælles [GamePlayView] som single-player også bruger — så
 /// vi kun har ÉT sæt regler for spil-interaktioner. Denne skærm håndterer
@@ -836,23 +860,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // uden en widget-pumpe (se test/replay_story_test.dart).
 
   /// Opdaterer [_lastByPlayer] med kun de NYE log-indlæg siden sidste build
-  /// (se [foldLogTail]) i stedet for at genscanne hele [log].
-  ///
-  /// Loggen er append-only (skrives kun via `arrayUnion`, og skærmen
-  /// oprettes frisk pr. spilkode), så den kan ikke krympe i dag. Værnet
-  /// herunder er kun et sikkerhedsnet mod et negativt sublist-interval,
-  /// hvis dén antagelse nogensinde brydes — det starter cachen forfra frem
-  /// for at kaste.
+  /// — selve beslutningen bor i den rene [advanceLogCache].
   Map<int, PlayingCard> _updateLastByPlayer(List log) {
-    if (log.length < _lastByPlayerLogLen) {
-      _lastByPlayer = <int, PlayingCard>{};
-      _lastByPlayerLogLen = 0;
-    }
-    if (log.length > _lastByPlayerLogLen) {
-      _lastByPlayer =
-          foldLogTail(log.sublist(_lastByPlayerLogLen), _lastByPlayer);
-      _lastByPlayerLogLen = log.length;
-    }
+    final r = advanceLogCache(log, _lastByPlayer, _lastByPlayerLogLen);
+    _lastByPlayer = r.lastByPlayer;
+    _lastByPlayerLogLen = r.logLen;
     return _lastByPlayer;
   }
 

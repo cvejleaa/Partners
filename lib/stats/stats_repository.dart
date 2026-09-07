@@ -344,6 +344,12 @@ class StatsRepository {
   /// én inde i transaktionen) i stedet for N spil-læsninger. For en bruger
   /// med få spil er det nul-sum; gevinsten ligger hos de tunge brugere,
   /// hvis historik ellers voksede for evigt.
+  ///
+  /// NAVNGIVET ADFÆRDSÆNDRING (Test Manager-fund): et allerede talt spil,
+  /// som værten/admin sletter bagefter, bliver IKKE længere trukket ud af
+  /// brugerens tal — den gamle fulde genberegning gjorde det stiltiende.
+  /// Statistik er dermed historisk fast, som en logbog; vil man have
+  /// slettede spil ud, er vejen admin-"genberegn alt" ([recomputeAndSave]).
   Future<void> recomputeAndSaveOwn(String uid) async {
     final userStatsRef = _db.collection('userStats').doc(uid);
     final Map<String, dynamic>? cachedData = (await userStatsRef.get()).data();
