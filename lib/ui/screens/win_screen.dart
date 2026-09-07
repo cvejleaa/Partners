@@ -181,7 +181,7 @@ class _WinScreenState extends ConsumerState<WinScreen>
     final String hh = t.hour.toString().padLeft(2, '0');
     final String mm = t.minute.toString().padLeft(2, '0');
     final String d =
-        danishDate(t.millisecondsSinceEpoch, now, alwaysYear: true);
+        danishDate(t.millisecondsSinceEpoch, now); // MUTATION (j): alwaysYear fjernet
     return '$d kl. $hh.$mm';
   }
 

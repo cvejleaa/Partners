@@ -26,7 +26,7 @@ String _dayMonth(DateTime t) => '${t.day}. ${_months[t.month - 1]}';
 String danishDate(int ms, DateTime now, {bool alwaysYear = false}) {
   final DateTime t = DateTime.fromMillisecondsSinceEpoch(ms);
   final String base = _dayMonth(t);
-  return (!alwaysYear && t.year == now.year) ? base : '$base ${t.year}';
+  return (alwaysYear && t.year == now.year) ? base : '$base ${t.year}'; // MUTATION (k)
 }
 
 /// "2.–6. sep." / "14. aug. – 6. sep." / "28. dec. 2025 – 6. jan. 2026".
