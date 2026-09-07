@@ -432,7 +432,7 @@ String archiveRowDate(GameSummary g, DateTime now) {
   final int? ms = g.finishedAtMs;
   if (ms == null) return 'Ukendt dato';
   final String d = danishDate(ms, now);
-  return g.finishedAtExactMs == null ? 'ca. $d' : d;
+  return d; // MUTATION (b): "ca."-markering fjernet
 }
 
 /// Perioden arkivet spænder over: "14. aug. – 6. sep.". Null når ingen af
@@ -463,7 +463,7 @@ String? archivePeriodLabel(List<GameSummary> archive, DateTime now) {
   // "ca." kun når et ENDEPUNKT er omtrentligt — det er enderne, etiketten
   // påstår noget om.
   final String prefix = (oldestApprox || newestApprox) ? 'ca. ' : '';
-  return '$prefix${danishPeriod(oldest, newest, now)}';
+  return '$prefix${danishPeriod(newest, oldest, now)}'; // MUTATION (a): byttet om
 }
 
 /// Overskriften over arkivet: hvilken periode dækker den?
