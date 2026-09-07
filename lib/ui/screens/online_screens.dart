@@ -618,7 +618,9 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           // Perioden står HER, for hele arkivet — ikke på
                           // knappen, og den ændrer sig ikke når man folder ud.
-                          child: Text(archiveHeaderLabel(archiveAll, now),
+                          child: Text(
+                              archiveHeaderLabel(archiveAll, now,
+                                  OnlineService.kMyGamesArchiveWindow),
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 13)),
                         ),

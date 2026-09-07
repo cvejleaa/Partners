@@ -132,18 +132,50 @@ void main() {
   });
 
   group('overskrift og knap (det brugeren klagede over)', () {
-    final List<GameSummary> archive = <GameSummary>[
-      _over('B', exact: _ms(2026, 9, 6)),
-      _over('A', exact: _ms(2026, 8, 14)),
-    ];
+    const Duration w = OnlineService.kMyGamesArchiveWindow; // 14 dage
 
-    test('overskriften BÆRER perioden', () {
-      expect(archiveHeaderLabel(archive, _now),
+    test('normalt: overskriften siger VINDUET, ikke bare spændet', () {
+      // Listen henter kun spil afsluttet inden for vinduet, så "seneste 14
+      // dage" forklarer hvorfor der ikke står mere. Et spænd ("2.–6. sep.")
+      // ville lade brugeren tro, at det er alt hun nogensinde har spillet.
+      expect(
+          archiveHeaderLabel(<GameSummary>[
+            _over('B', exact: _ms(2026, 9, 6)),
+            _over('A', exact: _ms(2026, 9, 2)),
+          ], _now, w),
+          'Afsluttede spil · seneste 14 dage');
+    });
+
+    test('dagtallet kommer fra KONSTANTEN, ikke fra en streng', () {
+      expect(
+          archiveHeaderLabel(<GameSummary>[_over('B', exact: _ms(2026, 9, 6))],
+              _now, const Duration(days: 30)),
+          'Afsluttede spil · seneste 30 dage');
+    });
+
+    test('ældre spil end vinduet → PRÆCIST spænd, ikke en falsk påstand', () {
+      // Sker når forespørgslen falder tilbage til den ubundne udgave, fordi
+      // det sammensatte indeks endnu ikke er bygget efter et deploy. Så ville
+      // "seneste 14 dage" være løgn — 14. aug. er 24 dage før 7. sep.
+      expect(
+          archiveHeaderLabel(<GameSummary>[
+            _over('B', exact: _ms(2026, 9, 6)),
+            _over('A', exact: _ms(2026, 8, 14)),
+          ], _now, w),
           'Afsluttede spil · 14. aug. – 6. sep.');
     });
 
+    test('lige på kanten af vinduet regnes som indenfor', () {
+      // 14 dage før 7. sep. kl. 12 er 24. aug. kl. 12 — præcis cutoff.
+      expect(
+          archiveHeaderLabel(<GameSummary>[
+            _over('KANT', exact: _now.subtract(w).millisecondsSinceEpoch),
+          ], _now, w),
+          'Afsluttede spil · seneste 14 dage');
+    });
+
     test('uden datoer falder overskriften tilbage til den nøgne titel', () {
-      expect(archiveHeaderLabel(<GameSummary>[_over('X')], _now),
+      expect(archiveHeaderLabel(<GameSummary>[_over('X')], _now, w),
           'Afsluttede spil');
     });
 

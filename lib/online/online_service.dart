@@ -466,15 +466,36 @@ String? archivePeriodLabel(List<GameSummary> archive, DateTime now) {
   return '$prefix${danishPeriod(oldest, newest, now)}';
 }
 
-/// Overskriften over arkivet — med perioden for HELE arkivet, også når kun de
-/// nyeste vises.
+/// Overskriften over arkivet: hvilken periode dækker den?
 ///
-/// Bevidst uafhængig af om listen er foldet ud: et spænd, der ændrer sig når
-/// man trykker på en knap, beskriver vinduet og ikke dataene — og brugeren
-/// spurgte, hvilken periode ARKIVET dækker (QC-fund).
-String archiveHeaderLabel(List<GameSummary> archive, DateTime now) {
+/// BRUGERØNSKET: "der må ikke længere stå alle afsluttet, men skal angives for
+/// hvilken periode det er … enten at det er for de sidste 14 dage eller
+/// præcist hvilken periode det drejer sig om."
+///
+/// Normalt er svaret VINDUET, ikke spændet: listen henter kun spil afsluttet
+/// inden for [OnlineService.kMyGamesArchiveWindow], så "seneste 14 dage"
+/// forklarer hvorfor der ikke står mere. Et spænd ("2.–6. sep.") beskriver
+/// derimod kun, hvad man tilfældigvis fik spillet, og lader brugeren tro at
+/// det er alt, hun nogensinde har spillet.
+///
+/// Men vinduet må kun påstås, når det HOLDER. Falder forespørgslen tilbage til
+/// den ubundne udgave (det sammensatte indeks er ikke bygget endnu efter et
+/// deploy), kommer der ældre spil med — og så skrives det præcise spænd i
+/// stedet. Afgøres på DATA, ikke på hvilken forespørgsel vi tror der kørte.
+///
+/// [window] gives af kalderen sammen med [now], så antallet af dage står ét
+/// sted (konstanten) og ikke som "14" i en tekststreng.
+String archiveHeaderLabel(
+    List<GameSummary> archive, DateTime now, Duration window) {
   final String? period = archivePeriodLabel(archive, now);
-  return period == null ? 'Afsluttede spil' : 'Afsluttede spil · $period';
+  if (period == null) return 'Afsluttede spil';
+  final int cutoff = now.subtract(window).millisecondsSinceEpoch;
+  final bool allWithinWindow = archive.every(
+      (GameSummary g) => g.finishedAtMs == null || g.finishedAtMs! >= cutoff);
+  if (allWithinWindow) {
+    return 'Afsluttede spil · seneste ${window.inDays} dage';
+  }
+  return 'Afsluttede spil · $period';
 }
 
 /// Knappen under de nyeste: "Vis 3 ældre".
