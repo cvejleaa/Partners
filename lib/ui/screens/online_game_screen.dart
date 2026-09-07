@@ -32,6 +32,27 @@ import 'online_screens.dart';
 import 'win_navigation.dart';
 import 'win_screen.dart';
 
+/// Falder [newEntries] (kun de NYE log-indlæg siden sidste kald) ind i
+/// [previous] og returnerer resultatet — samme regel som den gamle fulde
+/// scanning (sidst spillede kort pr. spiller), men ren og O(nye indlæg) i
+/// stedet for O(hele loggen). Udskilt som top-level funktion så den kan
+/// mutationstestes uden en widget-pumpe (forbrugs-fund #65), samme mønster
+/// som replay_story.dart's rene funktioner.
+Map<int, PlayingCard> foldLogTail(
+  List newEntries,
+  Map<int, PlayingCard> previous,
+) {
+  final out = Map<int, PlayingCard>.from(previous);
+  for (final e in newEntries) {
+    final m = Map<String, dynamic>.from(e as Map);
+    if (m['type'] == 'move' && m['card'] != null) {
+      out[(m['player'] as num).toInt()] =
+          cardFromMap(Map<String, dynamic>.from(m['card'] as Map));
+    }
+  }
+  return out;
+}
+
 /// Online-skærm. Selve UI-laget (tap, valg, split-7, byt, paneler, board)
 /// kommer fra den fælles [GamePlayView] som single-player også bruger — så
 /// vi kun har ÉT sæt regler for spil-interaktioner. Denne skærm håndterer
@@ -50,6 +71,14 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   String _lastProcessed = '';
   bool _busy = false;
   bool _aiActionPending = false;
+
+  /// Cache bag [_updateLastByPlayer] — sidst spillede kort pr. spiller, plus
+  /// hvor langt i loggen det er beregnet til. Loggen er append-only, så vi
+  /// falder kun de NYE indlæg ind i stedet for at genscanne den fra bunden
+  /// ved hvert build (forbrugs-fund #65 — ellers O(spillængde²) arbejde på
+  /// tværs af et partis levetid).
+  Map<int, PlayingCard> _lastByPlayer = <int, PlayingCard>{};
+  int _lastByPlayerLogLen = 0;
 
   /// Nøgle til at fange et billede af brættet ved spil-slut.
   final GlobalKey _boardKey = GlobalKey();
@@ -339,7 +368,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           final bool isHost = d['hostUid'] == myUid;
           _isHost = isHost; // så heartbeat-timeren kun rebuild'er hos værten (#11)
           final log = (d['log'] as List? ?? <dynamic>[]);
-          final lastByPlayer = _parseLog(log);
+          final lastByPlayer = _updateLastByPlayer(log);
 
           final seenMap = (d['seen'] as Map?) ?? const <String, dynamic>{};
           final int mySeen = (seenMap[myUid] as num?)?.toInt() ?? 0;
@@ -806,16 +835,21 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // (storyFor/fieldName/stepsAdvanced) — så ordvalget kan mutationstestes
   // uden en widget-pumpe (se test/replay_story_test.dart).
 
-  Map<int, PlayingCard> _parseLog(List log) {
-    final out = <int, PlayingCard>{};
-    for (final e in log) {
-      final m = Map<String, dynamic>.from(e as Map);
-      if (m['type'] == 'move' && m['card'] != null) {
-        out[(m['player'] as num).toInt()] =
-            cardFromMap(Map<String, dynamic>.from(m['card'] as Map));
-      }
+  /// Opdaterer [_lastByPlayer] med kun de NYE log-indlæg siden sidste build
+  /// (se [foldLogTail]) i stedet for at genscanne hele [log]. Krymper loggen
+  /// uventet (fx et helt andet spil genbruger samme State-instans), starter
+  /// cachen forfra i stedet for at ramme et negativt sublist-interval.
+  Map<int, PlayingCard> _updateLastByPlayer(List log) {
+    if (log.length < _lastByPlayerLogLen) {
+      _lastByPlayer = <int, PlayingCard>{};
+      _lastByPlayerLogLen = 0;
     }
-    return out;
+    if (log.length > _lastByPlayerLogLen) {
+      _lastByPlayer =
+          foldLogTail(log.sublist(_lastByPlayerLogLen), _lastByPlayer);
+      _lastByPlayerLogLen = log.length;
+    }
+    return _lastByPlayer;
   }
 
   // ---------------------------------------------------------------------------

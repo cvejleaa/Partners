@@ -42,6 +42,32 @@ int? _tsMsOf(dynamic v) {
   return null;
 }
 
+/// Den nye cursor-værdi for [StatsRepository.recomputeAndSaveOwn]'s
+/// inkrementelle sti (forbrugs-fund #17): det seneste af enten den forrige
+/// cursor eller det nyeste af de netop talte [newGames]. Ren funktion,
+/// testbar uden Firestore — kernen i at cursoren aldrig kan REGRESSERE
+/// (hvilket ville få allerede talte spil til at blive talt med igen).
+int nextStatsCursorMs(int previousCursorMs, List<Map<String, dynamic>> newGames) {
+  if (newGames.isEmpty) return previousCursorMs;
+  final int newestNewGameMs =
+      newGames.map(gameTimeMs).reduce((a, b) => a > b ? a : b);
+  return newestNewGameMs > previousCursorMs ? newestNewGameMs : previousCursorMs;
+}
+
+/// Er cursoren PRÆCIS den vi baserede en inkrementel opdatering på? Bruges
+/// inde i den beskyttende Firestore-transaktion i
+/// [StatsRepository.recomputeAndSaveOwn]: er den IKKE, har et andet
+/// samtidigt kald for samme uid allerede talt de samme spil med, og
+/// opdateringen skal springes over i stedet for at dobbelttælle. Ren
+/// funktion, testbar uden Firestore/transaktion.
+bool statsCursorUnchanged({
+  required bool freshHasCursor,
+  required int freshCursorMs,
+  required bool expectedHasCursor,
+  required int expectedCursorMs,
+}) =>
+    freshHasCursor == expectedHasCursor && freshCursorMs == expectedCursorMs;
+
 /// Spillene "som verden så ud, da [code] blev spillet": alle spil afsluttet
 /// FØR det, plus spillet selv. Bruges til at genskabe en gammel slutrapport
 /// fra arkivet, så rekorderne er dem der gjaldt dengang — ikke dem der gælder
@@ -152,6 +178,27 @@ class StatsRepository {
         .toList();
   }
 
+  /// Som [_ownFinishedGames], men kun spil afsluttet EFTER [cursorMs] —
+  /// bruger af den inkrementelle sti i [recomputeAndSaveOwn] (forbrugs-fund
+  /// #17). Kræver et sammensat indeks (`uids` arrayContains + `finishedAt`
+  /// range, se firestore.indexes.json); kaster `failed-precondition` videre
+  /// hvis det ikke er klar, så kalderen kan falde tilbage til en fuld
+  /// genberegning.
+  Future<List<Map<String, dynamic>>> _ownFinishedGamesSince(
+      String uid, int cursorMs) async {
+    final cutoff = Timestamp.fromMillisecondsSinceEpoch(cursorMs);
+    final snap = await _db
+        .collection('games')
+        .where('uids', arrayContains: uid)
+        .where('finishedAt', isGreaterThan: cutoff)
+        .get();
+    return snap.docs
+        .map((d) => <String, dynamic>{...d.data(), 'code': d.id})
+        .where((g) => g['status'] == 'over')
+        .where(countsInStats)
+        .toList();
+  }
+
   /// Byg hele doc-json'en for ÉN bruger: top-niveau (alle spil) + byVariant.
   /// [slim] vælger den slanke ranglisteform for byVariant-posterne (til den
   /// offentlige userStatsOnline). Doc'en skrives med set() UDEN merge, så et
@@ -226,36 +273,102 @@ class StatsRepository {
 
   /// Genberegn og gem KUN [uid]'s egen stats-doc — ud fra brugerens EGNE spil.
   ///
-  /// Læser kun de spil hvor [uid] var med (via [_ownFinishedGames]), ikke hele
-  /// `games`-collectionen. Beregningen er stadig en fuld (idempotent) recompute
-  /// af brugerens tal fra bunden — inkl. byVariant — så der er ingen risiko for
-  /// dobbelt-tælling eller drift.
+  /// INKREMENTEL (forbrugs-fund #17): en cursor (`lastCountedFinishedAtMs`,
+  /// gemt på selve userStats-doc'et) husker hvor langt brugerens historik
+  /// allerede er talt med. Findes cursoren, hentes KUN spil afsluttet SIDEN
+  /// (typisk præcis ét — det der lige sluttede) via [_ownFinishedGamesSince],
+  /// og [computePartitionedStats] FORTSÆTTER fra den cachede [UserStats] i
+  /// stedet for at genlæse hele historikken. Findes cursoren ikke endnu
+  /// (første kørsel for en eksisterende bruger), eller kaster den bundne
+  /// forespørgsel `failed-precondition` (indekset ikke klar), falder den
+  /// tilbage til én fuld, ubunden genberegning — som ALTID ETABLERER
+  /// cursoren, så alle senere kald bliver inkrementelle.
+  ///
+  /// En Firestore-transaktion beskytter mod dobbelt-tælling hvis to kald for
+  /// samme uid kører samtidig (fx "spillet sluttede lige" og "staleSince fra
+  /// app-genstart" i et snævert tidsvindue): skriver kun hvis cursoren stadig
+  /// er den vi læste — er den rykket af et andet kald i mellemtiden, har det
+  /// kald allerede talt de samme spil med, og denne opdatering springes over.
   Future<void> recomputeAndSaveOwn(String uid) async {
-    final games = await _ownFinishedGames(uid);
-    final combined = computePartitionedStats(games);
+    final userStatsRef = _db.collection('userStats').doc(uid);
+    final cachedSnap = await userStatsRef.get();
+    final cachedData = cachedSnap.data();
+    final bool hasCursor = cachedData != null &&
+        cachedData.containsKey('lastCountedFinishedAtMs');
+    final int cursorMs = hasCursor
+        ? (cachedData!['lastCountedFinishedAtMs'] as num).toInt()
+        : 0;
+
+    List<Map<String, dynamic>> newGames;
+    bool bootstrapped = !hasCursor;
+    if (hasCursor) {
+      try {
+        newGames = await _ownFinishedGamesSince(uid, cursorMs);
+      } on FirebaseException catch (e) {
+        if (e.code != 'failed-precondition') rethrow;
+        newGames = await _ownFinishedGames(uid);
+        bootstrapped = true;
+      }
+    } else {
+      newGames = await _ownFinishedGames(uid);
+    }
+
+    // Kun brugt som seed når vi REELT fortsætter en tidligere beregning —
+    // en bootstrap (ny cursor eller manglende indeks) tæller ALT forfra via
+    // [_ownFinishedGames], og skal ikke også seedes (ville dobbelttælle).
+    final UserStatsDoc? cachedDoc =
+        (hasCursor && !bootstrapped) ? UserStatsDoc.fromJson(cachedData!) : null;
+    final seedTotal = <String, UserStats>{
+      if (cachedDoc != null) uid: cachedDoc.total,
+    };
+    final seedByVariant = <String, Map<String, UserStats>>{
+      if (cachedDoc != null)
+        for (final e in cachedDoc.byVariant.entries) e.key: {uid: e.value},
+    };
+
+    final combined = computePartitionedStats(newGames,
+        seedTotal: seedTotal, seedByVariant: seedByVariant);
     final UserStats? own = combined.total[uid];
     // Den offentlige rangliste bygger på PRÆCIS samme tal som profilen —
-    // kun formen er slankere. Har brugeren ingen spil, skrives 0-stats (med
-    // rigtigt navn), så gamle tal ryddes og ingen bliver hængende på
-    // ranglisten.
+    // kun formen er slankere. Har brugeren ingen spil (hverken nye eller
+    // cachede), skrives 0-stats (med rigtigt navn), så gamle tal ryddes og
+    // ingen bliver hængende på ranglisten.
     final UserStats ownOrEmpty =
-        own ?? UserStats(uid: uid, displayName: 'Spiller');
-    // ÉN batch for BEGGE dokumenter (QC-fund): det er userStats-skrivningen
-    // der rydder `staleSince`-markøren. Blev de skrevet hver for sig og det
-    // andet kald fejlede (netværksdrop på mobil), ville markøren være væk,
-    // mens den OFFENTLIGE rangliste stod tilbage med forældede tal — og
-    // intet ville nogensinde prøve igen. Atomisk: enten begge eller ingen.
-    final batch = _db.batch();
-    // Skriv ALTID userStats — også når brugeren ingen afsluttede spil har
-    // (0-stats med kendt navn). Sprang vi skrivningen over, ville
-    // `staleSince`-markøren aldrig blive ryddet, og hver app-start ville
+        own ?? cachedDoc?.total ?? UserStats(uid: uid, displayName: 'Spiller');
+
+    final int newCursorMs = nextStatsCursorMs(cursorMs, newGames);
+
+    final Map<String, dynamic> ownJson =
+        docJsonFor(ownOrEmpty, combined.byVariant, slim: false);
+    ownJson['lastCountedFinishedAtMs'] = newCursorMs;
+    final Map<String, dynamic> onlineJson =
+        docJsonFor(ownOrEmpty, combined.byVariant, slim: true);
+
+    // ÉN transaktion for BEGGE dokumenter (QC-fund) + cursor-tjekket: det er
+    // userStats-skrivningen der rydder `staleSince`-markøren. Skrives den
+    // ikke — hverken fordi det andet kald fejler, eller fordi vi opgiver pga.
+    // et kapløb — ville markøren aldrig blive ryddet, og hver app-start ville
     // koste et forgæves læs + genberegning for evigt (security-fund: kan
-    // fremprovokeres ved at markere nogen og derefter slette spillet).
-    batch.set(_db.collection('userStats').doc(uid),
-        docJsonFor(ownOrEmpty, combined.byVariant, slim: false));
-    batch.set(_db.collection('userStatsOnline').doc(uid),
-        docJsonFor(ownOrEmpty, combined.byVariant, slim: true));
-    await batch.commit();
+    // fremprovokeres ved at markere nogen og derefter slette spillet). Derfor
+    // skriver vi ALTID, også når newGames er tom — kun VÆRDIEN uændret.
+    await _db.runTransaction((tx) async {
+      final freshSnap = await tx.get(userStatsRef);
+      final freshData = freshSnap.data();
+      final bool freshHasCursor = freshData != null &&
+          freshData.containsKey('lastCountedFinishedAtMs');
+      final int freshCursor = freshHasCursor
+          ? (freshData!['lastCountedFinishedAtMs'] as num).toInt()
+          : 0;
+      if (!statsCursorUnchanged(
+          freshHasCursor: freshHasCursor,
+          freshCursorMs: freshCursor,
+          expectedHasCursor: hasCursor,
+          expectedCursorMs: cursorMs)) {
+        return; // et andet samtidigt kald vandt kapløbet — lad det stå.
+      }
+      tx.set(userStatsRef, ownJson);
+      tx.set(_db.collection('userStatsOnline').doc(uid), onlineJson);
+    });
   }
 
   /// Selvhelbredelse ved app-start: ét dokument-læs, og kun en genberegning

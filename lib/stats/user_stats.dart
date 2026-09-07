@@ -424,9 +424,31 @@ class PartitionedStats {
 /// ([_deriveGame]) og anvendes derefter på både total-spanden og spillets
 /// variant-spand ([_applyGame]). Kronologien (streaks) bevares, fordi begge
 /// spande fyldes i samme sorterede gennemløb.
-PartitionedStats computePartitionedStats(List<Map<String, dynamic>> games) {
-  final total = <String, UserStats>{};
-  final byVariant = <String, Map<String, UserStats>>{};
+///
+/// [seedTotal]/[seedByVariant] lader kaldere FORTSÆTTE en tidligere
+/// beregning i stedet for at starte forfra: [_applyGame] finder den
+/// eksisterende [UserStats]-post via `putIfAbsent` og akkumulerer VIDERE på
+/// den (streaks, summer, min/max), præcis som når [games] i forvejen
+/// indeholdt flere spil for samme bruger. `games` skal her kun være de spil
+/// der IKKE allerede indgår i seedet — brugt af
+/// `StatsRepository.recomputeAndSaveOwn` til at undgå at genlæse en brugers
+/// FULDE historik ved hver opdatering (forbrugs-fund #17). Uden et seed
+/// (default) er resultatet uændret ift. før.
+///
+/// BIVIRKNING: de [UserStats]-OBJEKTER i seedet muteres i place (samme måde
+/// som et objekt der først blev oprettet af et tidligere spil i [games]) —
+/// kald med en FRISK-deserialiseret kopi (fx via [UserStatsDoc.fromJson]),
+/// aldrig med en reference andre steder i koden stadig holder på.
+PartitionedStats computePartitionedStats(
+  List<Map<String, dynamic>> games, {
+  Map<String, UserStats>? seedTotal,
+  Map<String, Map<String, UserStats>>? seedByVariant,
+}) {
+  final total = <String, UserStats>{...?seedTotal};
+  final byVariant = <String, Map<String, UserStats>>{
+    for (final e in (seedByVariant ?? const <String, Map<String, UserStats>>{}).entries)
+      e.key: <String, UserStats>{...e.value},
+  };
 
   // Sortér kronologisk så win-streaks beregnes i rigtig rækkefølge.
   final ordered = List<Map<String, dynamic>>.from(games);
