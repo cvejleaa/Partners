@@ -67,19 +67,6 @@ void main() {
           <String>['med-dato', 'utidsstemplet']);
     });
 
-    test('limit afkorter til de nyeste — og null viser ALLE', () {
-      // "Se alle afsluttede (N)" må aldrig skjule noget tavst.
-      final List<GameSummary> all = <GameSummary>[
-        for (int i = 0; i < 12; i++) _g('g$i', finishedAtMs: i * 10),
-      ];
-      final List<GameSummary> preview = archiveOf(all, limit: 5);
-      expect(preview.length, 5);
-      expect(preview.first.code, 'g11', reason: 'nyeste øverst');
-      expect(preview.last.code, 'g7');
-      expect(archiveOf(all).length, 12);
-      // Grænsetilfælde: færre end loftet → uændret.
-      expect(archiveOf(<GameSummary>[_g('x', finishedAtMs: 1)], limit: 5).length, 1);
-    });
   });
 
   group('didIWin — makkerne sidder diagonalt', () {

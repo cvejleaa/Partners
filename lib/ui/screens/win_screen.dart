@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+
+import '../../date_labels.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app.dart';
@@ -171,14 +173,16 @@ class _WinScreenState extends ConsumerState<WinScreen>
   }
 
   /// "14. aug. 2026 kl. 20.15" — dansk, kort, uden ekstra pakker.
-  static String _playedAtLabel(DateTime t) {
-    const List<String> m = <String>[
-      'jan.', 'feb.', 'mar.', 'apr.', 'maj', 'jun.',
-      'jul.', 'aug.', 'sep.', 'okt.', 'nov.', 'dec.',
-    ];
+  ///
+  /// Datodelen kommer fra den DELTE danishDate: månedstabellen fandtes før i
+  /// to kopier. Årstallet skal ALTID med her — rapporten kan åbnes længe efter
+  /// spillet — deraf alwaysYear.
+  static String _playedAtLabel(DateTime t, DateTime now) {
     final String hh = t.hour.toString().padLeft(2, '0');
     final String mm = t.minute.toString().padLeft(2, '0');
-    return '${t.day}. ${m[t.month - 1]} ${t.year} kl. $hh.$mm';
+    final String d =
+        danishDate(t.millisecondsSinceEpoch, now, alwaysYear: true);
+    return '$d kl. $hh.$mm';
   }
 
   List<Color> get _confettiColors {
@@ -253,7 +257,7 @@ class _WinScreenState extends ConsumerState<WinScreen>
                     if (widget.archived && widget.playedAt != null) ...<Widget>[
                       const SizedBox(height: 4),
                       Text(
-                        _playedAtLabel(widget.playedAt!),
+                        _playedAtLabel(widget.playedAt!, DateTime.now()),
                         style: const TextStyle(
                             color: Color(0xFF9C8B73), fontSize: 13),
                       ),

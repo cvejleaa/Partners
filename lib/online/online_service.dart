@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../date_labels.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -102,14 +104,13 @@ bool? didIWin(int mySeat, int? winningTeamIndex) {
 /// games-collectionen, og de er i flertal, så de ville skubbe de rigtige
 /// partier ud af listen. De ses i profilen i stedet.
 /// [limit] er et VISNINGS-loft; null = alle (når brugeren folder ud).
-List<GameSummary> archiveOf(List<GameSummary> all, {int? limit}) {
-  final List<GameSummary> out = all
-      .where((GameSummary g) => g.isOver && !g.isAi)
-      .toList()
+List<GameSummary> archiveOf(List<GameSummary> all) {
+  // `limit:` er fjernet: skærmen afkortede selv med take(), så parameteren var
+  // død kode — og dens test dækkede en gren, produktionen aldrig gik ad
+  // (QC-fund).
+  return all.where((GameSummary g) => g.isOver && !g.isAi).toList()
     ..sort((GameSummary a, GameSummary b) =>
         (b.finishedAtMs ?? 0).compareTo(a.finishedAtMs ?? 0));
-  if (limit == null || out.length <= limit) return out;
-  return out.sublist(0, limit);
 }
 
 class GameSummary {
@@ -123,6 +124,7 @@ class GameSummary {
       this.variantLabel = '',
       this.variant = classicVariant,
       this.finishedAtMs,
+      this.finishedAtExactMs,
       this.winningTeamIndex,
       this.mySeat = -1,
       this.unseen = false,
@@ -168,7 +170,22 @@ class GameSummary {
   final bool needsExchange;
 
   /// Hvornår spillet sluttede (epoch-ms). Null for spil der ikke er slut.
+  ///
+  /// BEMÆRK: falder tilbage på `createdAt`, når `finishedAt` mangler — brugt
+  /// til sortering, hvor et omtrentligt tal er bedre end ingenting. Skal en
+  /// DATO VISES, så spørg [finishedAtExactMs] om den er ægte.
   final int? finishedAtMs;
+
+  /// Den EKSAKTE afslutningsdato, uden fallback. Null når vi kun kender
+  /// oprettelsen.
+  ///
+  /// To grunde til at herkomsten skal være synlig i stedet for gemt i et `??`:
+  /// `finishedAt` er først blevet skrevet siden 26. aug. 2026, så ældre spil
+  /// har den ikke — og feltet sættes med et SERVER-tidsstempel, så klientens
+  /// eget snapshot har det tomt i sekundet, hvor partiet slutter. Uden dette
+  /// felt ville skærmen roligt påstå en oprettelsesdato som afslutningsdato
+  /// (QC-fund).
+  final int? finishedAtExactMs;
 
   /// Vinderholdet (0/1) for et afsluttet spil; null hvis ukendt.
   final int? winningTeamIndex;
@@ -392,6 +409,71 @@ LobbyNeed? lobbyNeedFromDoc(Map<String, dynamic> d, String uid) {
   if (canStart) return LobbyNeed.hostToStart;
   return LobbyNeed.waiting;
 }
+
+/// Datoen på en arkiv-række: "6. sep." — eller "ca. 14. aug.", når vi kun
+/// kender spillets oprettelse.
+///
+/// "ca." er ikke pynt. Uden det står en oprettelsesdato som en
+/// afslutningsdato, og det sker i to virkelige tilfælde: spil fra før
+/// `finishedAt` blev skrevet (26. aug. 2026), og de sekunder hvor server-
+/// tidsstemplet endnu ikke er landet i klientens eget snapshot.
+String archiveRowDate(GameSummary g, DateTime now) {
+  final int? ms = g.finishedAtMs;
+  if (ms == null) return 'Ukendt dato';
+  final String d = danishDate(ms, now);
+  return g.finishedAtExactMs == null ? 'ca. $d' : d;
+}
+
+/// Perioden arkivet spænder over: "14. aug. – 6. sep.". Null når ingen af
+/// spillene har en dato overhovedet.
+///
+/// Min/max regnes over de KENDTE datoer i stedet for at læse enderne af den
+/// sorterede liste: ét dokument uden dato ligger sidst i sorteringen og ville
+/// ellers slukke etiketten for alle de øvrige (QC-fund).
+String? archivePeriodLabel(List<GameSummary> archive, DateTime now) {
+  int? oldest;
+  int? newest;
+  bool oldestApprox = false;
+  bool newestApprox = false;
+  for (final GameSummary g in archive) {
+    final int? ms = g.finishedAtMs;
+    if (ms == null) continue;
+    final bool approx = g.finishedAtExactMs == null;
+    if (oldest == null || ms < oldest) {
+      oldest = ms;
+      oldestApprox = approx;
+    }
+    if (newest == null || ms > newest) {
+      newest = ms;
+      newestApprox = approx;
+    }
+  }
+  if (oldest == null || newest == null) return null;
+  // "ca." kun når et ENDEPUNKT er omtrentligt — det er enderne, etiketten
+  // påstår noget om.
+  final String prefix = (oldestApprox || newestApprox) ? 'ca. ' : '';
+  return '$prefix${danishPeriod(oldest, newest, now)}';
+}
+
+/// Overskriften over arkivet — med perioden for HELE arkivet, også når kun de
+/// nyeste vises.
+///
+/// Bevidst uafhængig af om listen er foldet ud: et spænd, der ændrer sig når
+/// man trykker på en knap, beskriver vinduet og ikke dataene — og brugeren
+/// spurgte, hvilken periode ARKIVET dækker (QC-fund).
+String archiveHeaderLabel(List<GameSummary> archive, DateTime now) {
+  final String? period = archivePeriodLabel(archive, now);
+  return period == null ? 'Afsluttede spil' : 'Afsluttede spil · $period';
+}
+
+/// Knappen under de nyeste: "Vis 3 ældre".
+///
+/// Ordet "alle" er væk efter brugerens ønske — og teksten svarer nu på det,
+/// man faktisk spørger om før trykket: hvor meget mere er der? Perioden står i
+/// overskriften, så knappen behøver ikke gentage en dato.
+/// "ældre" bøjes ikke i tal på dansk, så der er ingen ental/flertal-gren at
+/// tage fejl af: "Vis 1 ældre", "Vis 3 ældre".
+String archiveMoreLabel(int hidden) => 'Vis $hidden ældre';
 
 /// Lobbyerne på "Mine spil", mest presserende først.
 ///
@@ -1501,6 +1583,7 @@ GameSummary gameSummaryFromDoc(
       variantLabel: variantDisplayName(variant, d['cardRulesVariants']),
       variant: variant,
       finishedAtMs: _tsMs(d['finishedAt']) ?? createdAtMs,
+      finishedAtExactMs: _tsMs(d['finishedAt']),
       winningTeamIndex: winner,
       mySeat: mySeat,
       unseen: status == 'over' && mySeen < logLen,

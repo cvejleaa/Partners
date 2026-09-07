@@ -278,7 +278,9 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
   /// her er dato og deltagere det man leder efter, ikke "tryk for at
   /// genindtræde". Ingen papirkurv: at slette et afsluttet spil ville også
   /// fjerne grundlaget for statistikken for ALLE fire deltagere.
-  Widget _archiveTile(BuildContext context, GameSummary g) {
+  /// [now] gives af kalderen — se date_labels: to etiketter i samme frame må
+  /// ikke kunne lande på hver sin side af et årsskifte.
+  Widget _archiveTile(BuildContext context, GameSummary g, DateTime now) {
     final List<String> participants = g.playerNames
         .where((String n) => n.trim().isNotEmpty && n != 'Åben')
         .toList();
@@ -297,7 +299,7 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
         dense: true,
         leading: VariantBadge(variant: g.variant, compact: true),
         title: Text(
-          '${_archiveDate(g.finishedAtMs)} · $result',
+          '${archiveRowDate(g, now)} · $result',
           style: TextStyle(
               fontWeight: g.unseen ? FontWeight.bold : FontWeight.normal),
         ),
@@ -324,18 +326,6 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: const TextStyle(fontSize: 13));
-
-  /// "14. aug." / "14. aug. 2025" (år kun når det ikke er i år).
-  static String _archiveDate(int? ms) {
-    if (ms == null) return 'Ukendt dato';
-    final DateTime t = DateTime.fromMillisecondsSinceEpoch(ms);
-    const List<String> m = <String>[
-      'jan.', 'feb.', 'mar.', 'apr.', 'maj', 'jun.',
-      'jul.', 'aug.', 'sep.', 'okt.', 'nov.', 'dec.',
-    ];
-    final String base = '${t.day}. ${m[t.month - 1]}';
-    return t.year == DateTime.now().year ? base : '$base ${t.year}';
-  }
 
   /// [now] gives af kalderen, ikke læses her: to rækker bygget i samme frame
   /// skal ikke kunne lande på hver sin side af en tærskel (QC-fund).
@@ -624,21 +614,24 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                         const SizedBox(height: 12),
                       ],
                       if (archive.isNotEmpty) ...<Widget>[
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4),
-                          child: Text('Afsluttede spil',
-                              style: TextStyle(
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          // Perioden står HER, for hele arkivet — ikke på
+                          // knappen, og den ændrer sig ikke når man folder ud.
+                          child: Text(archiveHeaderLabel(archiveAll, now),
+                              style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 13)),
                         ),
-                        for (final g in archive) _archiveTile(context, g),
+                        for (final g in archive)
+                          _archiveTile(context, g, now),
                         if (!_showAllArchive &&
                             archiveAll.length > archive.length)
                           // Aldrig tavs afkortning: sig hvor mange der er.
                           TextButton(
                             onPressed: () =>
                                 setState(() => _showAllArchive = true),
-                            child: Text(
-                                'Se alle afsluttede (${archiveAll.length})'),
+                            child: Text(archiveMoreLabel(
+                                archiveAll.length - archive.length)),
                           ),
                       ],
                     ],
