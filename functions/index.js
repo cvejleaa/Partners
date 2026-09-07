@@ -63,9 +63,6 @@ exports.onInboxCreate = onDocumentCreated(
     if (invite.type !== "gameInvite") return;
 
     const uid = event.params.uid;
-    const userSnap = await db.collection("users").doc(uid).get();
-    const tokens = (userSnap.data() || {}).fcmTokens || [];
-    if (!tokens.length) return;
 
     // Defensiv validering af klient-leveret indhold, så en manipuleret
     // afsender ikke kan lave vildledende/overlange notifikationer eller
@@ -92,12 +89,24 @@ exports.onInboxCreate = onDocumentCreated(
   }
 );
 
-/// Notificér en spiller når det bliver DERES tur i et online-spil — men kun
-/// hvis de IKKE er aktive på spillepladen (deres presence-stempel er forældet).
-/// Trigges når spil-dokumentet opdateres; kun rigtige turn-skift (ændret
-/// currentPlayerIndex/hånd i play-fasen) fører til en push. Browseren/FCM
-/// afgør selv om beskeden vises i appen (synlig fane) eller som
-/// systemnotifikation (baggrund), så vi behøver ikke gætte på presence.
+/// To ting sker på SAMME skrivning til games/{code}, i én invocation
+/// (tidligere to separate onDocumentUpdated-triggers på samme sti — dobbelt
+/// invocation-count for hver eneste skrivning uden funktionel gevinst,
+/// forbrugs-fund #37):
+///
+/// 1. "Din tur"-push: kun rigtige turn-skift (ændret currentPlayerIndex/hånd
+///    i play-fasen) fører til en push. Browseren/FCM afgør selv om beskeden
+///    vises i appen (synlig fane) eller som systemnotifikation (baggrund),
+///    så vi behøver ikke gætte på presence.
+/// 2. Stats-forældelse ved spil-slut: en brugers stats skrives kun af
+///    brugerens EGEN klient (Firestore-reglerne tillader kun at skrive sit
+///    eget dokument), og kun mens dén klient ser spillet slutte. Lå
+///    makkerens app i baggrunden, blev deres tal aldrig opdateret — de
+///    manglede så i variant-toplisterne, indtil en admin genberegnede alt.
+///    Serveren sætter derfor en markør, og hver klient genberegner sine
+///    EGNE tal ved næste app-start (StatsRepository.recomputeOwnIfStale).
+///    Genberegningen overskriver dokumentet uden markøren, så den rydder
+///    sig selv.
 
 exports.onGameTurn = onDocumentUpdated(
   {
@@ -113,87 +122,68 @@ exports.onGameTurn = onDocumentUpdated(
   async (event) => {
     const before = event.data.before.data() || {};
     const after = event.data.after.data() || {};
-    if (after.status !== "playing") return;
 
-    const aState = after.state || {};
-    const bState = before.state || {};
-    if (aState.ph !== "play") return;
-
-    // Kun ægte turn-skift: currentPlayerIndex eller hånd ændret.
-    const sameTurn =
-      aState.cp === bState.cp && aState.hn === bState.hn;
-    if (sameTurn) return;
-
-    const seat = aState.cp;
-    const uids = after.uids || [];
-    const uid = uids[seat];
-    if (!uid) return; // AI-plads
-
-    // Vi undertrykker IKKE længere ud fra vores eget presence-gæt (en
-    // baggrunds-PWA kunne blive ved med at melde "aktiv", så push'en udeblev
-    // eller kom for sent). I stedet sender vi altid ved tur-skift og lader
-    // browseren/FCM selv route: er fanen SYNLIG lander beskeden i appen
-    // (onMessage) uden systemnotifikation; er den i baggrunden/lukket viser
-    // service-workeren en systemnotifikation. Det er den pålidelige mekanisme.
-    const code = event.params.code;
-    // DATA-only: service-workeren viser notifikationen (én gang) og håndterer
-    // klik → åbner selve spillet (/?game=<code>).
-    await pushToUser(uid, {
-      data: {
-        type: "turn",
-        gameCode: code,
-        title: "Partners — din tur",
-        body: `Det er din tur i spil ${code}`,
-      },
-      webpush: {headers: {Urgency: "high", TTL: "300"}},
-    });
-  }
-);
-
-// Ved spil-slut: markér ALLE deltageres statistik som forældet.
-//
-// Hvorfor: en brugers stats skrives kun af brugerens EGEN klient (Firestore-
-// reglerne tillader kun at skrive sit eget dokument), og kun mens dén klient
-// ser spillet slutte. Lå makkerens app i baggrunden, blev deres tal aldrig
-// opdateret — de manglede så i variant-toplisterne, indtil en admin
-// genberegnede alt. Nu sætter serveren en markør, og hver klient genberegner
-// sine EGNE tal ved næste app-start (StatsRepository.recomputeOwnIfStale).
-// Genberegningen overskriver dokumentet uden markøren, så den rydder sig selv.
-//
-// merge:true, så vi kun rører 'staleSince' og aldrig kan ødelægge tal.
-exports.onGameOver = onDocumentUpdated(
-  {
-    document: "games/{code}",
-    database: "partners",
-    region: "europe-west1",
-    memory: "256MiB",
-    timeoutSeconds: 30,
-    maxInstances: 10,
-  },
-  async (event) => {
-    const before = event.data.before.data() || {};
-    const after = event.data.after.data() || {};
-    if (!isGameOverTransition(before, after)) return;
-    const uids = staleTargets(after);
-    if (!uids.length) return;
-    // allSettled, ikke all: én afvist skrivning må ikke koste de ØVRIGE
-    // deltagere deres markering (og dermed deres opdaterede statistik).
-    const results = await Promise.allSettled(
-      uids.map((uid) =>
-        db
-          .collection("userStats")
-          .doc(uid)
-          .set({staleSince: FieldValue.serverTimestamp()}, {merge: true})
-      )
-    );
-    results.forEach((r, i) => {
-      if (r.status === "rejected") {
-        // Synlig i Cloud Functions-loggen — ellers kunne markeringen kun
-        // fejle tavst.
-        console.error(
-          `[onGameOver] kunne ikke markere ${uids[i]}: ${r.reason}`
-        );
+    // -- 1. "Din tur"-push. --------------------------------------------
+    if (after.status === "playing") {
+      const aState = after.state || {};
+      const bState = before.state || {};
+      // Kun ægte turn-skift: currentPlayerIndex eller hånd ændret.
+      const sameTurn =
+        aState.cp === bState.cp && aState.hn === bState.hn;
+      if (aState.ph === "play" && !sameTurn) {
+        const seat = aState.cp;
+        const seatUids = after.uids || [];
+        const turnUid = seatUids[seat];
+        if (turnUid) { // ellers AI-plads
+          // Vi undertrykker IKKE ud fra vores eget presence-gæt (en
+          // baggrunds-PWA kunne blive ved med at melde "aktiv", så push'en
+          // udeblev eller kom for sent). I stedet sender vi altid ved
+          // tur-skift og lader browseren/FCM selv route: er fanen SYNLIG
+          // lander beskeden i appen (onMessage) uden systemnotifikation; er
+          // den i baggrunden/lukket viser service-workeren en
+          // systemnotifikation. Det er den pålidelige mekanisme.
+          const code = event.params.code;
+          // DATA-only: service-workeren viser notifikationen (én gang) og
+          // håndterer klik → åbner selve spillet (/?game=<code>).
+          await pushToUser(turnUid, {
+            data: {
+              type: "turn",
+              gameCode: code,
+              title: "Partners — din tur",
+              body: `Det er din tur i spil ${code}`,
+            },
+            webpush: {headers: {Urgency: "high", TTL: "300"}},
+          });
+        }
       }
-    });
+    }
+
+    // -- 2. Stats-forældelse ved spil-slut. merge:true, så vi kun rører --
+    // -- 'staleSince' og aldrig kan ødelægge tal. -----------------------
+    if (isGameOverTransition(before, after)) {
+      const staleUids = staleTargets(after);
+      if (staleUids.length) {
+        // allSettled, ikke all: én afvist skrivning må ikke koste de
+        // ØVRIGE deltagere deres markering (og dermed deres opdaterede
+        // statistik).
+        const results = await Promise.allSettled(
+          staleUids.map((uid) =>
+            db
+              .collection("userStats")
+              .doc(uid)
+              .set({staleSince: FieldValue.serverTimestamp()}, {merge: true})
+          )
+        );
+        results.forEach((r, i) => {
+          if (r.status === "rejected") {
+            // Synlig i Cloud Functions-loggen — ellers kunne markeringen
+            // kun fejle tavst.
+            console.error(
+              `[onGameTurn] kunne ikke markere ${staleUids[i]}: ${r.reason}`
+            );
+          }
+        });
+      }
+    }
   }
 );

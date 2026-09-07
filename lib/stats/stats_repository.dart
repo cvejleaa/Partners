@@ -20,7 +20,8 @@ import 'user_stats.dart';
 
 /// Har serveren markeret brugerens statistik som forældet?
 ///
-/// Markøren `staleSince` sættes af Cloud Function'en onGameOver, når et spil
+/// Markøren `staleSince` sættes af Cloud Function'en onGameTurn (som også
+/// dækker spil-slut-overgangen, se functions/index.js), når et spil
 /// slutter — for ALLE deltagere. Den findes, fordi en brugers tal kun kan
 /// skrives af brugerens egen klient (Firestore-reglerne), og kun mens dén
 /// klient ser spillet slutte: lå makkerens app i baggrunden, blev deres tal

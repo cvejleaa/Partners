@@ -233,6 +233,23 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
 
+      - name: Deploy Firestore-indekser til navngivet database 'partners'
+        # Nye/ændrede indekser BYGGER asynkront efter deploy (kan tage et
+        # øjeblik) — hosting (ovenfor) kan derfor nå at servere kode, der
+        # forudsætter et indeks, FØR det er klart. myGamesFor() i
+        # online_service.dart har et selvhelbredende fallback for netop
+        # dette (failed-precondition → ubunden forespørgsel), så trinnet må
+        # gerne fejle uden at fælde resten af udrulningen.
+        continue-on-error: true
+        if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
+        run: |
+          firebase deploy \
+            --only "firestore:partners:indexes" \
+            --project "$FIREBASE_PROJECT_ID" \
+            --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/firebase-sa.json
+
       - name: Installér Cloud Functions deps
         if: env.HAS_SA == 'true' && (github.event_name == 'push' || inputs.deploy)
         run: npm --prefix functions install
