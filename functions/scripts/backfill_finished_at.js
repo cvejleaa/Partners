@@ -14,44 +14,84 @@
 // spil"-liste, permanent, uden fejl nogen steder.
 //
 // Dette script er IKKE kørt af Claude — der er ingen produktions-Firebase-
-// adgang i det miljø ændringen blev lavet i. Et menneske med adgang til
-// projektets service-account skal køre det (eller vurdere om risikoen —
-// formentlig et lille antal spil fra en kort periode tidligt i appens
-// levetid — er acceptabel uden backfill).
+// adgang i det miljø ændringen blev lavet i. Sikkerheds-gennemgangen af
+// selve logikken (kun `finishedAt` skrevet via merge, aldrig noget afledt
+// af dokumentindhold, ingen sti-injektion, trigger-bivirkningen efterprøvet
+// mod onGameTurn) er OK — men KØR DRY RUN FØRST og læs outputtet, jf.
+// CLAUDE.md "tør-kørsel først på alt der skriver i produktionsdata".
 //
 // Brug:
 //   GOOGLE_APPLICATION_CREDENTIALS=/sti/til/service-account.json \
 //     node functions/scripts/backfill_finished_at.js
 //       — DRY RUN (default): tæller og lister ramte spil, skriver INTET.
-//   ... node functions/scripts/backfill_finished_at.js --apply
+//   ... node functions/scripts/backfill_finished_at.js --apply --project=<forventet-projekt-id>
 //       — Skriver `finishedAt` for de ramte spil (se fallback-strategi
-//         nedenfor), én dokument-opdatering ad gangen, med et resumé
-//         til sidst.
+//         nedenfor). Kræver EKSPLICIT --project=<id>, der skal matche det
+//         projekt legitimationsoplysningerne faktisk peger på — sikkerhedsnet
+//         mod at ramme det forkerte projekt ved en fejl i miljøvariablen.
 //
 // Fallback-strategi for den manglende dato: `createdAt` findes IKKE for
 // disse spil heller (samme commit). Det ENESTE tidsstempel Firestore
 // garanterer på ethvert dokument — uanset app-kode — er dokumentets egen
 // `updateTime` (sat af Firestore selv ved hver skrivning). For et
 // `status: 'over'`-dokument er `updateTime` typisk selve
-// spil-slut-skrivningen (eller en skrivning kort efter, fx `seen`), altså
-// den bedst tilgængelige tilnærmelse til "hvornår sluttede spillet".
+// spil-slut-skrivningen, MEN: er dokumentet rørt SENERE (fx en forsinket
+// `seen`-flush), bliver `updateTime` nyere end det reelle sluttidspunkt —
+// spillet kan derfor ende med at se "friskere" ud end det er. Gennemse
+// dry-run-listen for datoer der virker for nye, før du kører --apply.
+//
+// Upagineret læsning undgås bevidst: alle `status:'over'`-dokumenter hentes
+// i sider af PAGE_SIZE ad gangen (ikke ét stort kald), så scriptet ikke
+// OOM'er eller laver én kæmpe fakturering på en stor kollektion.
 
-const {initializeApp} = require("firebase-admin/app");
+const {initializeApp, getApp} = require("firebase-admin/app");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 
 const APPLY = process.argv.includes("--apply");
+const PROJECT_ARG = process.argv.find((a) => a.startsWith("--project="));
+const PAGE_SIZE = 500;
 
 async function main() {
   initializeApp();
   const db = getFirestore("partners");
 
-  const snap = await db.collection("games")
-      .where("status", "==", "over")
-      .get();
+  if (APPLY) {
+    const actualProjectId = getApp().options.projectId;
+    const expectedProjectId = PROJECT_ARG && PROJECT_ARG.slice("--project=".length);
+    if (!expectedProjectId) {
+      throw new Error(
+          "--apply kræver --project=<forventet-projekt-id> som eksplicit " +
+          "sikkerhedsnet mod at skrive i det forkerte projekt.");
+    }
+    if (expectedProjectId !== actualProjectId) {
+      throw new Error(
+          `--project=${expectedProjectId} matcher IKKE det projekt ` +
+          `legitimationsoplysningerne peger på (${actualProjectId}). Stoppet ` +
+          "uden at skrive noget.");
+    }
+    console.log(`Bekræftet projekt: ${actualProjectId}`);
+  }
 
-  const missing = snap.docs.filter((d) => d.get("finishedAt") == null);
+  const missing = [];
+  let totalOver = 0;
+  let cursor = null;
+  for (;;) {
+    let q = db.collection("games")
+        .where("status", "==", "over")
+        .orderBy("__name__")
+        .limit(PAGE_SIZE);
+    if (cursor) q = q.startAfter(cursor);
+    const page = await q.get();
+    if (page.empty) break;
+    totalOver += page.size;
+    for (const d of page.docs) {
+      if (d.get("finishedAt") == null) missing.push(d);
+    }
+    cursor = page.docs[page.docs.length - 1];
+    if (page.size < PAGE_SIZE) break;
+  }
 
-  console.log(`Afsluttede spil i alt: ${snap.size}`);
+  console.log(`Afsluttede spil i alt: ${totalOver}`);
   console.log(`Mangler finishedAt:    ${missing.length}`);
   if (!missing.length) {
     console.log("Intet at rette.");
@@ -65,7 +105,7 @@ async function main() {
   }
 
   if (!APPLY) {
-    console.log("\nDRY RUN — intet skrevet. Kør med --apply for at rette.");
+    console.log("\nDRY RUN — intet skrevet. Kør med --apply --project=<id> for at rette.");
     return;
   }
 

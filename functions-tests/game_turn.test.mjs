@@ -58,6 +58,33 @@ test("turnPushTarget — AI-plads (intet uid i sædet) giver ingen push", () => 
   assert.equal(turnPushTarget(before, after), null);
 });
 
+test("turnPushTarget — ANGREB: fabrikeret cp (prototype-nøgle) rammer ikke Array/Object-prototypen", () => {
+  // Security-fund: `state` skrives af klienten, reglerne validerer den ikke.
+  // Uden Number.isInteger-tjekket ville `uids['__proto__']` returnere
+  // Array.prototype (et truthy objekt) i stedet for undefined.
+  // MUTATION: fjern `!Number.isInteger(cp) || cp < 0`-tjekket → rød.
+  const before = {status: "playing", state: {ph: "play", cp: 0, hn: 0}};
+  const after = {
+    status: "playing",
+    state: {ph: "play", cp: "__proto__", hn: 1},
+    uids: [A, B, C, D],
+  };
+  assert.equal(turnPushTarget(before, after), null);
+});
+
+test("turnPushTarget — ANGREB: et sti-agtigt uid i sædet returneres ikke", () => {
+  // Samme klasse fejl som staleTargets' UID_FORM-tjek beskytter imod
+  // (game_over.test.mjs) — her genbrugt, ikke duplikeret løsere.
+  // MUTATION: fjern UID_FORM-tjekket → denne bliver rød.
+  const before = {status: "playing", state: {ph: "play", cp: 0, hn: 0}};
+  const after = {
+    status: "playing",
+    state: {ph: "play", cp: 1, hn: 1},
+    uids: [A, "../../config/cardRules", C, D],
+  };
+  assert.equal(turnPushTarget(before, after), null);
+});
+
 test("handleGameTurnUpdate — sender push VED turn-skift, markerer IKKE stats", async () => {
   const pushed = [];
   const staled = [];

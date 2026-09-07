@@ -49,4 +49,4 @@ function staleTargets(game, maxSeats = 4) {
   return Array.from(new Set(real)).slice(0, maxSeats);
 }
 
-module.exports = {isGameOverTransition, staleTargets};
+module.exports = {isGameOverTransition, staleTargets, UID_FORM};
