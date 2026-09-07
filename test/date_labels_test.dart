@@ -9,7 +9,7 @@
 // eller vendes om, og suiten ville forblive grøn.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:partners/date_labels.dart';
+import 'package:partners/utils/date_labels.dart';
 
 void main() {
   group('danishDate', () {
@@ -24,22 +24,27 @@ void main() {
       expect(danishDate(ms(2025, 8, 14), now), '14. aug. 2025');
     });
 
-    test('alwaysYear: true — årstal med SELV i indeværende år', () {
-      // Det ENESTE alwaysYear ændrer: uden den ville dette være '14. aug.',
-      // ligesom standard-testen ovenfor. Slutrapporten (win_screen) sætter
-      // denne, fordi rapporten kan åbnes længe efter spillet, hvor "i år" er
-      // forkert.
-      expect(danishDate(ms(2026, 8, 14), now, alwaysYear: true),
-          '14. aug. 2026');
+  });
+
+  // `alwaysYear:`-flaget blev erstattet af en egen funktion (QC-fund): med
+  // flaget skulle kalderen give et `now`, funktionen ignorerede. Dækningen er
+  // den samme, målet er bare flyttet.
+  group('danishDateWithYear', () {
+    int ms(int y, int m, int d) => DateTime(y, m, d, 12).millisecondsSinceEpoch;
+
+    test('årstal med SELV i indeværende år', () {
+      // Det ENESTE denne funktion gør anderledes end danishDate: uden den
+      // ville dette være '14. aug.'. Slutrapporten bruger den, fordi den kan
+      // åbnes længe efter spillet, hvor "i år" er forkert.
+      expect(danishDateWithYear(ms(2026, 8, 14)), '14. aug. 2026');
     });
 
-    test('alwaysYear: true — forgangent år er stadig bare årstallet med', () {
-      expect(danishDate(ms(2025, 8, 14), now, alwaysYear: true),
-          '14. aug. 2025');
+    test('forgangent år er stadig bare årstallet med', () {
+      expect(danishDateWithYear(ms(2025, 8, 14)), '14. aug. 2025');
     });
 
-    test('alwaysYear ignorerer IKKE dag/måned', () {
-      expect(danishDate(ms(2026, 1, 1), now, alwaysYear: true), '1. jan. 2026');
+    test('ignorerer IKKE dag/måned', () {
+      expect(danishDateWithYear(ms(2026, 1, 1)), '1. jan. 2026');
     });
   });
 }

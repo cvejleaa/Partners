@@ -2,13 +2,12 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../date_labels.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../utils/date_labels.dart';
 import '../game/ai/ai_player.dart';
 import '../game/ai/heuristic_ai.dart';
 import '../game/card_rules.dart';
@@ -104,7 +103,6 @@ bool? didIWin(int mySeat, int? winningTeamIndex) {
 /// Solospil mod computeren (isAi) holdes UDE — de gemmes også i
 /// games-collectionen, og de er i flertal, så de ville skubbe de rigtige
 /// partier ud af listen. De ses i profilen i stedet.
-/// [limit] er et VISNINGS-loft; null = alle (når brugeren folder ud).
 List<GameSummary> archiveOf(List<GameSummary> all) {
   // `limit:` er fjernet: skærmen afkortede selv med take(), så parameteren var
   // død kode — og dens test dækkede en gren, produktionen aldrig gik ad
@@ -460,10 +458,11 @@ String? archivePeriodLabel(List<GameSummary> archive, DateTime now) {
     }
   }
   if (oldest == null || newest == null) return null;
-  // "ca." kun når et ENDEPUNKT er omtrentligt — det er enderne, etiketten
-  // påstår noget om.
-  final String prefix = (oldestApprox || newestApprox) ? 'ca. ' : '';
-  return '$prefix${danishPeriod(oldest, newest, now)}';
+  // "ca." sættes ved PRÆCIS den ende, der er omtrentlig — ikke som ét fælles
+  // forbehold foran hele perioden. Det er enderne, etiketten påstår noget om,
+  // og et forbehold, der ikke siger HVAD der er usikkert, er ingen oplysning.
+  return danishPeriod(oldest, newest, now,
+      fromApprox: oldestApprox, toApprox: newestApprox);
 }
 
 /// Overskriften over arkivet: hvilken periode dækker den?
@@ -504,8 +503,22 @@ String archiveHeaderLabel(
 /// man faktisk spørger om før trykket: hvor meget mere er der? Perioden står i
 /// overskriften, så knappen behøver ikke gentage en dato.
 /// "ældre" bøjes ikke i tal på dansk, så der er ingen ental/flertal-gren at
-/// tage fejl af: "Vis 1 ældre", "Vis 3 ældre".
-String archiveMoreLabel(int hidden) => 'Vis $hidden ældre';
+/// tage fejl af: "Vis 1 ældre spil", "Vis 3 ældre spil". Og "spil" skal med —
+/// "Vis 3 ældre" læner sig helt på at stå lige under en liste (QC-fund).
+String archiveMoreLabel(int hidden) => 'Vis $hidden ældre spil';
+
+/// Hvor mange afsluttede spil der vises, før man folder ud.
+const int kArchivePreview = 5;
+
+/// Udsnittet af arkivet, der vises lige nu.
+///
+/// Afkortningen lå før som `archiveAll.take(_kArchivePreview)` inde i
+/// skærmens build og var derfor HELT udækket — det blev synligt, da den døde
+/// `archiveOf(limit:)` blev fjernet og Test Manager ledte efter, hvad dens
+/// test egentlig dækkede. Som ren funktion kan den mutationstestes.
+List<GameSummary> archivePreview(List<GameSummary> all,
+        {required bool showAll, int limit = kArchivePreview}) =>
+    showAll ? all : all.take(limit).toList();
 
 /// Lobbyerne på "Mine spil", mest presserende først.
 ///

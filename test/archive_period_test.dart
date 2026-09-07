@@ -7,9 +7,17 @@
 // finishedAtMs falder tilbage på createdAt. Derfor testes herkomsten lige så
 // hårdt som formatet — et pænt formateret tal, der påstår noget forkert, er
 // værre end intet tal.
+//
+// NAVNGIVET (Test Manager-fund): efter at "Mine spil" blev afgrænset til 14
+// dage, filtrerer den bundne forespørgsel på `finishedAt >= cutoff`, og et
+// Firestore-range-filter matcher kun dokumenter hvor feltet FINDES. Et spil
+// uden `finishedAt` kan derfor ikke nå skærmen i normaltilstand — "ca." er nu
+// en FALLBACK-tilstand (mens det sammensatte indeks bygger efter et deploy,
+// og for spil afsluttet før feltet fandtes), ikke normalvejen. Testene her er
+// altså ægte, men de dækker en sti, produktionen sjældent går ad.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:partners/date_labels.dart';
+import 'package:partners/utils/date_labels.dart';
 import 'package:partners/online/online_service.dart';
 
 /// Fast "nu" — ALDRIG DateTime.now(): en test på "14. aug." ville ellers være
@@ -89,7 +97,7 @@ void main() {
           '2.–6. sep.');
     });
 
-    test('omtrentligt ENDEPUNKT markeres med "ca."', () {
+    test('omtrentlig ÆLDSTE markeres — i den ÆLDSTE ende', () {
       // Ældste spil kender kun sin oprettelse — perioden må ikke påstå, at
       // det er en afslutningsdato.
       expect(
@@ -98,6 +106,38 @@ void main() {
             _over('GAMMEL', fallback: _ms(2026, 8, 14)),
           ], _now),
           'ca. 14. aug. – 6. sep.');
+    });
+
+    test('omtrentlig NYESTE markeres i den NYESTE ende, ikke forrest', () {
+      // KERNEN i QC-fundet: med ét fælles "ca." foran hele perioden gav dette
+      // den SAMME streng som testen ovenfor — forbeholdet sad visuelt på
+      // 14. aug., selvom det var 6. sep., der var gættet.
+      final String? s = archivePeriodLabel(<GameSummary>[
+        _over('NY', fallback: _ms(2026, 9, 6)),
+        _over('GAMMEL', exact: _ms(2026, 8, 14)),
+      ], _now);
+      expect(s, '14. aug. – ca. 6. sep.');
+      expect(s!.startsWith('ca.'), isFalse);
+    });
+
+    test('begge ender omtrentlige → forbehold i begge ender', () {
+      expect(
+          archivePeriodLabel(<GameSummary>[
+            _over('NY', fallback: _ms(2026, 9, 6)),
+            _over('GAMMEL', fallback: _ms(2026, 8, 14)),
+          ], _now),
+          'ca. 14. aug. – ca. 6. sep.');
+    });
+
+    test('samme måned + forbehold → måneden skrives ud i BEGGE ender', () {
+      // Den korte form "ca. 2.–6. sep." ville igen være tvetydig om, hvilken
+      // ende der er usikker.
+      expect(
+          archivePeriodLabel(<GameSummary>[
+            _over('NY', exact: _ms(2026, 9, 6)),
+            _over('GAMMEL', fallback: _ms(2026, 9, 2)),
+          ], _now),
+          'ca. 2. sep. – 6. sep.');
     });
 
     test('omtrentligt MIDT i arkivet markeres IKKE', () {
@@ -109,6 +149,40 @@ void main() {
             _over('GAMMEL', exact: _ms(2026, 8, 14)),
           ], _now),
           '14. aug. – 6. sep.');
+    });
+  });
+
+  // Afkortningen til 5 lå før inde i skærmens build og var HELT udækket —
+  // Test Manager fandt hullet, da den døde archiveOf(limit:) blev fjernet og
+  // den ledte efter, hvad dens test egentlig dækkede.
+  group('archivePreview', () {
+    List<GameSummary> many(int n) => <GameSummary>[
+          for (int i = 0; i < n; i++)
+            _over('S$i', exact: _ms(2026, 9, 1) + i),
+        ];
+
+    test('sammenfoldet: kun de første 5', () {
+      expect(archivePreview(many(8), showAll: false).length, 5);
+    });
+
+    test('udfoldet: alle', () {
+      expect(archivePreview(many(8), showAll: true).length, 8);
+    });
+
+    test('færre end loftet afkortes ikke', () {
+      expect(archivePreview(many(3), showAll: false).length, 3);
+    });
+
+    test('afkorter FORFRA — rækkefølgen bevares', () {
+      // Listen er allerede sorteret nyeste først af archiveOf; et udsnit
+      // bagfra ville vise de ÆLDSTE fem under overskriften "nyeste først".
+      expect(
+          archivePreview(many(8), showAll: false).map((GameSummary g) => g.code),
+          <String>['S0', 'S1', 'S2', 'S3', 'S4']);
+    });
+
+    test('loftet er 5 — samme tal som skærmen viser', () {
+      expect(kArchivePreview, 5);
     });
   });
 
@@ -184,13 +258,13 @@ void main() {
       // ord. En positiv test på den nye tekst ville være grøn, selvom den
       // gamle stod et andet sted på skærmen.
       final String s = archiveMoreLabel(3);
-      expect(s, 'Vis 3 ældre');
+      expect(s, 'Vis 3 ældre spil');
       expect(s.contains('alle'), isFalse);
       expect(s.contains('afsluttede'), isFalse);
     });
 
     test('ental bøjes ikke — "ældre" er ens', () {
-      expect(archiveMoreLabel(1), 'Vis 1 ældre');
+      expect(archiveMoreLabel(1), 'Vis 1 ældre spil');
     });
   });
 }

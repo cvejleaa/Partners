@@ -127,14 +127,16 @@ void main() {
 
   testWidgets(
       'E: spilletidspunktet viser ÅRSTAL, selv når det er indeværende år '
-      '(alwaysYear — Test Manager-fund: ingen test kaldte danishDate med '
-      'alwaysYear, hverken direkte eller via denne skærm)',
+      '(Test Manager-fund: ingen test dækkede datoen på denne skærm — '
+      'hverken direkte eller gennem widget-træet)',
       (WidgetTester tester) async {
-    // playedAt er 25. aug. 2026 — danishDate uden alwaysYear ville skrive
-    // "25. aug." (uden årstal), fordi funktionen ikke kan vide at "nu" i
-    // denne test-kørsel ikke er 2026. alwaysYear: true er det, der tvinger
-    // årstallet med. SingleChildScrollView bygger hele sit barn uanset
-    // rullePosition (se test B), så teksten står i træet uden at rulle.
+    // playedAt er 25. aug. 2026. Den almindelige danishDate ville skrive
+    // "25. aug." uden årstal, når kørslen falder i 2026 — rapporten kan åbnes
+    // længe efter spillet, så årstallet skal med. Det er dét,
+    // danishDateWithYear gør, og dette er beviset på at skærmen bruger den
+    // (og ikke bare at funktionen findes). SingleChildScrollView bygger hele
+    // sit barn uanset rullePosition (se test B), så teksten står i træet uden
+    // at rulle.
     await pumpReport(tester);
     expect(find.text('25. aug. 2026 kl. 11.04'), findsOneWidget);
   });

@@ -194,7 +194,6 @@ class OnlineHomeScreen extends ConsumerStatefulWidget {
 class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
   /// Antal afsluttede spil der vises uden at folde ud. Resten er ét tryk væk
   /// — aldrig tavs afkortning (det var netop klagen: "spillet forsvandt").
-  static const int _kArchivePreview = 5;
   bool _showAllArchive = false;
 
   /// Uret bag ventetælleren.
@@ -578,9 +577,8 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
                   // Udsnittet tages af den FÆRDIGE liste — archiveOf sorterer,
                   // og at kalde den to gange pr. build ville gøre det arbejde
                   // dobbelt for præcis samme resultat.
-                  final List<GameSummary> archive = _showAllArchive
-                      ? archiveAll
-                      : archiveAll.take(_kArchivePreview).toList();
+                  final List<GameSummary> archive =
+                      archivePreview(archiveAll, showAll: _showAllArchive);
                   // ÉT nu for hele listen — se _gameTile.
                   final DateTime now = DateTime.now();
                   // Tom-tilstanden måler på AKTIVE spil: har man kun et arkiv,
