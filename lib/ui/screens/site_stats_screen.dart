@@ -37,6 +37,12 @@ class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
     _load();
   }
 
+  // Notifikations-tal. Hentes KUN for admin: skærmen er offentlig, og disse
+  // læsninger skal ikke ramme alle. Null = ikke hentet.
+  int? _pushProfiles;
+  int? _pushChose;
+  int? _pushReachable;
+
   Future<void> _load() async {
     try {
       // Forbrug: denne skærm er en OFFENTLIG rangliste (åbnes fra forsiden af
@@ -126,6 +132,34 @@ class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
           await firestore.collection('userStats').count().get();
       _registeredPlayers = playersAgg.count ?? _allStats.length;
 
+      // Notifikations-sundhed — KUN for admin, og kun fordi det er admin, der
+      // skal handle på tallet.
+      //
+      // Hvorfor der ikke er en minimumsgrænse her, som der er i måle-scriptet:
+      // grænsen dér findes, fordi en rapport kan deles videre og læses af
+      // nogen, der ikke havde adgang til rådata. Admin HAR allerede adgang —
+      // `users`-dokumenterne kan i dag læses af enhver indlogget — så at
+      // skjule "1 kan ikke nås" for netop den person ville være teater, ikke
+      // databeskyttelse. Det er samtidig den ENESTE, der kan gøre noget ved
+      // det. Vurderingen er bevidst og står her, så den kan omgøres.
+      //
+      // Koster ét gennemløb af `users`. Acceptabelt for en vennekreds og kun
+      // ved admins egen åbning — NAVNGIVET grænse, hvis brugertallet vokser.
+      if (isAdmin(FirebaseAuth.instance.currentUser)) {
+        final usersSnap = await firestore.collection('users').get();
+        int chose = 0;
+        int reachable = 0;
+        for (final d in usersSnap.docs) {
+          final m = d.data();
+          if (m['pushOn'] == true) chose++;
+          final t = m['fcmTokens'];
+          if (t is List && t.isNotEmpty) reachable++;
+        }
+        _pushProfiles = usersSnap.docs.length;
+        _pushChose = chose;
+        _pushReachable = reachable;
+      }
+
       setState(() => _loading = false);
     } catch (e) {
       setState(() {
@@ -143,6 +177,7 @@ class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final Widget? pushCard = _pushCard();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Statistik · alle'),
@@ -173,6 +208,10 @@ class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
                   padding: const EdgeInsets.all(12),
                   children: <Widget>[
                     _siteCard(),
+                    // Bygges ÉN gang: `if (_pushCard() != null) _pushCard()!`
+                    // ville kalde den to gange, og null-aware element-syntaks
+                    // kræver en nyere Dart end pubspec erklærer.
+                    if (pushCard != null) pushCard,
                     const SizedBox(height: 4),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
@@ -238,6 +277,54 @@ class _SiteStatsScreenState extends ConsumerState<SiteStatsScreen> {
                                   '${unlockedBadgeCount(s)}/${kAllBadges.length}')),
                   ],
                 ),
+    );
+  }
+
+  /// Notifikations-sundhed. Kun for admin — se _load().
+  ///
+  /// Det ene tal, ingen kan opdage selv: appen ser rigtig ud, også når
+  /// beskederne ikke kommer frem. Den fulde fordeling af svartider hører
+  /// derimod IKKE til her — den bor i functions/scripts/push_quality.js, saa
+  /// beregningen kun findes ét sted.
+  Widget? _pushCard() {
+    final int? profiles = _pushProfiles;
+    final int? chose = _pushChose;
+    final int? reachable = _pushReachable;
+    if (profiles == null || chose == null || reachable == null) return null;
+    // Kan ikke naas: har valgt notifikationer til, men har ingen levende
+    // enhed. Kan ikke blive negativ — en gammel token uden `pushOn` (feltet
+    // er nyt) ville ellers give "-1".
+    final int unreachable = (chose - reachable).clamp(0, chose);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text('🔔 Notifikationer (admin)',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            _row('Profiler i alt', '$profiles'),
+            _row('Har slået notifikationer til', '$chose'),
+            _row('Kan nås lige nu', '$reachable'),
+            if (unreachable > 0) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(
+                '$unreachable tror de får beskeder, men har ingen levende '
+                'enhed. De opdager det ikke selv — appen ser rigtig ud.',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 6),
+            const Text(
+              'Om beskederne kommer frem står i Cloud Functions-loggen '
+              '(søg event=push). Svartider måles med '
+              'functions/scripts/push_quality.js.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
