@@ -167,7 +167,10 @@ jobs:
           # Glob, ikke en haandholdt liste: Test Manager viste at en ny fil
           # uden for listen ALDRIG koerer, og saa staar suiten groen uden at
           # daekke den. Efterproevet med en bevidst roed dummy-fil.
-          node --test 'functions-tests/*.test.mjs'
+          # Ucitert med vilje: SKALLEN udvider moensteret, ikke node.
+          # `node --test '<glob>'` virker lokalt paa Node 22, men CI's node
+          # laeser det som et filnavn og fejler med "Could not find".
+          node --test functions-tests/*.test.mjs
 
       - name: Firestore-regeltests (emulator — sikkerheds-gate)
         # ANGRIBER de faktiske firestore.rules i Firestore-emulatoren
