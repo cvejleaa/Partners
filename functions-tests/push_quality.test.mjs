@@ -76,6 +76,56 @@ test("exchange-poster kasseres eksplicit, ikke ved et tilfælde", () => {
   assert.equal(discarded.exchange, 1);
 });
 
+test("tomt log giver ingen gaps og ingen kasseringer (ingen crash)", () => {
+  const {gaps, discarded} = responseGaps([], UIDS);
+  assert.deepEqual(gaps, []);
+  assert.deepEqual(discarded,
+      {handChange: 0, sameSeat: 0, aiSeat: 0, noTime: 0, negative: 0, exchange: 0});
+});
+
+test("log med ét indlæg giver ingen gaps — der er intet par at sammenligne", () => {
+  const {gaps} = responseGaps([e(0, 1, T)], UIDS);
+  assert.deepEqual(gaps, []);
+});
+
+test("GAMMELT spil uden hn OVERALT: prev.hn og cur.hn er begge undefined, " +
+    "og sammenlignes ikke som et håndskifte", () => {
+  // Ethvert spil logget før denne funktion fandtes har INTET hn-felt på
+  // nogen post. `undefined !== undefined` er false, så handChange-vagten
+  // slår ikke til her — gabet falder igennem til en almindelig svartid,
+  // præcis som FØR hn blev indført. Det er ikke en forbedring for gamle
+  // spil, men heller ikke en regression: det var sådan hele historikken så
+  // ud, indtil i dag.
+  const {gaps, discarded} = responseGaps(
+      [{player: 0, type: "move", t: T}, {player: 1, type: "move", t: T + 30e3}],
+      UIDS);
+  assert.equal(discarded.handChange, 0);
+  assert.deepEqual(gaps, [{seat: 1, ms: 30e3}]);
+});
+
+test("MIGRERINGS-KANT: hn på kun ÉN side af gabet tolkes forsigtigt som håndskifte", () => {
+  // Et spil der var i gang DA feltet blev indført: den sidste post uden hn
+  // og den næste post MED hn er stadig samme hånd, men vi kan ikke bevise
+  // det — så den kasseres i stedet for at risikere at tælle en gammel
+  // kortgivning som en svartid. Sikker retning: vi taber ét datapunkt, vi
+  // forgifter ikke målingen.
+  const {gaps, discarded} = responseGaps(
+      [{player: 0, type: "move", t: T}, {player: 1, type: "move", hn: 1, t: T + 30e3}],
+      UIDS);
+  assert.equal(gaps.length, 0);
+  assert.equal(discarded.handChange, 1);
+});
+
+test("sæde uden for uids-listen (kort/ufuldstændig uids) kasseres som en AI-plads", () => {
+  // uids kan være kortere end antal sæder hvis spillet blev oprettet før et
+  // sæde-antal blev udvidet, eller ved korrupt/gammelt data. uids[cur.player]
+  // er da undefined — samme kode-sti som en rigtig AI-plads.
+  const {gaps, discarded} = responseGaps(
+      [e(0, 1, T), e(3, 1, T + 20e3)], ["u0"]);
+  assert.equal(gaps.length, 0);
+  assert.equal(discarded.aiSeat, 1);
+});
+
 test("GDPR: for få observationer → INGEN median, kun en forklaring", () => {
   // I en kreds under ti personer ville "medianen for dem uden push" i
   // praksis være én persons svartid.
