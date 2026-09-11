@@ -362,6 +362,88 @@ describe('games/{game}', () => {
         { 'seen.mallory': 7, status: 'over' }));
   });
 
+  it('ANGREB: seen-undtagelsen må IKKE smugle STATE med (K1 ad bagvejen)',
+      async () => {
+    // Min første udgave af denne test smuglede `status` med — men `status` er
+    // allerede dækket af statusUnchangedOrSeated, så testen blev rød på en
+    // HELT ANDEN vagt end den, den troede den målte. hasOnly(['seen']) på
+    // topniveau var dermed utestet, og kunne løsnes til hasAny uden at noget
+    // blev rødt — hvilket genåbner K1 ordret (sikkerheds-fund).
+    await seed((db) => setDoc(doc(db, 'games/SEEN4'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob', 'mallory'],
+      uids: ['alice', 'bob', null, null], seen: { alice: 3 },
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/SEEN4'),
+        { 'seen.mallory': 7, state: { ph: 'play', cp: 1, hn: 1 } }));
+  });
+
+  it('ANGREB: seen-undtagelsen må IKKE skrive eget OG andres stempel', async () => {
+    // Skrives KUN andres nøgle, afvises det også af en for-løs hasAny-udgave,
+    // så den test kunne ikke skelne. Eget + andres er dét, der kan.
+    await seed((db) => setDoc(doc(db, 'games/SEEN5'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob', 'mallory'],
+      uids: ['alice', 'bob', null, null], seen: { alice: 3, bob: 2 },
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/SEEN5'),
+        { 'seen.mallory': 7, 'seen.alice': 0 }));
+  });
+
+  it('ANGREB: seen-stemplet må ikke være andet end et tal', async () => {
+    // Ellers kunne et medlem uden sæde puste dokumentet op mod 1 MiB-loftet
+    // og gøre det uskrivbart for de rigtige spillere.
+    await seed((db) => setDoc(doc(db, 'games/SEEN6'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob', 'mallory'],
+      uids: ['alice', 'bob', null, null], seen: { alice: 3 },
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/SEEN6'),
+        { 'seen.mallory': 'x'.repeat(50000) }));
+  });
+
+  // ---- ANDRES SÆDER (regression indført af sæde-kravet, efterprøvet) ----
+  it('ANGREB: må IKKE skubbe en siddende spiller ud af en åben lobby', async () => {
+    // Før denne vagt kunne Mallory overskrive værtens sæde, flippe til
+    // playing, og så var værten LÅST ude af sit eget spil for altid — sæde-
+    // kravet gjorde udelukkelsen permanent, hvor 'members' før var en vej hjem.
+    await seed((db) => setDoc(doc(db, 'games/SEAT2'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/SEAT2'),
+        { uids: ['mallory', null, null, null] }));
+  });
+
+  it('ANGREB: en siddende spiller må ikke TØMME sæderne (brick)', async () => {
+    // Er ingen længere siddende, er dokumentet uskrivbart for alle — også
+    // værten. Kun sletning ville hjælpe.
+    await seed((db) => setDoc(doc(db, 'games/SEAT3'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    await assertFails(updateDoc(doc(as('alice'), 'games/SEAT3'), { uids: [] }));
+  });
+
+  it('TILLADT: man må flytte sit EGET sæde (joinGame skifter plads)', async () => {
+    // Den for-stramme side: othersSeatsKept må ikke låse et sædeskift.
+    await seed((db) => setDoc(doc(db, 'games/SEAT4'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/SEAT4'),
+        { uids: ['alice', null, 'bob', null] }));
+  });
+
+  it('ANGREB: må IKKE kapre værtskabet (og derfra slette spillet)', async () => {
+    // 'kun vært/admin må slette' hviler på hostUid. Var feltet skrivbart, var
+    // reglen reelt 'enhver må slette enhver åben lobby'. Efterprøvet i to
+    // skridt før vagten.
+    await seed((db) => setDoc(doc(db, 'games/HOST1'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice'],
+      uids: ['alice', null, null, null],
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/HOST1'),
+        { hostUid: 'mallory' }));
+  });
+
   it('TILLADT: en SIDDENDE spiller starter og spiller sit spil', async () => {
     // Den for-stramme mutation skal også fanges: gøres sæde-kravet gældende
     // for bredt, dør de rigtige flows.

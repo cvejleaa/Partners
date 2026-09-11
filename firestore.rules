@@ -79,6 +79,27 @@ service cloud.firestore {
             .hasOnly(resource.data.get('uids', [])
                 .concat([request.auth.uid, null]));
       }
+      // Lader skrivningen ANDRES sæder stå? `onlySelfInSeats` alene gjorde det
+      // ikke: den kræver kun at den NYE liste er en delmængde af den gamle
+      // plus mig selv og null — så man kunne overskrive fremmede sæder med
+      // sine egne/null.
+      //
+      // Det blev FARLIGERE af sæde-kravet nedenfor, og det er en regression,
+      // denne rettelse selv indførte (efterprøvet i emulatoren): skubbede
+      // Mallory værten ud af en åben lobby og flippede til 'playing', var
+      // værten LÅST ude af sit eget spil for altid — før kunne hun stadig
+      // skrive via 'members'. Samme vej kunne et helt spil "brickes" ved at
+      // tømme `uids`: så er ingen længere siddende, og dokumentet er
+      // uskrivbart for alle.
+      //
+      // Genkendt på positiv tilstedeværelse: alle andres uid'er skal stadig
+      // være der. Mit eget sæde og tomme pladser må jeg flytte — det er
+      // netop hvad joinGame gør ved et sædeskift.
+      function othersSeatsKept() {
+        return request.resource.data.get('uids', [])
+            .hasAll(resource.data.get('uids', [])
+                .removeAll([null, request.auth.uid]));
+      }
       // Sidder JEG med ved bordet? Det er den eneste egenskab, man ikke kan
       // give sig selv: 'uids' er låst af onlySelfInSeats, mens 'members'
       // bevidst er ubegrænset (invite() skal kunne tilføje den inviterede,
@@ -112,7 +133,13 @@ service cloud.firestore {
                 .hasOnly(['seen'])
             && request.resource.data.get('seen', {})
                 .diff(resource.data.get('seen', {})).affectedKeys()
-                .hasOnly([request.auth.uid]);
+                .hasOnly([request.auth.uid])
+            // markSeen skriver et heltal. Uden denne grænse kunne et medlem
+            // uden sæde skrive en kæmpe streng under sin egen nøgle og puste
+            // spil-dokumentet op mod Firestores 1 MiB-loft, så de rigtige
+            // spillere ikke længere kunne skrive i det.
+            && request.resource.data.get('seen', {})
+                .get(request.auth.uid, 0) is int;
       }
       allow read: if isSignedIn();
       // Oprettelse: kun med sig selv som vært, som eneste medlem og som
@@ -130,10 +157,21 @@ service cloud.firestore {
       // skrive i et igangværende spil — det var vej 3 i angrebet ovenfor.
       allow update: if isSignedIn()
         && onlySelfInSeats()
+        && othersSeatsKept()
+        // Værtskabet er ikke et almindeligt felt: sletning hviler på det
+        // ('resource.data.hostUid == request.auth.uid' nedenfor), så kunne man
+        // skrive sig selv som vært, kunne man slette andres spil. Efterprøvet
+        // i emulatoren i to skridt, før denne linje. Der findes ingen
+        // vært-overdragelse i klienten, så feltet må aldrig ændre sig.
+        && request.resource.data.get('hostUid', '') ==
+             resource.data.get('hostUid', '')
         && statusUnchangedOrSeated()
         && (
           selfSeated() ||
-          resource.data.status == 'lobby' ||
+          // .get() også her: husets konvention i denne fil er, at et doc uden
+          // feltet skal give AFVISNING, ikke en regel-FEJL (som ville afvise
+          // alt, også de ægte flows).
+          resource.data.get('status', '') == 'lobby' ||
           (request.auth.uid in resource.data.get('members', []) && onlyOwnSeen())
         );
       allow delete: if isSignedIn() &&
