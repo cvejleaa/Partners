@@ -17,8 +17,25 @@ const {isGameOverTransition, staleTargets, UID_FORM} = require("./game_over");
 
 /**
  * Skal der sendes en "din tur"-push, og til hvem? Kun et ægte turn-skift
- * (ændret currentPlayerIndex/hånd) i play-fasen af et spil i gang tæller —
- * ikke lobby/exchange/afsluttede spil, ikke en AI-plads.
+ * i play-fasen af et spil i gang tæller — ikke lobby/exchange/afsluttede
+ * spil, ikke en AI-plads.
+ *
+ * "Ægte turn-skift" er TO ting, ikke én:
+ *  a) play-fasen BEGYNDER (bytte er slut, turen gives til starterIndex), og
+ *  b) inden i play-fasen skifter cp/hn.
+ *
+ * (a) er ikke pynt — uden den udeblev beskeden ved hver fjerde håndstart.
+ * `startNewHand` sætter fasen til 'exchange' og tæller `hn` op, men rører
+ * ALDRIG `currentPlayerIndex`; den peger derfor stadig på den, der lavede
+ * sidste træk i forrige hånd. Når det fjerde byttekort er afgivet, sættes
+ * fasen til 'play' og turen til `starterIndex` — i DEN skrivning er `hn`
+ * uændret. Var starteren tilfældigvis den samme som sidste træks spiller,
+ * så cp og hn ens, og den gamle sameTurn-regel kaldte det "ingen ændring".
+ *
+ * Konsekvensen var værre end en manglende besked: AI-overtagelsen efter
+ * kAiTakeoverTimeout gælder KUN spil med mindst én computer-plads, så i et
+ * spil med fire mennesker ventede man på en besked, der aldrig kom, uden
+ * nogen timeout til at bryde det (QC-fund).
  *
  * `state` (og dermed `cp`) skrives af KLIENTEN — reglerne validerer ikke
  * dens indhold. Uden UID_FORM-tjekket kunne et fabrikeret `cp` (fx
@@ -35,7 +52,12 @@ function turnPushTarget(before, after) {
   const aState = (after || {}).state || {};
   const bState = (before || {}).state || {};
   if (aState.ph !== "play") return null;
-  const sameTurn = aState.cp === bState.cp && aState.hn === bState.hn;
+  // Begyndte play-fasen med DENNE skrivning, er turen pr. definition ny —
+  // uanset hvad cp/hn stod på før. Genkendes på positiv tilstedeværelse af
+  // 'play' EFTER og fravær FØR, ikke på at noget bestemt ændrede sig.
+  const playJustStarted = bState.ph !== "play";
+  const sameTurn = !playJustStarted &&
+    aState.cp === bState.cp && aState.hn === bState.hn;
   if (sameTurn) return null;
   const cp = aState.cp;
   if (!Number.isInteger(cp) || cp < 0) return null;

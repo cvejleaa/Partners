@@ -30,6 +30,64 @@ test("turnPushTarget — ægte turn-skift i play-fasen giver den nye spillers ui
   assert.equal(turnPushTarget(before, after), B);
 });
 
+test("turnPushTarget — HÅNDSTART: play begynder, og starteren er den SAMME " +
+  "som sidste træks spiller → der skal stadig sendes push", () => {
+  // FEJLEN (QC-fund), som denne test låser fast: startNewHand sætter fasen
+  // til 'exchange' og tæller hn op, men rører aldrig cp — den peger derfor
+  // stadig på den, der lavede sidste træk i forrige hånd. Når det fjerde
+  // byttekort er afgivet, sættes ph='play' og cp=starterIndex, og hn er
+  // UÆNDRET i dén skrivning. Var starteren den samme som sidste træks
+  // spiller, var cp og hn ens, og den gamle regel kaldte det "ingen ændring".
+  //
+  // FØR rettelsen returnerede dette null. Med fire sæder skete det ca. hver
+  // fjerde håndstart — og i et spil med fire MENNESKER findes der ingen
+  // AI-overtagelse til at bryde ventetiden, så spillet kunne stå stille i
+  // ubestemt tid.
+  const before = {status: "playing", state: {ph: "exchange", cp: 2, hn: 5}};
+  const after = {
+    status: "playing",
+    state: {ph: "play", cp: 2, hn: 5},
+    uids: [A, B, C, D],
+  };
+  assert.equal(turnPushTarget(before, after), C);
+});
+
+test("turnPushTarget — håndstart hvor starteren er en ANDEN end sidste " +
+  "træks spiller virkede allerede, og skal blive ved med det", () => {
+  const before = {status: "playing", state: {ph: "exchange", cp: 2, hn: 5}};
+  const after = {
+    status: "playing",
+    state: {ph: "play", cp: 0, hn: 5},
+    uids: [A, B, C, D],
+  };
+  assert.equal(turnPushTarget(before, after), A);
+});
+
+test("turnPushTarget — selve BYTTE-fasen giver ingen push", () => {
+  // Hver afgivelse af et byttekort skriver til dokumentet. Det er ingens tur
+  // endnu, så vagten på ph==='play' EFTER skal holde dem alle ude — ellers
+  // ville rettelsen ovenfor koste fire falske pushes pr. hånd.
+  const before = {status: "playing", state: {ph: "play", cp: 2, hn: 4}};
+  const after = {
+    status: "playing",
+    state: {ph: "exchange", cp: 2, hn: 5},
+    uids: [A, B, C, D],
+  };
+  assert.equal(turnPushTarget(before, after), null);
+});
+
+test("turnPushTarget — håndstart til en AI-plads giver ingen push", () => {
+  // Samme vagt som ved et almindeligt turn-skift: en tom/AI-plads har ingen
+  // uid at sende til.
+  const before = {status: "playing", state: {ph: "exchange", cp: 1, hn: 2}};
+  const after = {
+    status: "playing",
+    state: {ph: "play", cp: 1, hn: 2},
+    uids: [A, null, C, D],
+  };
+  assert.equal(turnPushTarget(before, after), null);
+});
+
 test("turnPushTarget — samme tur (uændret cp/hn) giver ingen push", () => {
   // MUTATION: fjern sameTurn-tjekket → hver eneste skrivning (fx en
   // heartbeat-afledt re-render, eller markSeen) ville sende en falsk
