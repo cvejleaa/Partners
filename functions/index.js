@@ -148,7 +148,12 @@ async function markStale(staleUids) {
       // Synlig i Cloud Functions-loggen — ellers kunne markeringen kun
       // fejle tavst.
       console.error(
-        `[onGameTurn:stats] kunne ikke markere ${staleUids[i]}: ${r.reason}`
+        // INTET uid i loggen — samme graense som push-maalingen (se
+        // push_log.js). Positionen er nok til at finde sagen igen i
+        // spillets egen uids-liste, uden at Cloud Logging bliver en ny
+        // opbevaring af personoplysninger (GDPR-fund).
+        `[onGameTurn:stats] kunne ikke markere spiller #${i} af ` +
+        `${staleUids.length}: ${r.reason}`
       );
     }
   });

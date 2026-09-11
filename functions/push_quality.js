@@ -139,6 +139,29 @@ function summarize(gaps, {minN = 30, minPlayers = 3} = {}) {
   return out;
 }
 
+/**
+ * Optaellinger om en gruppe MENNESKER — samme spaerre som medianen.
+ *
+ * Jeg havde foerst kun spaerret median/p90 og ladet disse tal staa frit. Det
+ * er inkonsekvent, og GDPR-gennemgangen pegede paa, at det netop er det mest
+ * afsloerende af dem: er kredsen seks personer, og deltaet er 1, har man
+ * udpeget EEN bestemt person — "hende dér tror hun faar beskeder, men gaar
+ * glip af dem". Der staar intet navn, men den, der koerer scriptet, kender
+ * kredsen.
+ *
+ * @param {object} counts {active, chose, reachable}
+ * @param {number} minPlayers mindste kreds, foer tallene maa vises
+ * @return {object} enten tallene, eller en forklaring i stedet
+ */
+function headlineCounts({active, chose, reachable}, minPlayers) {
+  if (active < minPlayers) {
+    return {suppressed:
+      `for faa aktive spillere til at vise fordelingen (n=${active}; ` +
+      `kraever >=${minPlayers})`, active};
+  }
+  return {active, chose, reachable, unreachable: Math.max(0, chose - reachable)};
+}
+
 module.exports = {
-  responseGaps, summarize, bucketOf, NEVER_ANSWERED, BUCKETS,
+  responseGaps, summarize, bucketOf, headlineCounts, NEVER_ANSWERED, BUCKETS,
 };

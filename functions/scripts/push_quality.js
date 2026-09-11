@@ -39,7 +39,8 @@
 
 const {getFirestore} = require("firebase-admin/firestore");
 const {initializeApp} = require("firebase-admin/app");
-const {responseGaps, summarize} = require("../push_quality");
+const {responseGaps, summarize, headlineCounts} =
+  require("../push_quality");
 
 const MIN_N = 30;
 const MIN_PLAYERS = 3;
@@ -109,12 +110,22 @@ async function main() {
   const opts = {minN: MIN_N, minPlayers: MIN_PLAYERS};
 
   console.log(`\n=== Notifikations-kvalitet, seneste ${days} dage ===\n`);
-  console.log(`Aktive spillere i vinduet:        ${active.size}`);
-  console.log(`  heraf valgt push til:           ${chose}`);
-  console.log(`  heraf faktisk KAN nås nu:       ${reachable}`);
-  if (chose > reachable) {
-    console.log(`  → ${chose - reachable} tror de har notifikationer, men har` +
-        ` ingen levende enhed. Det er det mest handlingsanvisende tal her.`);
+  // Samme spærre som medianen: i en lille, kendt kreds er "1 kan ikke nås"
+  // lige så identificerende som et navn.
+  const head = headlineCounts(
+      {active: active.size, chose, reachable}, MIN_PLAYERS);
+  if (head.suppressed) {
+    console.log(`Aktive spillere i vinduet:        ${head.active}`);
+    console.log(`  fordeling: ${head.suppressed}`);
+  } else {
+    console.log(`Aktive spillere i vinduet:        ${head.active}`);
+    console.log(`  heraf valgt push til:           ${head.chose}`);
+    console.log(`  heraf faktisk KAN nås nu:       ${head.reachable}`);
+    if (head.unreachable > 0) {
+      console.log(`  → ${head.unreachable} tror de har notifikationer, men` +
+          ` har ingen levende enhed. Det er det mest handlingsanvisende tal` +
+          ` her.`);
+    }
   }
   const totalDiscarded = Object.values(discardTotals).reduce((a, b) => a + b, 0);
   console.log(`\nGab i spil-loggene: ${considered} betragtet, ` +

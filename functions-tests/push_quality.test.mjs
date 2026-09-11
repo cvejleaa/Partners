@@ -9,7 +9,8 @@ import {test} from "node:test";
 import assert from "node:assert/strict";
 import pkg from "../functions/push_quality.js";
 
-const {responseGaps, summarize, bucketOf, NEVER_ANSWERED} = pkg;
+const {responseGaps, summarize, bucketOf, headlineCounts, NEVER_ANSWERED} =
+  pkg;
 
 const UIDS = ["u0", "u1", "u2", "u3"];
 const T = 1_700_000_000_000;
@@ -115,4 +116,32 @@ test("'svarede aldrig' tælles for sig og trækker ikke medianen ned", () => {
   assert.equal(s.never, 1);
   assert.equal(s.median, 60e3, "de ubesvarede maa ikke indgaa i medianen");
   assert.equal(s.buckets["aldrig (AI overtog)"], 1);
+});
+
+// ---- Optællingerne, ikke kun medianen ----
+// Jeg havde først kun spærret median/p90. GDPR-gennemgangen pegede på, at
+// netop optællingerne er de mest afslørende: i en kreds på seks er "1 kan
+// ikke nås" en udpegning af én bestemt person.
+
+test("GDPR: for lille kreds → optællingerne vises IKKE", () => {
+  const h = headlineCounts({active: 4, chose: 3, reachable: 2}, 5);
+  assert.match(h.suppressed, /for faa aktive spillere/);
+  assert.equal(h.chose, undefined);
+  assert.equal(h.reachable, undefined);
+  assert.equal(h.unreachable, undefined,
+      "deltaet er det mest afsloerende af dem alle");
+  assert.equal(h.active, 4, "selve antallet aktive er ikke identificerende");
+});
+
+test("stor nok kreds → tallene vises, og deltaet udregnes", () => {
+  const h = headlineCounts({active: 12, chose: 9, reachable: 7}, 5);
+  assert.equal(h.suppressed, undefined);
+  assert.equal(h.unreachable, 2);
+});
+
+test("deltaet kan ikke blive negativt", () => {
+  // reachable > chose kan ske for en spiller med en gammel token, der aldrig
+  // har sat pushOn (feltet er nyt). Det maa ikke give "-1 kan ikke naas".
+  const h = headlineCounts({active: 12, chose: 2, reachable: 5}, 5);
+  assert.equal(h.unreachable, 0);
 });
