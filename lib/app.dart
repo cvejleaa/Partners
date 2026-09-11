@@ -178,7 +178,8 @@ class GameController extends StateNotifier<GameState> {
 
   void applyMove(int playerIndex, Move move) {
     _engine?.applyMove(playerIndex, move);
-    _aiLog.add(_withTimestamp(moveLogEntry(playerIndex, move)));
+    _aiLog.add(_withTimestamp(
+        moveLogEntry(playerIndex, move, hn: _engine?.state.handNumber ?? 0)));
     _bump();
   }
 
@@ -187,7 +188,8 @@ class GameController extends StateNotifier<GameState> {
   void passHand(int playerIndex) {
     final int discarded = _engine?.state.players[playerIndex].hand.length ?? 0;
     _engine?.passHand(playerIndex);
-    _aiLog.add(_withTimestamp(passLogEntry(playerIndex, discarded)));
+    _aiLog.add(_withTimestamp(passLogEntry(
+        playerIndex, discarded, hn: _engine?.state.handNumber ?? 0)));
     _bump();
   }
 

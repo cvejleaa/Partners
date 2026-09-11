@@ -523,7 +523,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                   GamePlayView(
                     state: state,
                     mySeat: mySeat,
-                    onApplyMove: (seat, move) => _applyMove(seat, move),
+                    onApplyMove: (seat, move) =>
+                        _applyMove(state, seat, move),
                     onPass: (seat) => _passHand(state, seat),
                     onSubmitExchange: (seat, card) =>
                         _submitExchange(seat, card),
@@ -544,17 +545,17 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // Write-side: spil-handlinger via Firestore-transaktion.
   // ---------------------------------------------------------------------------
 
-  Future<void> _applyMove(int seat, Move move) async {
+  Future<void> _applyMove(GameState state, int seat, Move move) async {
     await _run(() => _svc.mutate(widget.code,
         (engine, _) => engine.applyMove(seat, move),
-        logEntry: moveLogEntry(seat, move)));
+        logEntry: moveLogEntry(seat, move, hn: state.handNumber)));
   }
 
   Future<void> _passHand(GameState state, int seat) async {
     final discarded = state.players[seat].hand.length;
     await _run(() => _svc.mutate(widget.code,
         (engine, _) => engine.passHand(seat),
-        logEntry: passLogEntry(seat, discarded)));
+        logEntry: passLogEntry(seat, discarded, hn: state.handNumber)));
   }
 
   Future<void> _submitExchange(int seat, PlayingCard card) async {

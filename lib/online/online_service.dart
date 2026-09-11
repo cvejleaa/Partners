@@ -1518,10 +1518,10 @@ class OnlineService {
       final Map<String, dynamic> logEntry;
       if (m != null) {
         engine.applyMove(seat, m);
-        logEntry = moveLogEntry(seat, m);
+        logEntry = moveLogEntry(seat, m, hn: state.handNumber);
       } else {
         engine.passHand(seat);
-        logEntry = passLogEntry(seat, discardedCount);
+        logEntry = passLogEntry(seat, discardedCount, hn: state.handNumber);
       }
       final upd = <String, dynamic>{
         'state': gameStateToMap(state),
@@ -1551,9 +1551,19 @@ class OnlineService {
   }
 }
 
-Map<String, dynamic> moveLogEntry(int seat, Move move) => <String, dynamic>{
+/// [hn] er håndnummeret. Uden det kan afstanden mellem to log-poster ikke
+/// tolkes som svartid: `startNewHand` skriver INGEN post, så gabet hen over
+/// et håndskifte rummer kortgivning og fire spilleres byttevalg — hvor der
+/// slet ikke blev sendt en "din tur"-besked. Med håndnummeret kan de gab
+/// kasseres præcist i stedet for at trække målingen skæv (QC-fund).
+///
+/// Koster ingen ekstra skrivning, og bryder ikke dublet-værnet:
+/// [sameLoggedMove] sammenligner kun player/type/card/steps.
+Map<String, dynamic> moveLogEntry(int seat, Move move, {int hn = 0}) =>
+    <String, dynamic>{
       'player': seat,
       'type': 'move',
+      'hn': hn,
       'card': cardToMap(move.card),
       'steps': move.steps
           .map((s) => <String, dynamic>{
@@ -1576,10 +1586,12 @@ Map<String, dynamic> moveLogEntry(int seat, Move move) => <String, dynamic>{
     };
 
 /// Log-entry for når en spiller smider hånden og sidder over runden.
-Map<String, dynamic> passLogEntry(int seat, int cardsDiscarded) =>
+/// [hn]: se [moveLogEntry].
+Map<String, dynamic> passLogEntry(int seat, int cardsDiscarded, {int hn = 0}) =>
     <String, dynamic>{
       'player': seat,
       'type': 'pass',
+      'hn': hn,
       'cardsDiscarded': cardsDiscarded,
     };
 

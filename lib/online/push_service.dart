@@ -200,6 +200,19 @@ class PushService {
       await _db.collection('users').doc(uid).set(<String, dynamic>{
         'fcmTokens': FieldValue.arrayUnion(<String>[token]),
         'fcmUpdatedAt': FieldValue.serverTimestamp(),
+        // Brugerens VALG, adskilt fra om der findes en levende token.
+        //
+        // Serveren sletter døde tokens (pushToUser rydder op), så et tomt
+        // fcmTokens betyder to vidt forskellige ting: "har aldrig slået det
+        // til" og "har slået det til, men kan ikke nås". Uden denne skelnen
+        // ville en måling af "hjælper push?" systematisk flytte de mest
+        // fraværende spillere — dem med de længste svartider — over i
+        // "uden push"-gruppen og få push til at se bedre ud end det er
+        // (QC-fund).
+        //
+        // Feltet er en DIAGNOSE, aldrig en adgangsvagt: det skrives af
+        // klienten og kan derfor lyves.
+        'pushOn': true,
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('[push] skriv af token fejlede: $e');
@@ -234,6 +247,8 @@ class PushService {
         await _db.collection('users').doc(uid).set(<String, dynamic>{
           'fcmTokens': FieldValue.arrayRemove(<String>[token]),
           'fcmUpdatedAt': FieldValue.serverTimestamp(),
+          // Brugeren har FRAVALGT — se _writeTokenForUser.
+          'pushOn': false,
         }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('[push] fjern af token fejlede: $e');
