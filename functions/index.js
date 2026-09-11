@@ -13,26 +13,45 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {initializeApp} = require("firebase-admin/app");
 const {FieldValue} = require("firebase-admin/firestore");
 const {handleGameTurnUpdate} = require("./game_turn");
+const {logger} = require("firebase-functions");
+const {pushLogFields, skippedLogFields, severityFor, STALE_CODES} =
+  require("./push_log");
 
 initializeApp();
 const db = getFirestore("partners");
 
-/// Send FCM til alle en brugers tokens og ryd stale tokens op.
-async function pushToUser(uid, message) {
+/// Send FCM til alle en brugers tokens, ryd stale tokens op, og LOG udfaldet.
+///
+/// Loggen er hele maalingen af "kom den frem". Se push_log.js for hvad linjen
+/// maa indeholde — og hvorfor den ikke maa indeholde mere.
+///
+/// [present] gives kun for tur-push: sad modtageren og kiggede paa spillet, da
+/// vi sendte? Det er det eneste tidspunkt, spoergsmaalet kan besvares —
+/// presence-stemplet overskrives ved hvert heartbeat, saa der findes ingen
+/// historik at regne baglaens fra bagefter.
+async function pushToUser(uid, message, {present = null} = {}) {
+  const type = (message.data || {}).type || "unknown";
   const userSnap = await db.collection("users").doc(uid).get();
   const tokens = (userSnap.data() || {}).fcmTokens || [];
-  if (!tokens.length) return;
+  if (!tokens.length) {
+    // Denne gren returnerede foer HELT tavst.
+    logger.info("push", skippedLogFields(type));
+    return;
+  }
   const res = await getMessaging().sendEachForMulticast({
     tokens,
     ...message,
   });
+  const fields = pushLogFields({type, responses: res.responses, present});
+  if (severityFor(fields) === "error") {
+    logger.error("push", fields);
+  } else {
+    logger.info("push", fields);
+  }
   const stale = [];
   res.responses.forEach((r, i) => {
     const err = r.error;
-    if (!r.success && err && (
-      err.code === "messaging/registration-token-not-registered" ||
-      err.code === "messaging/invalid-registration-token"
-    )) {
+    if (!r.success && err && STALE_CODES.includes(err.code)) {
       stale.push(tokens[i]);
     }
   });
@@ -152,5 +171,14 @@ exports.onGameTurn = onDocumentUpdated(
     code: event.params.code,
     pushToUser,
     markStale,
+    // Presence ligger i en subcollection, saa opslaget roerer ikke selve
+    // spil-doc'et og udloeser derfor ingen ny onGameTurn-invocation.
+    presenceAt: async (gameCode, uid) => {
+      const snap = await db
+          .collection("games").doc(gameCode)
+          .collection("presence").doc(uid).get();
+      const t = (snap.data() || {}).t;
+      return t && t.toMillis ? t.toMillis() : null;
+    },
   })
 );

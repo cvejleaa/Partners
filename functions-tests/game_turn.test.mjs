@@ -16,7 +16,7 @@ import {test} from "node:test";
 import assert from "node:assert/strict";
 import pkg from "../functions/game_turn.js";
 
-const {turnPushTarget, handleGameTurnUpdate} = pkg;
+const {turnPushTarget, handleGameTurnUpdate, PRESENT_WINDOW_MS} = pkg;
 
 // Realistiske Firebase-uid'er (28 tegn), som game_over.test.mjs.
 const A = "AaBbCcDdEeFfGgHhIiJjKkLl0001";
@@ -277,4 +277,83 @@ test("handleGameTurnUpdate — hverken push eller markering ved en uvedkommende 
   });
   assert.equal(pushed.length, 0);
   assert.equal(staled.length, 0);
+});
+
+// ---- PRESENCE paa tur-push (maaling: sender vi til nogen der allerede sad?) ----
+// Kan KUN afgoeres i sendeoejeblikket: presence-stemplet overskrives ved hvert
+// heartbeat, saa der er ingen historik at regne baglaens fra bagefter.
+
+const TURN = {
+  before: {status: "playing", state: {ph: "play", cp: 0, hn: 1}},
+  after: {status: "playing", state: {ph: "play", cp: 1, hn: 1},
+    uids: [A, B, C, D]},
+};
+const NOW = 1_700_000_000_000;
+
+async function capture(opts) {
+  const calls = [];
+  await handleGameTurnUpdate({
+    ...TURN,
+    code: "KODE",
+    pushToUser: async (uid, msg, extra) => { calls.push({uid, extra}); },
+    markStale: async () => {},
+    now: NOW,
+    ...opts,
+  });
+  return calls;
+}
+
+test("presence: frisk stempel → present:true", async () => {
+  const calls = await capture({
+    presenceAt: async () => NOW - (PRESENT_WINDOW_MS - 1000),
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].extra.present, true);
+});
+
+test("presence: gammelt stempel → present:false", async () => {
+  // Det er DENNE vaerdi maalingen handler om: en push til en, der ikke sad
+  // der, er den push der gjorde nytte.
+  const calls = await capture({
+    presenceAt: async () => NOW - (PRESENT_WINDOW_MS + 1000),
+  });
+  assert.equal(calls[0].extra.present, false);
+});
+
+test("presence: intet stempel → present:false, ikke ukendt", async () => {
+  // Har man aldrig aabnet spillet, sad man beviseligt ikke og kiggede.
+  const calls = await capture({presenceAt: async () => null});
+  assert.equal(calls[0].extra.present, false);
+});
+
+test("presence: opslaget FEJLER → push sendes stadig, present er ukendt", async () => {
+  // Maalingen maa aldrig kunne forhindre selve beskeden. Uden denne vagt
+  // ville et fejlende presence-opslag koste en spiller sin "din tur".
+  const calls = await capture({
+    presenceAt: async () => { throw new Error("Firestore nede"); },
+  });
+  assert.equal(calls.length, 1, "push SKAL stadig sendes");
+  assert.equal(calls[0].extra.present, null);
+});
+
+test("presence: ingen presenceAt givet → ingen ekstra laesning, present null",
+    async () => {
+  const calls = await capture({presenceAt: null});
+  assert.equal(calls[0].extra.present, null);
+});
+
+test("presence slaas IKKE op, naar der ikke skal sendes push", async () => {
+  // Ellers ville hver eneste skrivning til spillet koste en ekstra laesning.
+  let opslag = 0;
+  await handleGameTurnUpdate({
+    before: {status: "playing", state: {ph: "play", cp: 1, hn: 1}},
+    after: {status: "playing", state: {ph: "play", cp: 1, hn: 1},
+      uids: [A, B, C, D]},
+    code: "KODE",
+    pushToUser: async () => {},
+    markStale: async () => {},
+    presenceAt: async () => { opslag += 1; return NOW; },
+    now: NOW,
+  });
+  assert.equal(opslag, 0);
 });

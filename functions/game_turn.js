@@ -15,6 +15,12 @@
 
 const {isGameOverTransition, staleTargets, UID_FORM} = require("./game_over");
 
+/// Hvor frisk et presence-stempel skal vaere, foer vi regner modtageren for
+/// at sidde og kigge. Klienten stempler hvert 12. sekund (kPresenceInterval),
+/// og 35 s er samme graense som AI-overtagelsen bruger til "vaek" — saa de to
+/// begreber ikke kan drive fra hinanden.
+const PRESENT_WINDOW_MS = 35000;
+
 /**
  * Skal der sendes en "din tur"-push, og til hvem? Kun et ægte turn-skift
  * i play-fasen af et spil i gang tæller — ikke lobby/exchange/afsluttede
@@ -73,14 +79,40 @@ function turnPushTarget(before, after) {
  * @param {object} opts.before dokumentet før ændringen
  * @param {object} opts.after dokumentet efter ændringen
  * @param {string} opts.code spil-koden (event.params.code)
- * @param {function(string, object): Promise<void>} opts.pushToUser
+ * @param {function(string, object, object=): Promise<void>} opts.pushToUser
  * @param {function(string[]): Promise<void>} opts.markStale
+ * @param {function(string, string): Promise<number|null>} [opts.presenceAt]
+ *   sidste presence-stempel (ms) for en uid i et spil, eller null
+ * @param {number} [opts.now] "nu" i ms — gives af kalderen, saa tests ikke
+ *   afhaenger af uret
  * @return {Promise<void>}
  */
-async function handleGameTurnUpdate({before, after, code, pushToUser, markStale}) {
+async function handleGameTurnUpdate({
+  before, after, code, pushToUser, markStale, presenceAt = null, now = null,
+}) {
   const turnUid = turnPushTarget(before, after);
   const staleUids = isGameOverTransition(before, after) ?
     staleTargets(after) : [];
+
+  // Sad modtageren og kiggede? Kan KUN afgoeres nu: presence-stemplet
+  // overskrives ved hvert heartbeat, saa der er ingen historik at regne
+  // baglaens fra. Svarer paa "sender vi til nogen, der allerede sidder der" —
+  // og kan senere begrunde at springe push'en over. Koster eet ekstra
+  // dokument-read pr. tur-push.
+  //
+  // Maalingen maa ALDRIG kunne forhindre selve push'en: fejler opslaget,
+  // logger vi bare "ved ikke" (null).
+  let present = null;
+  if (turnUid && presenceAt) {
+    try {
+      const at = await presenceAt(code, turnUid);
+      const t = now === null ? Date.now() : now;
+      present = at === null || at === undefined ?
+        false : (t - at) < PRESENT_WINDOW_MS;
+    } catch (e) {
+      present = null;
+    }
+  }
 
   const tasks = [];
   if (turnUid) {
@@ -94,7 +126,7 @@ async function handleGameTurnUpdate({before, after, code, pushToUser, markStale}
         body: `Det er din tur i spil ${code}`,
       },
       webpush: {headers: {Urgency: "high", TTL: "300"}},
-    }));
+    }, {present}));
   }
   if (staleUids.length) {
     tasks.push(markStale(staleUids));
@@ -105,4 +137,4 @@ async function handleGameTurnUpdate({before, after, code, pushToUser, markStale}
   if (rejected) throw rejected.reason;
 }
 
-module.exports = {turnPushTarget, handleGameTurnUpdate};
+module.exports = {turnPushTarget, handleGameTurnUpdate, PRESENT_WINDOW_MS};
