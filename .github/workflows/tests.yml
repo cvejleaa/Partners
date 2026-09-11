@@ -54,7 +54,10 @@ jobs:
           node --check functions/index.js
           node --check functions/game_over.js
           node --check functions/game_turn.js
-          node --test functions-tests/game_over.test.mjs functions-tests/game_turn.test.mjs
+          # Glob, ikke en haandholdt liste: Test Manager viste at en ny fil
+          # uden for listen ALDRIG koerer, og saa staar suiten groen uden at
+          # daekke den. Efterproevet med en bevidst roed dummy-fil.
+          node --test 'functions-tests/*.test.mjs'
 
       - name: Firestore-regeltests (emulator)
         # Angriber firestore.rules i emulatoren (@firebase/rules-unit-testing).

@@ -418,6 +418,13 @@ describe('games/{game}', () => {
   });
 
   // ---- ANDRES SÆDER (regression indført af sæde-kravet, efterprøvet) ----
+  //
+  // NAVNGIVET, IKKE LUKKET (QC-fund): vagterne beskytter mod at FJERNE en
+  // andens sæde, ikke mod at FLYTTE det. En siddende spiller kan omrokere en
+  // medspiller fra plads 1 til plads 2 uden samtykke — alle uid'er er jo
+  // stadig til stede, så othersSeatsKept er tilfreds. Sædet afgør
+  // turrækkefølge og farver, så det er en reel, om end sjælden, skrøbelighed.
+  // Den fandtes før denne ændring og lukkes ikke af den.
   it('ANGREB: må IKKE skubbe en siddende spiller ud af en åben lobby', async () => {
     // Før denne vagt kunne Mallory overskrive værtens sæde, flippe til
     // playing, og så var værten LÅST ude af sit eget spil for altid — sæde-
@@ -519,7 +526,7 @@ describe('games/{game}', () => {
       status: 'playing',
     }));
   });
-  it('medlem må selv starte og afslutte spillet', async () => {
+  it('en SIDDENDE spiller må selv starte og afslutte spillet', async () => {
     await seed((db) => setDoc(doc(db, 'games/G13'), {
       hostUid: 'alice', status: 'lobby', members: ['alice'],
       uids: ['alice', null, null, null],
@@ -530,7 +537,7 @@ describe('games/{game}', () => {
       updateDoc(doc(as('alice'), 'games/G13'), { status: 'over' }));
   });
 
-  it('ikke-medlem må opdatere et spil i LOBBY (for at kunne joine)', async () => {
+  it('en udenforstående må opdatere et spil i LOBBY (for at kunne joine)', async () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game({ status: 'lobby' })));
     await assertSucceeds(updateDoc(doc(as('newbie'), 'games/G1'), { seq: 1 }));
   });
@@ -546,7 +553,7 @@ describe('games/{game}', () => {
   // de øvrige lobby-felter (aiLevel/names). Disse to vagter fastholder den flade
   // netop for variant-feltet, så en fremtidig stramning/mutation af games-
   // update-reglen fanges på variant-stien og ikke kun på seq/aiLevel.
-  it('medlem må sætte variantId (variant vælges i lobbyen)', async () => {
+  it('en siddende spiller må sætte variantId (variant vælges i lobbyen)', async () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game({ status: 'lobby' })));
     await assertSucceeds(
       updateDoc(doc(as('alice'), 'games/G1'), { variantId: 'p25' }));
