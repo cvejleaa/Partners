@@ -1515,13 +1515,18 @@ class OnlineService {
       final engine = GameEngine(state: state);
       final Move? m = onlineAi.chooseMove(state, seat, params: params);
       final int discardedCount = state.players[seat].hand.length;
+      // FØR motorens træk: engine muterer netop dette state-objekt, og
+      // afslutter trækket hånden, tæller startNewHand handNumber op. Læst
+      // bagefter ville det håndafsluttende træk bære den NÆSTE hånds nummer
+      // (Test Manager-fund).
+      final int hn = state.handNumber;
       final Map<String, dynamic> logEntry;
       if (m != null) {
         engine.applyMove(seat, m);
-        logEntry = moveLogEntry(seat, m, hn: state.handNumber);
+        logEntry = moveLogEntry(seat, m, hn: hn);
       } else {
         engine.passHand(seat);
-        logEntry = passLogEntry(seat, discardedCount, hn: state.handNumber);
+        logEntry = passLogEntry(seat, discardedCount, hn: hn);
       }
       final upd = <String, dynamic>{
         'state': gameStateToMap(state),

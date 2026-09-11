@@ -177,9 +177,15 @@ class GameController extends StateNotifier<GameState> {
   }
 
   void applyMove(int playerIndex, Move move) {
+    // Håndnummeret læses FØR trækket. Afslutter trækket hånden, kalder
+    // _afterMove startNewHand(), som tæller handNumber op — og så ville det
+    // håndafsluttende træk blive logget med den NÆSTE hånds nummer. For
+    // målingen er det stik modsat af det ønskede: det ægte svartids-gab ville
+    // blive kasseret som "håndskifte", mens gabet hen over håndskiftet — hvor
+    // der aldrig sendes en besked — ville tælle med (Test Manager-fund).
+    final int hn = _engine?.state.handNumber ?? 0;
     _engine?.applyMove(playerIndex, move);
-    _aiLog.add(_withTimestamp(
-        moveLogEntry(playerIndex, move, hn: _engine?.state.handNumber ?? 0)));
+    _aiLog.add(_withTimestamp(moveLogEntry(playerIndex, move, hn: hn)));
     _bump();
   }
 
@@ -187,9 +193,10 @@ class GameController extends StateNotifier<GameState> {
 
   void passHand(int playerIndex) {
     final int discarded = _engine?.state.players[playerIndex].hand.length ?? 0;
+    // Se applyMove: FØR trækket.
+    final int hn = _engine?.state.handNumber ?? 0;
     _engine?.passHand(playerIndex);
-    _aiLog.add(_withTimestamp(passLogEntry(
-        playerIndex, discarded, hn: _engine?.state.handNumber ?? 0)));
+    _aiLog.add(_withTimestamp(passLogEntry(playerIndex, discarded, hn: hn)));
     _bump();
   }
 
