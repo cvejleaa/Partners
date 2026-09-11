@@ -343,6 +343,24 @@ describe('games/{game}', () => {
         { 'seen.mallory': 7 }));
   });
 
+  // Den ægte flow-dækning ovenfor bruger status 'over' — men markSeen kaldes
+  // fra online_game_screen ved ÅBNING af skærmen, UANSET status (også et
+  // spil der stadig er i gang). onlyOwnSeen() har ingen status-betingelse i
+  // koden, men INGEN eksisterende test beviste det: alle andre seen-tests med
+  // status 'playing' er ANGREB (der SKAL fejle uanset), så en fremtidig
+  // for-stram regel (fx "seen-undtagelsen gælder kun for 'over'") ville
+  // stadig lade dem fejle korrekt — og ville brække netop dette ægte flow
+  // uden at noget blev rødt.
+  it('TILLADT: en inviteret UDEN sæde må skrive sit EGET seen-stempel på et ' +
+      'IGANGVÆRENDE (playing) spil, ikke kun et afsluttet', async () => {
+    await seed((db) => setDoc(doc(db, 'games/SEEN1B'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob', 'mallory'],
+      uids: ['alice', 'bob', null, null], seen: { alice: 3 },
+    }));
+    await assertSucceeds(updateDoc(doc(as('mallory'), 'games/SEEN1B'),
+        { 'seen.mallory': 7 }));
+  });
+
   it('ANGREB: seen-undtagelsen må IKKE bruges til at skrive ANDRES stempel',
       async () => {
     await seed((db) => setDoc(doc(db, 'games/SEEN2'), {
@@ -410,6 +428,22 @@ describe('games/{game}', () => {
     }));
     await assertFails(updateDoc(doc(as('mallory'), 'games/SEAT2'),
         { uids: ['mallory', null, null, null] }));
+  });
+
+  it('ANGREB: må IKKE erstatte ÉN ud af flere siddende spillere og lade ' +
+      'resten stå (partiel-fjernelse, adskiller hasAll fra hasAny)', async () => {
+    // SEAT2 fjerner ALLE andre sæder på én gang — det skelner IKKE
+    // othersSeatsKept()'s `hasAll` fra en svækket `hasAny` (begge er "false"
+    // når INGEN andre er tilbage). Her beholder mallory bob, men sletter
+    // carol og tager hendes plads — det kræver netop hasALL for at blive
+    // fanget.
+    await seed((db) => setDoc(doc(db, 'games/SEAT5'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob', 'carol'],
+      uids: ['alice', 'bob', 'carol', null],
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/SEAT5'), {
+      uids: ['alice', 'bob', 'mallory', null],
+    }));
   });
 
   it('ANGREB: en siddende spiller må ikke TØMME sæderne (brick)', async () => {
