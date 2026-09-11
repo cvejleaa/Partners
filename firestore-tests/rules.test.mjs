@@ -212,12 +212,17 @@ describe('games/{game}', () => {
     await assertFails(
       setDoc(doc(anon(), 'games/G2'), game({ hostUid: 'x', status: 'lobby' })));
   });
-  it('medlem må opdatere et igangværende spil', async () => {
-    await seed((db) => setDoc(doc(db, 'games/G1'), game()));
+  // Fixturen får et SÆDE, ikke bare et medlemskab: et igangværende spil UDEN
+  // uids kan ikke opstå i virkeligheden (startGameFromLobby skriver sæderne
+  // sammen med status), og et sådant fixture ville skjule, at adgangen nu
+  // hviler på sædet frem for på 'members'.
+  const seated = { uids: ['alice', 'bob', null, null] };
+  it('en SIDDENDE spiller må opdatere et igangværende spil', async () => {
+    await seed((db) => setDoc(doc(db, 'games/G1'), game(seated)));
     await assertSucceeds(updateDoc(doc(as('alice'), 'games/G1'), { seq: 2 }));
   });
   it('ANGREB: ikke-medlem må IKKE opdatere et igangværende (playing) spil', async () => {
-    await seed((db) => setDoc(doc(db, 'games/G1'), game()));
+    await seed((db) => setDoc(doc(db, 'games/G1'), game(seated)));
     await assertFails(updateDoc(doc(as('mallory'), 'games/G1'), { seq: 99 }));
   });
   // ---- ANGREB mod spil-dokumentets deltagerliste (security-gennemgang) ----
@@ -291,6 +296,96 @@ describe('games/{game}', () => {
     // ... men en invitation må stadig ikke sætte den inviterede i et SÆDE.
     await assertFails(updateDoc(doc(as('alice'), 'games/G14'), {
       uids: ['alice', 'bob', null, null],
+    }));
+  });
+
+  // ---- TO-TRINS-OVERTAGELSE af en åben lobby (sikkerheds-gennemgang) ----
+  // Ét-trins-testen nedenfor var GRØN hele tiden og gav falsk tryghed: samme
+  // angriber nåede målet i to skridt, fordi 'members' bevidst er ubegrænset.
+  // Efterprøvet i emulatoren FØR rettelsen: alle tre skridt lykkedes.
+  it('ANGREB: udenforstående må IKKE skrive sig ind i members og DERFRA ' +
+      'flippe en fremmed lobby til playing', async () => {
+    await seed((db) => setDoc(doc(db, 'games/TAKE1'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    const m = as('mallory');
+    // Trin 1 er stadig tilladt — 'members' SKAL kunne vokse (invite/revanche).
+    await assertSucceeds(updateDoc(doc(m, 'games/TAKE1'),
+        { members: ['alice', 'bob', 'mallory'] }));
+    // Trin 2 er dét, der nu afvises: status kræver et SÆDE, ikke et medlemskab.
+    await assertFails(updateDoc(doc(m, 'games/TAKE1'), { status: 'playing' }));
+    await assertFails(updateDoc(doc(m, 'games/TAKE1'), { status: 'over' }));
+  });
+
+  it('ANGREB: et MEDLEM uden sæde må ikke skrive state i et igangværende spil',
+      async () => {
+    // Trin 3 i kæden, isoleret: selv hvis angriberen står i members (fx fordi
+    // de blev inviteret og aldrig satte sig), må de ikke røre brættet — det
+    // ville både korrumpere spillet og udløse "din tur"-push i ring.
+    await seed((db) => setDoc(doc(db, 'games/TAKE2'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob', 'mallory'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/TAKE2'),
+        { state: { ph: 'play', cp: 1, hn: 1 } }));
+  });
+
+  it('TILLADT: en inviteret UDEN sæde må stadig skrive sit EGET seen-stempel',
+      async () => {
+    // Undtagelsen der holder arkivet i live: man kan være inviteret uden at
+    // have taget plads, og åbner man spillet, kalder skærmen markSeen.
+    await seed((db) => setDoc(doc(db, 'games/SEEN1'), {
+      hostUid: 'alice', status: 'over', members: ['alice', 'bob', 'mallory'],
+      uids: ['alice', 'bob', null, null], seen: { alice: 3 },
+    }));
+    await assertSucceeds(updateDoc(doc(as('mallory'), 'games/SEEN1'),
+        { 'seen.mallory': 7 }));
+  });
+
+  it('ANGREB: seen-undtagelsen må IKKE bruges til at skrive ANDRES stempel',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/SEEN2'), {
+      hostUid: 'alice', status: 'over', members: ['alice', 'bob', 'mallory'],
+      uids: ['alice', 'bob', null, null], seen: { alice: 3 },
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/SEEN2'),
+        { 'seen.alice': 0 }));
+  });
+
+  it('ANGREB: seen-undtagelsen må IKKE smugle andre felter med', async () => {
+    await seed((db) => setDoc(doc(db, 'games/SEEN3'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob', 'mallory'],
+      uids: ['alice', 'bob', null, null], seen: { alice: 3 },
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/SEEN3'),
+        { 'seen.mallory': 7, status: 'over' }));
+  });
+
+  it('TILLADT: en SIDDENDE spiller starter og spiller sit spil', async () => {
+    // Den for-stramme mutation skal også fanges: gøres sæde-kravet gældende
+    // for bredt, dør de rigtige flows.
+    await seed((db) => setDoc(doc(db, 'games/SEAT1'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/SEAT1'),
+        { status: 'playing', state: { ph: 'exchange', cp: 0, hn: 1 } }));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/SEAT1'),
+        { state: { ph: 'play', cp: 1, hn: 1 } }));
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/SEAT1'),
+        { status: 'over', winningTeamIndex: 0 }));
+  });
+
+  it('TILLADT: en udenforstående tager plads i en åben lobby', async () => {
+    await seed((db) => setDoc(doc(db, 'games/JOIN1'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice'],
+      uids: ['alice', null, null, null],
+    }));
+    await assertSucceeds(updateDoc(doc(as('mallory'), 'games/JOIN1'), {
+      uids: ['alice', 'mallory', null, null],
+      members: ['alice', 'mallory'],
+      'ready.mallory': false,
     }));
   });
 

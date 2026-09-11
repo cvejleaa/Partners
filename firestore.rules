@@ -79,18 +79,40 @@ service cloud.firestore {
             .hasOnly(resource.data.get('uids', [])
                 .concat([request.auth.uid, null]));
       }
-      // BEMÆRK: 'members' begrænses bevidst IKKE ved update. Det er alene en
-      // adgangsliste for dokumentet, og den fodrer INGEN af misbrugs-stierne:
-      // statistik-attribution (arrayContains på 'uids'), onGameOver-markering
-      // og "din tur"-push læser alle 'uids', aldrig 'members'. Til gengæld
-      // tilføjer invite() netop den INVITEREDES uid til members — en
-      // selv-kun-regel ville have slået invitationer og revanche ihjel.
-      // Kun deltagere må starte/afslutte et spil. En udenforstående må joine
-      // en åben lobby, men ikke flippe den til 'playing'/'over'.
-      function statusUnchangedOrMember() {
+      // Sidder JEG med ved bordet? Det er den eneste egenskab, man ikke kan
+      // give sig selv: 'uids' er låst af onlySelfInSeats, mens 'members'
+      // bevidst er ubegrænset (invite() skal kunne tilføje den inviterede,
+      // ellers dør invitationer og revanche).
+      function selfSeated() {
+        return request.auth.uid in resource.data.get('uids', []);
+      }
+      // Kun nogen med et SÆDE må ændre status.
+      //
+      // Stod der 'members' her, kunne en vilkårlig udenforstående overtage
+      // enhver åben lobby i to trin — efterprøvet i emulatoren:
+      //   1) update {members: [... , mig]}  — status uændret, doc er lobby → OK
+      //   2) nu "medlem" → update {status: 'playing'}                    → OK
+      //   3) og derfra skrive 'state' på et IGANGVÆRENDE fremmed spil:
+      //      ændre brættet, og udløse "din tur"-push i ring.
+      // Angriberen behøvede aldrig et sæde. Den GAMLE test dækkede kun
+      // ét-trins-angrebet (og var grøn), så hullet så lukket ud.
+      function statusUnchangedOrSeated() {
         return request.resource.data.get('status', '') ==
                 resource.data.get('status', '')
-            || request.auth.uid in resource.data.get('members', []);
+            || selfSeated();
+      }
+      // Rører skrivningen KUN mit eget 'seen'-stempel?
+      //
+      // Undtagelsen findes, fordi man kan være inviteret uden at have taget
+      // plads: sådan et spil står i ens arkiv, og åbner man det, skriver
+      // markSeen 'seen.<mig>'. Uden denne gren ville sæde-kravet nedenfor
+      // slå netop dét flow ihjel.
+      function onlyOwnSeen() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['seen'])
+            && request.resource.data.get('seen', {})
+                .diff(resource.data.get('seen', {})).affectedKeys()
+                .hasOnly([request.auth.uid]);
       }
       allow read: if isSignedIn();
       // Oprettelse: kun med sig selv som vært, som eneste medlem og som
@@ -102,12 +124,17 @@ service cloud.firestore {
         && request.resource.data.get('members', []).hasOnly([request.auth.uid])
         && request.resource.data.get('uids', [])
             .hasOnly([request.auth.uid, null]);
+      // Adgangsporten: et SÆDE i spillet, eller en åben lobby (så man kan
+      // tage plads), eller den snævre seen-undtagelse for en inviteret, der
+      // aldrig satte sig. At stå i 'members' er IKKE længere nok til at
+      // skrive i et igangværende spil — det var vej 3 i angrebet ovenfor.
       allow update: if isSignedIn()
         && onlySelfInSeats()
-        && statusUnchangedOrMember()
+        && statusUnchangedOrSeated()
         && (
-          request.auth.uid in resource.data.members ||
-          resource.data.status == 'lobby'
+          selfSeated() ||
+          resource.data.status == 'lobby' ||
+          (request.auth.uid in resource.data.get('members', []) && onlyOwnSeen())
         );
       allow delete: if isSignedIn() &&
         (resource.data.hostUid == request.auth.uid || isAdmin());
