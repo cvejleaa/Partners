@@ -93,17 +93,35 @@ void main() {
     });
   });
 
-  group('hn skal være hånden FØR trækket — ikke hånden bagefter', () {
-    test(
-        'FUND: "kald motoren, læs handNumber bagefter" logger det NYE håndnummer for det håndafsluttende træk',
-        () {
-      // Samme form som de to buggy kaldesteder bruger: 3 spillere har allerede
-      // tom hånd, spiller 0 har ét kort tilbage — en To, der intet kan gøre
-      // med alle brikker i Start (CardRules.defaults(): Rank.two har hverken
-      // exitStart, swap, split eller backward — kun forwardSteps, som kræver
-      // en brik UDENFOR Start). passHand() er derfor både lovlig og, ligesom
-      // et håndafsluttende applyMove, den handling der tømmer SIDSTE hånd og
-      // synkront udløser GameEngine._afterMove -> startNewHand().
+  group('KONTRAKT: hn skal være hånden FØR trækket — ikke hånden bagefter', () {
+    // Fundet (og rettet i "Test Manager-fund: haandnummeret blev laest EFTER
+    // traekket"): app.dart (GameController.applyMove/passHand) og
+    // online_service.dart's _aiSeatMoveInternal læste oprindeligt
+    // state.handNumber EFTER at have kaldt motoren. GameEngine._afterMove
+    // kalder startNewHand() SYNKRONT når trækket tømmer den sidste hånd, og
+    // den tæller handNumber op MED DET SAMME — så en læsning bagefter gav for
+    // netop det håndafsluttende træk den NÆSTE hånds nummer.
+    //
+    // Kørt i CI med den (dengang aktuelle) forkerte rækkefølge gav denne
+    // opsætning konkret: Expected: <1>, Actual: <2> — dvs. et træk der reelt
+    // hørte til hånd 1 ville være blevet logget som hånd 2. Det lammede
+    // push_quality.responseGaps' handChange-vagt (prev.hn !== cur.hn) for
+    // netop den overgang: den ægte kassable overgang (kortgivning + fire
+    // spilleres byttevalg, intet push sendt) ville i stedet ligne et
+    // almindeligt turskifte og tælle forkert med som en svartid.
+    //
+    // Denne test låser den KORREKTE kontrakt (læs FØR) fast som en permanent
+    // regressionsvagt. Den kan ikke selv kalde app.dart/online_service.dart
+    // (kræver Firebase, som ikke er mocket i denne test-suite) — den beviser
+    // kontrakten på selve GameEngine, som begge kaldesteder er bygget på.
+    test('hn læst FØR motorkaldet er hånden trækket faktisk hørte til', () {
+      // 3 spillere har allerede tom hånd, spiller 0 har ét kort tilbage — en
+      // To, der intet kan gøre med alle brikker i Start (CardRules.defaults():
+      // Rank.two har hverken exitStart, swap, split eller backward — kun
+      // forwardSteps, som kræver en brik UDENFOR Start). passHand() er derfor
+      // både lovlig og, ligesom et håndafsluttende applyMove, den handling
+      // der tømmer SIDSTE hånd og synkront udløser
+      // GameEngine._afterMove -> startNewHand().
       final state = makeState(
         hands: <List<PlayingCard>>[
           const <PlayingCard>[PlayingCard(Rank.two, Suit.hearts)],
@@ -123,37 +141,24 @@ void main() {
 
       final int handDaPassetSkete = state.handNumber;
 
-      // ---- PRÆCIS samme rækkefølge som:
-      //   lib/app.dart (GameController.passHand, ca. linje 188-192):
-      //     _engine?.passHand(playerIndex);
-      //     ... hn: _engine?.state.handNumber ?? 0 ...
-      //   lib/online/online_service.dart (_aiSeatMoveInternal, ca. linje
-      //     1518-1524): engine.passHand(seat); ... hn: state.handNumber ...
+      // ---- Den KORREKTE rækkefølge: læs FØR motoren kaldes.
+      final int hnDerSkalLogges = state.handNumber;
       engine.passHand(0);
-      final int hvadDerFaktiskBlevLogget = state.handNumber;
       // ---------------------------------------------------------------
 
       expect(
         state.handNumber,
         handDaPassetSkete + 1,
-        reason: 'forudsætning for fundet: hånden skiftede UNDER selve '
-            'kaldet, fordi alle 4 hænder blev tomme på samme træk',
+        reason: 'forudsætning: hånden skiftede UNDER selve kaldet, fordi '
+            'alle 4 hænder blev tomme på samme træk — ellers beviser testen '
+            'ikke noget om læse-rækkefølgen',
       );
       expect(
-        hvadDerFaktiskBlevLogget,
+        hnDerSkalLogges,
         handDaPassetSkete,
-        reason: 'app.dart og online_service.dart._aiSeatMoveInternal ville '
-            'her logge hn=$hvadDerFaktiskBlevLogget for et pas der reelt '
-            'hørte til hånd $handDaPassetSkete. functions/push_quality.js\' '
-            'handChange-vagt (prev.hn !== cur.hn) skal netop opdage '
-            'håndskiftet og kassere gabet mellem sidste træk i den gamle '
-            'hånd og første træk i den nye (kortgivning + fire spilleres '
-            'byttevalg — intet "din tur"-push blev sendt i den overgang). '
-            'Men fordi BEGGE poster her ville bære hn=$hvadDerFaktiskBlevLogget, '
-            'ligner overgangen et almindeligt turskifte, og gabet tælles '
-            'fejlagtigt med som en svartid. Rettelsen er at læse '
-            'state.handNumber FØR engine.passHand()/applyMove() kaldes, '
-            'ikke bagefter.',
+        reason: 'hn skal være hånden passet FAKTISK hørte til ($handDaPassetSkete), '
+            'ikke den nye hånd motoren allerede har talt op til '
+            '(${state.handNumber}).',
       );
     });
   });
