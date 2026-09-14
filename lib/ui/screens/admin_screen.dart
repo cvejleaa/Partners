@@ -11,6 +11,28 @@ import '../../state/card_rules_controller.dart';
 import '../../state/display_config.dart';
 import '../../state/variant_card_rules_controller.dart';
 
+/// Indhold på en FAST lys flade.
+///
+/// Skærmen er mørk, så temaets tekstfarve er lys. Lægger man en lys flade oven
+/// på den UDEN at sætte forgrunden, arver teksten den lyse farve og bliver
+/// lys-på-lys — ulæselig. Samme fejlklasse som blokken på slutskærmen, der
+/// lånte tema-farver på en fast mørk baggrund; her bare vendt om.
+///
+/// TOP-LEVEL med vilje. Første udgave lå som en static på ÉN klasse, og så
+/// kunne AI-graderne — der bor i en anden klasse i samme fil — ikke bruge den.
+/// CI fangede det. En vagt, der kun gælder halvdelen af filen, er ikke én
+/// vagt.
+///
+/// Tekst med sin EGEN farve (fx de røde fejllinjer) beholder den — merge
+/// overskriver ikke en eksplicit farve.
+Widget _onLightSurface({required Widget child}) => DefaultTextStyle.merge(
+      style: const TextStyle(color: Color(0xFF1B1B1B)),
+      child: IconTheme.merge(
+        data: const IconThemeData(color: Color(0xFF1B1B1B)),
+        child: child,
+      ),
+    );
+
 class AdminScreen extends ConsumerWidget {
   const AdminScreen({super.key});
 
@@ -32,25 +54,6 @@ class AdminScreen extends ConsumerWidget {
 
   static String _label(Rank r) => PlayingCard(r, Suit.spades).rankLabel;
 
-  /// Indhold på en FAST lys flade.
-  ///
-  /// Skærmen er mørk, så temaets tekstfarve er lys. Lægger man en lys flade
-  /// oven på den UDEN at sætte forgrunden, arver teksten den lyse farve og
-  /// bliver lys-på-lys — ulæselig. Det er samme fejlklasse som blokken på
-  /// slutskærmen, der lånte tema-farver på en fast mørk baggrund; her er den
-  /// bare vendt om.
-  ///
-  /// ÉT sted, så en ny lys flade ikke skal huske at rette farverne selv:
-  /// wrap den i denne. Tekst med sin EGEN farve (fx de røde fejllinjer)
-  /// beholder den — merge overskriver ikke en eksplicit farve.
-  static Widget _onLightSurface({required Widget child}) =>
-      DefaultTextStyle.merge(
-        style: const TextStyle(color: Color(0xFF1B1B1B)),
-        child: IconTheme.merge(
-          data: const IconThemeData(color: Color(0xFF1B1B1B)),
-          child: child,
-        ),
-      );
 
   static String _hhmmss(DateTime d) {
     String two(int n) => n.toString().padLeft(2, '0');
