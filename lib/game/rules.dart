@@ -291,15 +291,27 @@ class Rules {
   /// respekterer blokaden som −4 (intet hop).
   ///
   /// Deterministisk pr. brik — ingen sim nødvendig: mellemfeltet kan aldrig
-  /// være et UD-felt (fremmede springes over, eget drejer i hjemstræk), den
+  /// være et UD-felt (ALLE springes over uden at tælle — fremmede efter §6,
+  /// eget efter ejer-valget nedenfor), den
   /// slåede brik står PÅ mellemfeltet (bag baglæns-stien, spærrer aldrig), og
   /// slutfeltet er aldrig mellemfeltet (back >= 1).
   Move? _tryFwdThenBack(GameState state, Player player, Piece piece, int fwd,
       int back, PlayingCard card) {
     if (fwd < 1 || back < 1) return null;
     if (piece.position is! TrackPosition) return null;
-    final PiecePosition? mid = _advanceFrom(state, player, piece, fwd);
-    if (mid is! TrackPosition) return null; // blokeret ELLER hjemstræk → nej
+    // Fremad-delen kører FORBI eget UD-felt i stedet for at dreje ind.
+    //
+    // EJERENS VALG for netop dette kort: kortets egen tekst siger kun "først 2
+    // frem og derefter 5 tilbage MED SAMME BRIK" — intet om hjemstrækket. Med
+    // tvungen indrejse kunne sekvensen ALDRIG bruges fra ét felt før eget
+    // UD-felt: +2 landede i hjemstrækket, og man kan ikke bakke ud derfra.
+    // Det var ikke en kant, men en fast død vinkel.
+    //
+    // Gælder KUN sekvens-kortet. Et almindeligt fremadtræk drejer stadig ind,
+    // som §11 siger.
+    final PiecePosition? mid =
+        _advanceFrom(state, player, piece, fwd, enterHome: false);
+    if (mid is! TrackPosition) return null; // blokeret → nej
     final _Landing midLanding = _landing(state, player.index, mid);
     if (!midLanding.legal || midLanding.burnsMover) return null;
     final int? endIdx = _reverseIndexFrom(state, player.index, mid.index, back);
@@ -439,12 +451,16 @@ class Rules {
 
   /// Geometrisk fremad-position. Returnerer null hvis trækket ikke er muligt.
   /// Brikker i hjemstrækket kan KUN rykke længere ind (aldrig ud på banen igen).
+  /// [enterHome] false: kør FORBI eget UD-felt i stedet for at dreje ind i
+  /// hjemstrækket. Bruges kun af sekvens-kortets fremad-del (25 års +2−5) —
+  /// ejerens valg, jf. docs/regler.md §12.
   PiecePosition? _advanceFrom(
     GameState state,
     Player player,
     Piece piece,
     int steps, {
     bool jumpsBlockade = false,
+    bool enterHome = true,
   }) {
     final PiecePosition pos = piece.position;
     if (pos is StartPosition) return null;
@@ -475,15 +491,28 @@ class Rules {
         final int next = (idx + 1) % len;
         // Drej ind i EGET hjemstræk når man (efter en omgang) når sit eget
         // UD-felt.
-        if (next == ownUd && piece.hasLeftStart) {
-          final int slot = remaining - 1;
-          if (slot >= geometry.homeStretchLength) return null;
-          for (int s = 0; s <= slot; s++) {
-            if (state.pieceAt(HomeStretchPosition(player.index, s)) != null) {
-              return null;
+        if (next == ownUd) {
+          if (enterHome && piece.hasLeftStart) {
+            final int slot = remaining - 1;
+            if (slot >= geometry.homeStretchLength) return null;
+            for (int s = 0; s <= slot; s++) {
+              if (state.pieceAt(HomeStretchPosition(player.index, s)) != null) {
+                return null;
+              }
             }
+            return HomeStretchPosition(player.index, slot);
           }
-          return HomeStretchPosition(player.index, slot);
+          // Forbi eget UD-felt UDEN at tælle det. §6: "Selve UD-feltet er IKKE
+          // et tællende ringfelt", og "Blokaden gælder KUN modstandere/makker
+          // — aldrig ejeren selv". Præcis samme behandling som baglæns
+          // (_reverseIndexFrom), så de to retninger ikke kan drive fra
+          // hinanden.
+          //
+          // Grenen nås i dag kun med enterHome: false. En brik på banen har
+          // altid hasLeftStart, men skulle et skævt fixture give en uden, er
+          // det nu §6 der gælder frem for at eget UD talte som et ringfelt.
+          idx = next;
+          continue;
         }
         // Fremmed UD-felt: ryk forbi uden at tælle skridtet (14 → 1 direkte),
         // medmindre der står brikker på det — så spærrer det. Et Hopsakort

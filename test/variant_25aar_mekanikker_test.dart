@@ -7,8 +7,10 @@
 //      begge captures. applyMove ende-til-ende: slutposition + begge slåede
 //      hjemme + kortet ude af hånden (motoren re-validerer selv — en tavs
 //      afvisning ville efterlade brikken på 11 og gøre testen rød).
-//  M2  afvisninger: mellem i hjemstræk / mellem-brænd (dobbelt) / baglæns
-//      blokeret af besat fremmed UD / brik i hjemstræk.
+//  M2  ét/to felter før eget UD: sekvensen kører FORBI eget UD og er lovlig
+//      (brugerfund) + MODPRØVE: et almindeligt kort drejer stadig ind.
+//      Dertil afvisninger: mellem-brænd (dobbelt) / baglæns blokeret af
+//      besat fremmed UD / brik i hjemstræk.
 //  M3  baglæns forbi EGET UD tæller ikke og spærrer aldrig ejeren: fra mellem
 //      4 går −5 til 3,2,1,[0=eget UD springes],59,58 → slut 58. Mutation der
 //      tæller UD med → slut 59 → rød.
@@ -112,9 +114,41 @@ void main() {
   });
 
   group('M2 — +2−5: afvisninger', () {
-    test('mellem-skridt ind i hjemstrækket → ingen sekvens', () {
-      // Brik på 58 (owner 0, hasLeftStart): +2 → 59, [0=eget UD → drej] →
-      // hjemstræk. Mellem i hjemstræk er forbudt.
+    test('ÉT FELT FØR eget UD: sekvensen kører FORBI og er lovlig', () {
+      // BRUGERFUND: "hvis man står 1 felt tilbage fra eget ud-felt, kan man
+      // ikke benytte kortet med 2 frem 5 tilbage".
+      //
+      // Før: +2 fra 59 drejede ind i hjemstrækket (slot 1), og sekvensen blev
+      // afvist, fordi man ikke kan bakke ud af målcirkler. Det var ikke en
+      // kant — fra dén position kunne kortet ALDRIG bruges.
+      //
+      // Nu (ejerens valg, kun dette kort): fremad-delen kører FORBI eget
+      // UD-felt uden at tælle det (§6).
+      //   +2:  59 → [0 = eget UD springes] → 1 → 2
+      //   −5:  2 → 1 → [0 springes] → 59 → 58 → 57 → 56
+      final GameState st = makeState(
+        cardRules: p25,
+        piecePositions: <List<PiecePosition>>[
+          startRow(0, replace: <PiecePosition>[const TrackPosition(59)]),
+          startRow(1),
+          startRow(2),
+          startRow(3),
+        ],
+      );
+      final List<Move> seqs = Rules(st.geometry)
+          .legalMoves(st, st.players[0], seven)
+          .where(isSeq)
+          .toList();
+      expect(seqs, hasLength(1), reason: 'sekvensen skal nu findes');
+      expect(seqs.single.steps.first.to, const TrackPosition(2),
+          reason: 'mellemfeltet er et BANEfelt, ikke hjemstræk');
+      expect(seqs.single.steps.last.to, const TrackPosition(56));
+    });
+
+    test('to felter før eget UD: samme — mellemfeltet er aldrig eget UD', () {
+      // Fra 58: +2 → 59, [0 springes], → 1. Mellemfeltet kan aldrig BLIVE
+      // eget UD-felt, fordi det springes over uden at tælle — invarianten
+      // bag "deterministisk pr. brik" holder altså stadig.
       final GameState st = makeState(
         cardRules: p25,
         piecePositions: <List<PiecePosition>>[
@@ -124,9 +158,34 @@ void main() {
           startRow(3),
         ],
       );
+      final List<Move> seqs = Rules(st.geometry)
+          .legalMoves(st, st.players[0], seven)
+          .where(isSeq)
+          .toList();
+      expect(seqs, hasLength(1));
+      expect(seqs.single.steps.first.to, const TrackPosition(1));
+      expect(seqs.single.steps.last.to, const TrackPosition(55));
+    });
+
+    test('MODPRØVE: et almindeligt kort drejer STADIG ind i hjemstrækket', () {
+      // Undtagelsen gælder KUN sekvens-kortet. Uden denne test kunne
+      // enterHome-valget brede sig til alle kort uden at noget blev rødt —
+      // og det ville være en helt anden regelændring end den, der er bestilt.
+      final GameState st = makeState(
+        cardRules: p25,
+        piecePositions: <List<PiecePosition>>[
+          startRow(0, replace: <PiecePosition>[const TrackPosition(59)]),
+          startRow(1),
+          startRow(2),
+          startRow(3),
+        ],
+      );
+      const PlayingCard two = PlayingCard(Rank.two, Suit.clubs);
       final List<Move> moves =
-          Rules(st.geometry).legalMoves(st, st.players[0], seven);
-      expect(moves.where(isSeq), isEmpty);
+          Rules(st.geometry).legalMoves(st, st.players[0], two);
+      expect(moves, hasLength(1));
+      expect(moves.single.steps.last.to, const HomeStretchPosition(0, 1),
+          reason: '+2 fra 59 skal stadig ende i hjemstrækket, slot 1');
     });
 
     test('mellem-landing på DOBBELT (brænd) → ingen sekvens', () {

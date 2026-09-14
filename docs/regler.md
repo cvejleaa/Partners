@@ -189,7 +189,8 @@ ikke findes — og er derfor ulovligt.
 ## 11. Hjemstræk 🔧 KODE
 
 - En brik drejer ind i sit **eget** hjemstræk, når den efter en hel omgang når
-  tilbage til sit eget UD-felt.
+  tilbage til sit eget UD-felt. ENESTE undtagelse: fremad-delen af 25 års
+  sekvens-kort (+2−5) kører forbi i stedet — se §12.
 - Man kan **ikke** rykke længere end hjemstrækkets bagende (slot 3) — et træk der
   ville overskride, er ulovligt.
 - En brik i hjemstrækket kan kun rykke **længere ind** (aldrig ud på banen igen)
@@ -241,8 +242,17 @@ ingen af dem):
     sekvensen ULOVLIG — trækket tilbydes ikke. (Valgt frem for "lovligt men
     brænder", som ingen ville vælge og kun ville være en fælde i valg-arket.
     Bemærk asymmetrien mod 7'eren, hvor brænd midt i en split ER lovligt.)
-  - Mellem-skridtet må ikke ende i hjemstrækket, og en brik i hjemstrækket kan
-    ikke bruge sekvensen (man kan ikke bakke i/ud af målcirkler, jf. §11).
+  - **Fremad-delen kører FORBI eget UD-felt** i stedet for at dreje ind i
+    hjemstrækket (§11 gælder altså ikke her). EJERENS VALG, truffet efter et
+    brugerfund: med tvungen indrejse kunne sekvensen ALDRIG bruges fra ét felt
+    før eget UD-felt — +2 landede i hjemstrækket, og man kan ikke bakke ud
+    derfra. Det var ikke en kant, men en fast død vinkel. Kortets egen tekst
+    (`partners-varianter.md`) siger kun "først 2 frem og derefter 5 tilbage med
+    samme brik" — intet om hjemstrækket. UD-feltet tæller ikke med undervejs,
+    jf. §6. Undtagelsen gælder KUN dette kort: et almindeligt fremadtræk
+    drejer stadig ind.
+  - En brik der allerede STÅR i hjemstrækket kan ikke bruge sekvensen (man kan
+    ikke bakke ud af målcirkler, jf. §11).
   - Baglæns-delen respekterer blokaden som −4 (§6) — intet hop.
 - **Multi (1×1, `multiPieces`/`multiSteps`)**: PRÆCIS N forskellige brikker
   rykker hver S frem, anvendt sekventielt (brik B må lande på brik As forladte
