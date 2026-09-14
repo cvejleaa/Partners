@@ -193,6 +193,17 @@ ikke findes — og er derfor ulovligt.
   sekvens-kort (+2−5) kører forbi i stedet — se §12.
 - Man kan **ikke** rykke længere end hjemstrækkets bagende (slot 3) — et træk der
   ville overskride, er ulovligt.
+- **HUSREGEL, bevidst valgt (ejer-bekræftet).** De oprindelige regler havde en
+  ventil: passede kortets værdi ikke, SKULLE de overskydende træk rykkes
+  baglæns ("vende" på en fri målcirkel). Den er fravalgt i alle varianter (se
+  `partners-varianter.md`), mens indrejsen forbliver tvungen og overskridelse
+  ulovlig. Konsekvensen er KENDT og ønsket: høje kort bliver ubrugelige for en
+  brik, jo tættere den kommer på sit eget mål — en brik fire felter fra sin
+  indgang kan kun bruge værdier op til syv. Har man ingen andre muligheder,
+  smides hånden (§13).
+  **Dette er IKKE en fejl, og det skal ikke "rettes".** Det er skrevet her,
+  fordi en gennemgang ellers med rette læser det som en forglemmelse — det
+  gjorde spil-rådgiveren, da +2−5-sagen blev undersøgt.
 - En brik i hjemstrækket kan kun rykke **længere ind** (aldrig ud på banen igen)
   og kan ikke slås.
 - En egen brik længere inde i hjemstrækket **blokerer** for at en anden egen brik

@@ -32,6 +32,26 @@ class AdminScreen extends ConsumerWidget {
 
   static String _label(Rank r) => PlayingCard(r, Suit.spades).rankLabel;
 
+  /// Indhold på en FAST lys flade.
+  ///
+  /// Skærmen er mørk, så temaets tekstfarve er lys. Lægger man en lys flade
+  /// oven på den UDEN at sætte forgrunden, arver teksten den lyse farve og
+  /// bliver lys-på-lys — ulæselig. Det er samme fejlklasse som blokken på
+  /// slutskærmen, der lånte tema-farver på en fast mørk baggrund; her er den
+  /// bare vendt om.
+  ///
+  /// ÉT sted, så en ny lys flade ikke skal huske at rette farverne selv:
+  /// wrap den i denne. Tekst med sin EGEN farve (fx de røde fejllinjer)
+  /// beholder den — merge overskriver ikke en eksplicit farve.
+  static Widget _onLightSurface({required Widget child}) =>
+      DefaultTextStyle.merge(
+        style: const TextStyle(color: Color(0xFF1B1B1B)),
+        child: IconTheme.merge(
+          data: const IconThemeData(color: Color(0xFF1B1B1B)),
+          child: child,
+        ),
+      );
+
   static String _hhmmss(DateTime d) {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(d.hour)}:${two(d.minute)}:${two(d.second)}';
@@ -183,7 +203,12 @@ class AdminScreen extends ConsumerWidget {
                         fontWeight: FontWeight.bold, color: Colors.red),
                   ),
                   const SizedBox(height: 4),
-                  Text(saveErr, style: const TextStyle(fontSize: 12)),
+                  // Uden farve arvede fejlbeskeden temaets LYSE tekst og stod
+                  // ulæselig på den lyse røde flade — netop når man havde
+                  // allermest brug for at kunne læse den.
+                  Text(saveErr,
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF1B1B1B))),
                   const SizedBox(height: 4),
                   const Text(
                     'Indstillingen virker stadig lokalt indtil næste deploy '
@@ -202,7 +227,8 @@ class AdminScreen extends ConsumerWidget {
               border: Border.all(color: Colors.green.shade300),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Column(
+            child: _onLightSurface(
+                child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
@@ -234,7 +260,7 @@ class AdminScreen extends ConsumerWidget {
                         fontSize: 11, color: Colors.red),
                   ),
               ],
-            ),
+            )),
           ),
           if (variantSaveErr.isNotEmpty)
             Container(
@@ -355,7 +381,8 @@ class _AiLevelsTileState extends ConsumerState<_AiLevelsTile> {
           borderRadius: BorderRadius.circular(8),
         ),
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-        child: Column(
+        child: _onLightSurface(
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
@@ -400,7 +427,7 @@ class _AiLevelsTileState extends ConsumerState<_AiLevelsTile> {
               },
             ),
           ],
-        ),
+        )),
       ),
     );
   }
