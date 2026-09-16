@@ -1302,7 +1302,8 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // spilleren valgt enkelt-brik-evnen (11 frem), må split-flowet derfor
     // ikke tage trykket alligevel — så ville statuslinjen skrive "vælg brik
     // 1 af 2" oven på et valg om ét stort træk.
-    if (_isMultiPieceCard(state, _selectedCard!) && _multiPieceMode != false) {
+    // MUTATION (d): mangler "&& _multiPieceMode != false".
+    if (_isMultiPieceCard(state, _selectedCard!)) {
       _handleSplitTap(state, pieceId);
       return;
     }
