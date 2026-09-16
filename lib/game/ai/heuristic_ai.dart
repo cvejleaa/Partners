@@ -11,17 +11,9 @@ import '../rules.dart';
 import 'ai_player.dart';
 
 class HeuristicAi implements AiPlayer {
-  HeuristicAi({Random? rng, this.useLegacyCardScore = false})
-      : _rng = rng ?? Random();
+  HeuristicAi({Random? rng}) : _rng = rng ?? Random();
 
   final Random _rng;
-
-  /// KUN til målingen. Med true bruges den gamle faste rang-tabel, så ny og
-  /// gammel kortvurdering kan spilles mod hinanden i samme kørsel
-  /// (test/ai_card_value_test.dart). Viser målingen at den nye er bedre,
-  /// fjernes flaget igen — to kortvurderinger er to vagter om samme regel,
-  /// og den ene kan ændres uden at nogen test opdager det.
-  final bool useLegacyCardScore;
 
   @override
   PlayingCard chooseExchangeCard(GameState state, int playerIndex,
@@ -128,44 +120,15 @@ class HeuristicAi implements AiPlayer {
 
   // ---------------------------------------------------------------------------
 
-  int _cardScore(CardRules rules, PlayingCard c) {
-    if (!useLegacyCardScore) {
-      // UD-kortet er uvurderligt med brikker i start og dødt uden — men
-      // kalderne her bruger kun scoren til at rangere kort indbyrdes, og
-      // exit-hensynet er allerede håndteret ovenfor. Et rent UD-kort har
-      // ingen anden værdi, så det ryger nederst og gives væk først.
-      return cardAbilityValue(rules, c);
-    }
-    if (c.isExit) return 12;
-    switch (c.rank!) {
-      case Rank.ace:
-        return 11;
-      case Rank.king:
-        return 10;
-      case Rank.queen:
-        return 9;
-      case Rank.jack:
-        return 8;
-      case Rank.ten:
-        return 7;
-      case Rank.nine:
-        return 6;
-      case Rank.eight:
-        return 5;
-      case Rank.seven:
-        return 4;
-      case Rank.six:
-        return 3;
-      case Rank.five:
-        return 2;
-      case Rank.four:
-        return 1;
-      case Rank.three:
-        return 0;
-      case Rank.two:
-        return 0;
-    }
-  }
+  /// Kortets værdi, udledt af hvad det KAN under de gældende regler.
+  ///
+  /// Her lå før en fast rang-tabel (es 11, konge 10, … firer 1, toer 0).
+  /// Den er væk, fordi den løj under enhver tilpasset opsætning — og fordi
+  /// to kortvurderinger side om side ville være to vagter om samme regel.
+  /// Se test/ai_card_value_test.dart for den testede RANGORDNING, og
+  /// test/ai_card_value_measure_test.dart for målingen bag valget.
+  int _cardScore(CardRules rules, PlayingCard c) =>
+      cardAbilityValue(rules, c);
 
   double _scoreMove(GameState state, Player me, Move move, double noiseAmp) {
     double score = 0;
