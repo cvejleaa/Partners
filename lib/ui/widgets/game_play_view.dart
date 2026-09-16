@@ -811,7 +811,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             onTap: () => _chooseMultiMode(false),
           ),
           _modeButton(
-            label: _multiAbilityLabel(state, card!),
+            label: _multiAbilityLabel(state, card),
             icon: Icons.groups,
             selected: _multiPieceMode == true,
             onTap: () => _chooseMultiMode(true),
