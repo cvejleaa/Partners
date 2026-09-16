@@ -91,14 +91,26 @@ void main() {
 
       expect(t.illegal, 0, reason: '$navn: ingen ulovlige træk');
 
+      // Løse bånd på de tal, der FØRST viste en (støj-)forringelse ved 20
+      // seeds. De blev kun printet, og en regression i netop dem ville
+      // derfor stå i et testoutput, ingen læser rutinemæssigt (QC-fund).
+      // Båndene er sat over det målte (smidte 14,1-19,4; tørke 2,7-3,5), så
+      // de ikke flakker ved små ændringer, men fanger et sammenbrud.
+      expect(t.avgDiscards, lessThan(25.0),
+          reason: '$navn: flere smidte hænder betyder flere døde kort '
+              'på hånden — målt 14,1-19,4');
+      expect(t.avgDrought, lessThan(5.0),
+          reason: '$navn: exit-tørke er prøven på om byttet blev dummere — '
+              'målt 2,7-3,5');
+
       // VAGTEN, ikke bare et tal. Med den gamle rang-tabel gav AI'en fireren
       // væk 2,67-4,36 gange pr. spil; med den evne-udledte 0,01-0,22.
       // Båndet er valgt så den GAMLE værdi gør testen rød — et bånd der
       // rummede begge tal ville ikke måle noget.
-      expect(t.givenAvg('four'), lessThan(0.5),
+      expect(t.givenAvg('four'), lessThan(0.3),
           reason: '$navn: fireren er et topkort (baglæns fra eget UD er '
               'spillets største tempo) og må ikke foræres væk — '
-              'gammel tabel gav 2,67-4,36 pr. spil');
+              'gammel tabel gav 2,67-4,36 pr. spil; ny måler 0,00-0,05');
     });
     // ignore: avoid_print
     print(out.toString());
