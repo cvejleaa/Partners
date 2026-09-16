@@ -60,10 +60,10 @@ class HeuristicAi implements AiPlayer {
       return exitCards.first;
     }
 
-    // Ellers giv det laveste-værdi kort — men behold mit exit-kort hvis jeg
-    // selv skal bruge det og ikke har overskud.
+    // MUTATION (test-manager, bånd-tjek): giv det HØJESTE-værdi kort væk i
+    // stedet for det laveste — realistisk "forkert kort i byttet"-fejl.
     hand.sort((PlayingCard a, PlayingCard b) =>
-        _cardScore(rules, a).compareTo(_cardScore(rules, b)));
+        _cardScore(rules, b).compareTo(_cardScore(rules, a)));
     if (params.protectExitCard && iNeedStart && !hasSurplusExit) {
       final Iterable<PlayingCard> nonExit =
           hand.where((PlayingCard c) => !cardExitsStart(rules, c));
