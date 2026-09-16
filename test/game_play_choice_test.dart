@@ -118,6 +118,42 @@ GameState aceState() => makeState(
       ],
     );
 
+/// BRUGERENS EGEN OPSÆTNING: en firer, der KUN kan baglæns.
+///
+/// Sat som admin ville sætte den — via `withRank`, samme vej som gemte
+/// overrides går gennem `effectiveCardRules` og videre i spillets `state.cr`.
+/// Testen nedenfor er der, fordi resten af firer-testene kører på de
+/// KLASSISKE standardregler (frem ELLER tilbage), og de siger derfor intet
+/// om det spil, der faktisk spilles. Uden denne test hvilede påstanden
+/// "ændringen følger din opsætning" kun på kode-læsning.
+final CardRules backwardOnlyFour = CardRules.defaults().withRank(
+  Rank.four,
+  const CardRuleConfig(backwardSteps: 4),
+);
+
+GameState backwardFourState() => makeState(
+      cardRules: backwardOnlyFour,
+      variant: classicVariant,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(20),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[four],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
+
 /// Alle egne brikker i start: kongens eneste lovlige træk er "ud af start".
 GameState kingState() => makeState(
       cardRules: classic,
@@ -408,6 +444,30 @@ void main() {
     expect(applied, isEmpty);
     expect(find.text('4 frem'), findsNothing,
         reason: 'knapperne skal være væk igen efter Annullér');
+  });
+
+  testWidgets(
+      'ADMIN-OPSÆTNING: en firer der KUN kan baglæns spørger ikke — den rykker',
+      (t) async {
+    // Hele fladen udleder sine valg af de træk, motoren FANDT, og af
+    // `state.cardRules` — som bærer admins gemte overrides. Er fireren sat
+    // til kun baglæns, findes der ét lovligt træk for brikken, og så er der
+    // intet at spørge om.
+    final GameState state = backwardFourState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+    });
+    expect(applied, hasLength(1),
+        reason: 'ét lovligt træk → udfør det, spørg ikke');
+    expect(applied.single.steps.single.to, const TrackPosition(16),
+        reason: '20 − 4 = 16; fremad findes ikke i denne opsætning');
+    // Og det, der IKKE må være der: hverken spørgsmålet eller en frem-knap.
+    expect(find.text('Denne brik kan flere ting — vælg én:'), findsNothing);
+    expect(find.text('4 frem'), findsNothing,
+        reason: 'et træk admin har slået fra, må aldrig kunne vælges');
+    expect(find.text('Annullér'), findsNothing);
   });
 
   testWidgets('KONGEN: brikken har allerede svaret — ingen knapper, træk straks',
