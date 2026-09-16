@@ -1097,11 +1097,8 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// (matchning, 'N træk tilbage', canExtend, Bekræft) læser i stedet denne,
   /// og så længe [_multiPieceMode] er null, er de to lister den samme liste.
   List<Move> _flowMoves() {
-    final bool? mode = _multiPieceMode;
-    if (mode == null) return _candidateMoves;
-    return _candidateMoves
-        .where((Move m) => !_isSwapMove(m) && (piecesInMove(m) > 1) == mode)
-        .toList();
+    // MUTATION (c): ingen filtrering overhovedet.
+    return _candidateMoves;
   }
 
   bool _isSwapCard(GameState state, PlayingCard c) {
