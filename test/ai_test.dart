@@ -130,4 +130,35 @@ void main() {
     expect(ai.chooseExchangeCard(state, 0), ace,
         reason: 'fireren er min eneste vej ud — den må ikke gives væk');
   });
+
+  final CardRules twoExitCards = CardRules.defaults()
+      .withRank(
+          Rank.three, const CardRuleConfig(exitStart: true, forwardSteps: <int>[3]))
+      .withRank(Rank.ten, const CardRuleConfig(exitStart: true, forwardSteps: <int>[]));
+
+  test('byttet: mellem to udgangskort gives det MINST alsidige væk', () {
+    final state = makeState(
+      cardRules: twoExitCards,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          for (int s = 0; s < 4; s++) TrackPosition(3 + s * 7),
+        ],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(1, s)],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(2, s)],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(3, s)],
+      ],
+      hands: <List<PlayingCard>>[
+        const <PlayingCard>[
+          PlayingCard(Rank.three, Suit.hearts),
+          PlayingCard(Rank.ten, Suit.clubs),
+        ],
+        for (int i = 1; i < 4; i++) const <PlayingCard>[],
+      ],
+    );
+    final ai = HeuristicAi(rng: Random(0));
+    expect(
+        ai.chooseExchangeCard(state, 0), const PlayingCard(Rank.ten, Suit.clubs),
+        reason: 'det mindst alsidige udgangskort (tieren) skal gives væk — '
+            'ikke treeren, som også kan rykke frem');
+  });
 }
