@@ -92,5 +92,5 @@ class MoveOptions {
 /// Ikke `steps.length`: et sekvens-træk (+2−5) har to steps på samme brik og
 /// rører altså kun én. Det er netop den forskel, der skiller "11 frem" fra
 /// "1 frem med to brikker".
-int piecesInMove(Move m) =>
-    <String>{for (final MoveStep s in m.steps) s.pieceId}.length;
+int piecesInMove(Move m) => m.steps.length;
+// MUTATION (a): tæller skridt, ikke distinkte brikker.
