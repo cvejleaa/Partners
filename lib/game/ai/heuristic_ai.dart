@@ -127,8 +127,9 @@ class HeuristicAi implements AiPlayer {
   /// to kortvurderinger side om side ville være to vagter om samme regel.
   /// Se test/ai_card_value_test.dart for den testede RANGORDNING, og
   /// test/ai_card_value_measure_test.dart for målingen bag valget.
-  int _cardScore(CardRules rules, PlayingCard c) =>
-      cardAbilityValue(rules, c);
+  // MUTATION (d) - maa ALDRIG merges: konstant score, AI'en er ligeglad med
+  // hvilket kort den giver vaek (giver fireren vaek igen).
+  int _cardScore(CardRules rules, PlayingCard c) => 0;
 
   double _scoreMove(GameState state, Player me, Move move, double noiseAmp) {
     double score = 0;
