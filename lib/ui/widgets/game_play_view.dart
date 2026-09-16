@@ -1181,7 +1181,8 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // lydløst: nøjagtig den fejl brugeren meldte, bare et niveau nede. Det
     // modale ark spærrede brættet; en inline-form gør ikke, så spærringen
     // skal skrives. Vejen ud er Annullér.
-    if (_pieceChoice.isNotEmpty) return;
+    // MUTATION (test-manager, midlertidig): vagten fjernet med vilje for at
+    // bevise at QC-FUND-testen fanger dens fravær. Rulles tilbage.
     if (_swapFlowActive(state, _selectedCard!)) {
       _handleSwapTap(state, pieceId);
       return;
