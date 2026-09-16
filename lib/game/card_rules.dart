@@ -420,7 +420,8 @@ int cardAbilityValue(CardRules rules, PlayingCard c) {
   if (cfg.backwardSteps != null) v += 30;
   if (cfg.hasFwdThenBack) v += 30;
   if (cfg.swap) v += 32;
-  if (cfg.hasMultiForward) v += 25;
+  // MUTATION: hasMultiForward-tillæg fjernet.
+  // if (cfg.hasMultiForward) v += 25;
   if (cfg.jumpsBlockade) v += 12;
 
   // At kunne VÆLGE SIN AFSTAND er en værdi i sig selv: esset (1 ELLER 11) er
