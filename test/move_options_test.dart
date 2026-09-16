@@ -27,6 +27,19 @@ Move fwd() => const Move(card: nine, steps: <MoveStep>[
       MoveStep(pieceId: 'p0.1', from: TrackPosition(3), to: TrackPosition(12)),
     ]);
 
+/// 1×1: to FORSKELLIGE brikker, ét felt hver.
+Move multi() => const Move(card: nine, steps: <MoveStep>[
+      MoveStep(pieceId: 'p0.0', from: TrackPosition(5), to: TrackPosition(6)),
+      MoveStep(pieceId: 'p0.1', from: TrackPosition(40), to: TrackPosition(41)),
+    ]);
+
+/// Sekvens (+2−5): to skridt, men SAMME brik. Den skelnen er hele pointen —
+/// tælles der på `steps.length`, ser sekvensen ud som et fler-briks-træk.
+Move seq() => const Move(card: nine, steps: <MoveStep>[
+      MoveStep(pieceId: 'p0.2', from: TrackPosition(3), to: TrackPosition(5)),
+      MoveStep(pieceId: 'p0.2', from: TrackPosition(5), to: TrackPosition(60 - 1)),
+    ]);
+
 void main() {
   test('både byt og flyt → spilleren SKAL vælge', () {
     final MoveOptions o = MoveOptions.classify(<Move>[swap(), fwd()]);
@@ -73,5 +86,43 @@ void main() {
     expect(o.hasSwap, isFalse);
     expect(o.hasOther, isTrue);
     expect(o.needsChoice, isFalse);
+  });
+
+  // ---------------------------------------------------------------------
+  // Brik-antal: skellet mellem "11 frem" og "1 frem med to brikker".
+  // ---------------------------------------------------------------------
+
+  test('piecesInMove tæller BRIKKER, ikke skridt', () {
+    expect(piecesInMove(fwd()), 1);
+    expect(piecesInMove(multi()), 2);
+    // Kernen: sekvensen har TO skridt, men rører kun ÉN brik. Talte vi
+    // steps.length, ville +2−5 blive læst som et fler-briks-træk, og
+    // 25 års syver ville få et evne-valg, den ikke har.
+    expect(seq().steps, hasLength(2));
+    expect(piecesInMove(seq()), 1);
+  });
+
+  test('begge brik-antal til stede → der ER to slags træk at skelne', () {
+    final MoveOptions o = MoveOptions.classify(<Move>[fwd(), multi()]);
+    expect(o.hasSinglePiece, isTrue);
+    expect(o.hasMultiPiece, isTrue);
+    expect(o.hasBothPieceCounts, isTrue);
+  });
+
+  test('kun ét-briks-træk → intet brik-antal at vælge imellem', () {
+    final MoveOptions o = MoveOptions.classify(<Move>[fwd(), seq()]);
+    expect(o.hasSinglePiece, isTrue);
+    expect(o.hasMultiPiece, isFalse,
+        reason: 'sekvensen rører kun én brik');
+    expect(o.hasBothPieceCounts, isFalse);
+  });
+
+  test('et BYT tæller ikke med i brik-antallet', () {
+    // Byttet rører to brikker, men det er en tredje slags træk og har sin
+    // egen knap. Talte det med her, ville en nier se ud som om den også
+    // havde et fler-briks-træk.
+    final MoveOptions o = MoveOptions.classify(<Move>[swap(), fwd()]);
+    expect(o.hasMultiPiece, isFalse);
+    expect(o.hasBothPieceCounts, isFalse);
   });
 }

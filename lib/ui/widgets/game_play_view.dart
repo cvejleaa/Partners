@@ -104,6 +104,16 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// andet, og en knap FØR brik-trykket kunne ikke sige det.
   List<Move> _pieceChoice = <Move>[];
 
+  /// Multi-brik-kort med en SEPARAT enkelt-brik-evne (25 års knægt: "11 frem
+  /// ELLER 1×1"): har spilleren valgt hvilken af de to evner kortet skal
+  /// bruges til? null = ikke valgt endnu.
+  ///
+  /// Feltet er null på ALLE andre kort — og så er [_flowMoves] identisk med
+  /// [_candidateMoves]. Det er med vilje den eneste sikring, der betyder
+  /// noget her: den klassiske syver og 4×1 kan ikke rammes af denne gren,
+  /// uanset hvad der måtte være galt i den.
+  bool? _multiPieceMode;
+
   /// Memo for canPlay (se _buildPlayArea).
   String? _canPlayKey;
   bool _canPlayMemo = false;
@@ -179,6 +189,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       _candidateMoves = <Move>[];
       _swapFirstPiece = null;
       _hybridSwapMode = null;
+      _multiPieceMode = null;
       _pieceChoice = <Move>[];
       _splitPath.clear();
     }
@@ -725,12 +736,16 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       // Samme form som kortets eget valg ("Kortet kan to ting — vælg én:"),
       // et niveau længere nede: nu er det brikken, der kan flere ting.
       label = 'Denne brik kan flere ting — vælg én:';
+    } else if (_multiPieceMode == null && _multiChoicePending(state)) {
+      // FØR split-grenene: ellers ville tælleteksten ("N træk tilbage")
+      // stå og love en fordeling, spilleren ikke har valgt endnu.
+      label = 'Kortet kan to ting — vælg én:';
     } else if (_isSplitCard(state, card)) {
       final int rem = _splitRemaining(state);
       label = _splitPath.isEmpty
           ? 'Vælg første brik ($rem træk tilbage)'
           : '$rem træk tilbage — vælg næste brik eller bekræft';
-    } else if (_isMultiPieceCard(state, card)) {
+    } else if (_isMultiPieceCard(state, card) && _multiPieceMode != false) {
       // Multi-brik-kort (fx 1×1): tæl BRIKKER, ikke felter — "11 træk
       // tilbage" ville være nonsens her.
       final cfg = state.cardRules.forRank(card.rank!);
@@ -743,7 +758,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       label = _swapFirstPiece == null
           ? 'Byt: vælg den første af to brikker'
           : 'Byt: vælg brikken der byttes med';
-    } else if (_awaitingChoice()) {
+    } else if (_awaitingChoice(state)) {
       // Forklarer OGSÅ hvorfor ingen brik lyser — ellers ligner det mørke
       // bræt en fejl.
       label = 'Kortet kan to ting — vælg én:';
@@ -768,6 +783,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         state.cardRules.forRank(card.rank!).swap &&
         !_isSwapCard(state, card) &&
         MoveOptions.classify(_candidateMoves).needsChoice;
+    // Bliver STÅENDE efter valget, ligesom nierens: man skal kunne skifte
+    // mening, indtil en brik er trykket.
+    final bool isMultiAbility = card != null && _multiChoicePending(state);
     final bool isMultiStep = card != null && _isMultiPieceCard(state, card);
     final bool canCommit = isMultiStep && _firstFullyMatching() != null;
     final List<Widget> controls = <Widget>[
@@ -783,6 +801,20 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             icon: Icons.swap_horiz,
             selected: _hybridSwapMode == true,
             onTap: () => setState(() => _hybridSwapMode = true),
+          ),
+        ],
+        if (isMultiAbility) ...<Widget>[
+          _modeButton(
+            label: _singleAbilityLabel(state),
+            icon: Icons.arrow_forward,
+            selected: _multiPieceMode == false,
+            onTap: () => _chooseMultiMode(false),
+          ),
+          _modeButton(
+            label: _multiAbilityLabel(state, card!),
+            icon: Icons.groups,
+            selected: _multiPieceMode == true,
+            onTap: () => _chooseMultiMode(true),
           ),
         ],
         if (_pieceChoice.isNotEmpty) ..._pieceChoiceButtons(state),
@@ -822,6 +854,37 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         ),
       ],
     );
+  }
+
+  /// Skift af evne rydder et påbegyndt forløb. Ellers ville en halvvejs
+  /// valgt 1×1-sti hænge ved ind i "11 frem" og matche et træk, spilleren
+  /// ikke har peget på.
+  void _chooseMultiMode(bool multi) {
+    setState(() {
+      _multiPieceMode = multi;
+      _splitPath.clear();
+      _pieceChoice = <Move>[];
+    });
+  }
+
+  /// Etiketten for enkelt-brik-evnen — UDLEDT af de træk motoren fandt,
+  /// aldrig hardkodet. "11 frem" ville lyve på et admin-kort med en anden
+  /// afstand.
+  String _singleAbilityLabel(GameState state) {
+    final Set<String> distinct = <String>{
+      for (final Move m in _candidateMoves)
+        if (!_isSwapMove(m) && piecesInMove(m) == 1) _describeMove(state, m),
+    };
+    return distinct.length == 1 ? distinct.first : 'Flyt én brik';
+  }
+
+  /// Etiketten for multi-brik-evnen. Her er kortets opsætning den ærlige
+  /// kilde: antallet af brikker og skridt er netop dét, evnen ER.
+  String _multiAbilityLabel(GameState state, PlayingCard c) {
+    final cfg = state.cardRules.forRank(c.rank!);
+    final int n = cfg.multiPieces ?? 2;
+    final int st = cfg.multiSteps ?? 1;
+    return '$st frem med $n brikker';
   }
 
   /// Den ENE Annullér-knap. Betydningen er den samme begge steder den bruges:
@@ -970,6 +1033,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         // spørge om. onlyOption er null ved nul lovlige træk, og så skal der
         // heller ikke sættes en tilstand.
         _hybridSwapMode = opts.onlyOption;
+        _multiPieceMode = null;
       }
     });
   }
@@ -988,10 +1052,57 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   ///
   /// ÉN afledt vagt, brugt af brik-tryk, highlightning OG statuslinjen —
   /// reglen blev før regnet forfra tre steder og kunne drive fra hinanden.
-  bool _awaitingChoice() =>
-      _selectedCard != null &&
-      _hybridSwapMode == null &&
-      MoveOptions.classify(_candidateMoves).needsChoice;
+  bool _awaitingChoice(GameState state) {
+    if (_selectedCard == null) return false;
+    // Byt ELLER flyt (25 års nier).
+    if (_hybridSwapMode == null &&
+        MoveOptions.classify(_candidateMoves).needsChoice) {
+      return true;
+    }
+    // Én brik ELLER flere brikker (25 års knægt: 11 frem ELLER 1×1).
+    return _multiPieceMode == null && _multiChoicePending(state);
+  }
+
+  /// Har kortet BÅDE en multi-brik-evne og en helt anden evne på én brik?
+  ///
+  /// Afgøres på kortets EVNER, ikke på trækkenes form — og det er hele
+  /// pointen. En delt syver laver også både ét-briks- og fler-briks-træk,
+  /// men dér er de to måder at bruge SAMME evne, og split-flowet stiller
+  /// allerede det spørgsmål brik for brik. Ville man dele på formen, ville
+  /// syveren blive brækket i to.
+  ///
+  /// `splitTotal` tæller derfor IKKE med. Kun `multiPieces` (1×1) sammen med
+  /// en rigtig anden evne. Aldrig på rang: admin kan flytte evnerne rundt.
+  bool _hasSeparateMultiAbility(GameState state, PlayingCard c) {
+    if (c.isExit) return false;
+    final cfg = state.cardRules.forRank(c.rank!);
+    if (!cfg.hasMultiForward) return false;
+    return cfg.forwardSteps.isNotEmpty ||
+        cfg.backwardSteps != null ||
+        cfg.hasFwdThenBack;
+  }
+
+  /// Venter kortet på, at spilleren vælger mellem de to evner? Kun sandt når
+  /// kortet HAR to evner OG begge er lovlige i stillingen lige nu.
+  bool _multiChoicePending(GameState state) {
+    final PlayingCard? c = _selectedCard;
+    if (c == null || !_hasSeparateMultiAbility(state, c)) return false;
+    return MoveOptions.classify(_candidateMoves).hasBothPieceCounts;
+  }
+
+  /// De træk, det VALGTE flow arbejder på.
+  ///
+  /// [_candidateMoves] filtreres ALDRIG — den forbliver den ærlige kilde til
+  /// klassifikationen, knaprækken og tælleteksten. Fem steder i split-flowet
+  /// (matchning, 'N træk tilbage', canExtend, Bekræft) læser i stedet denne,
+  /// og så længe [_multiPieceMode] er null, er de to lister den samme liste.
+  List<Move> _flowMoves() {
+    final bool? mode = _multiPieceMode;
+    if (mode == null) return _candidateMoves;
+    return _candidateMoves
+        .where((Move m) => !_isSwapMove(m) && (piecesInMove(m) > 1) == mode)
+        .toList();
+  }
 
   bool _isSwapCard(GameState state, PlayingCard c) {
     if (c.isExit) return false;
@@ -1032,7 +1143,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // påstod altså en tilstand, der ikke var valgt, og pegede på præcis det
     // tryk, brugeren klagede over. Et tomt bræt siger "jeg venter på dig"
     // uden at kræve, at nogen læser en linje tekst.
-    if (_awaitingChoice()) return <String>{};
+    if (_awaitingChoice(state)) return <String>{};
     // Venter et trækvalg for én brik, er det KUN den brik, der er i spil.
     // Ellers ville brættet invitere til et tryk et andet sted, mens
     // spørgsmålet stod åbent — samme fejl som nierens, i det små.
@@ -1059,7 +1170,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       }
       return set;
     }
-    if (card != null && _isMultiPieceCard(state, card)) {
+    if (card != null &&
+        _isMultiPieceCard(state, card) &&
+        _multiPieceMode != false) {
       // Højlight ALLE brikker der kan vælges som næste delskridt — uanset
       // hvor i m.steps de står. Brikker der allerede er valgt udelukkes.
       final Set<String> alreadyChosen = <String>{
@@ -1082,7 +1195,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// SOMEWHERE i m.steps — rækkefølgen i UI er fri. Byt-par (positivt
   /// genkendt) hører aldrig til i dette flow, uanset admin-kombination.
   List<Move> _splitMatchingMoves() {
-    return _candidateMoves.where((Move m) => !_isSwapMove(m)).where((Move m) {
+    return _flowMoves().where((Move m) => !_isSwapMove(m)).where((Move m) {
       if (m.steps.length < _splitPath.length) return false;
       for (final MoveStep p in _splitPath) {
         final bool found = m.steps.any((MoveStep s) =>
@@ -1106,8 +1219,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// tilfredse.
   int _splitRemaining(GameState state) {
     final List<Move> matching = _splitMatchingMoves();
-    final List<Move> pool =
-        matching.isEmpty ? _candidateMoves : matching;
+    final List<Move> pool = matching.isEmpty ? _flowMoves() : matching;
     if (pool.isEmpty) return 0;
     int used = 0;
     for (final MoveStep s in _splitPath) {
@@ -1173,7 +1285,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // brugerfundet — man mistede byt-muligheden uden at have valgt, og et
     // flyt kan ikke fortrydes. Brættet er mørkt imens (se _highlightSet), så
     // der er heller ingen brik der inviterer til trykket.
-    if (_awaitingChoice()) return;
+    if (_awaitingChoice(state)) return;
     // Samme regel ét niveau nede (QC-fund). Står brikkens eget valg åbent, er
     // KUN den brik markeret — så et tryk et andet sted må heller ikke gøre
     // noget. Uden denne vagt udførte et tryk på en anden brik med præcis ét
@@ -1186,13 +1298,17 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       _handleSwapTap(state, pieceId);
       return;
     }
-    if (_isMultiPieceCard(state, _selectedCard!)) {
+    // `_isMultiPieceCard` afgøres af KORTET, ikke af det valgte flow. Har
+    // spilleren valgt enkelt-brik-evnen (11 frem), må split-flowet derfor
+    // ikke tage trykket alligevel — så ville statuslinjen skrive "vælg brik
+    // 1 af 2" oven på et valg om ét stort træk.
+    if (_isMultiPieceCard(state, _selectedCard!) && _multiPieceMode != false) {
       _handleSplitTap(state, pieceId);
       return;
     }
     // Byt-par (hybrid-kortets anden tilstand) hører ikke hjemme i det
     // generiske flow — de vælges via byt-tilstanden.
-    final List<Move> matching = _candidateMoves
+    final List<Move> matching = _flowMoves()
         .where((Move m) =>
             !_isSwapMove(m) && m.steps.first.pieceId == pieceId)
         .toList();
@@ -1243,7 +1359,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // sum=1 [A alene] og sum=5 [A+B] begge er valide), venter vi på
     // brugeren — de kan tappe flere brikker eller trykke 'Bekræft' for at
     // afslutte med den nuværende delvise split.
-    final bool canExtend = _candidateMoves.any((Move m) {
+    final bool canExtend = _flowMoves().any((Move m) {
       if (m.steps.length <= _splitPath.length) return false;
       return _moveMatchesPath(m);
     });
@@ -1265,7 +1381,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
   /// Det første move hvor præcis vores valgte sti er hele move'et.
   Move? _firstFullyMatching() {
-    for (final Move m in _candidateMoves) {
+    for (final Move m in _flowMoves()) {
       if (m.steps.length != _splitPath.length) continue;
       if (_moveMatchesPath(m)) return m;
     }

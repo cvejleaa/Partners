@@ -39,6 +39,9 @@ const PlayingCard king = PlayingCard(Rank.king, Suit.clubs);
 
 /// Klassisk es: ud af start ELLER 1 frem ELLER 11 frem.
 const PlayingCard ace = PlayingCard(Rank.ace, Suit.diamonds);
+
+/// 25 års knægt: 11 frem ELLER 1×1 — to FORSKELLIGE evner på samme kort.
+const PlayingCard jack = PlayingCard(Rank.jack, Suit.hearts);
 final CardRules p25 = effectiveCardRules(partners25, CardRules.defaults());
 final CardRules classic = CardRules.defaults();
 
@@ -147,6 +150,34 @@ GameState choiceState() => makeState(
       ],
       hands: <List<PlayingCard>>[
         <PlayingCard>[nine],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
+
+/// Knægten, hvor BEGGE evner er lovlige samtidig: to egne brikker på banen,
+/// langt fra hinanden. Hver kan rykke 11 frem alene (p0.0: 5 → 17, idet felt
+/// 15 er et fremmed UD-felt og ikke tæller), og de kan tilsammen rykke 1 frem
+/// hver. Uden BEGGE dele ville der ikke være noget at vælge imellem — og så
+/// målte testen ingenting.
+GameState jackState() => makeState(
+      cardRules: p25,
+      variant: partners25,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(5),
+          const TrackPosition(40),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[jack],
         const <PlayingCard>[],
         const <PlayingCard>[],
         const <PlayingCard>[],
@@ -361,6 +392,69 @@ void main() {
     // Og valget skal stadig stå åbent — ikke være tabt på gulvet.
     expect(find.text('1 frem'), findsOneWidget);
     expect(find.text('11 frem'), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // Knægten: 11 frem ELLER 1×1. Det var her spørgsmålet var FORKLÆDT — det
+  // stod som "Hvor mange felter?" med svarene "1 frem"/"11 frem", selv om
+  // svaret i virkeligheden afgør, om kortet bliver ét stort træk eller to
+  // små. Ingen kunne gætte det.
+  // -------------------------------------------------------------------------
+
+  testWidgets('KNÆGTEN: de to EVNER står som knapper — ikke som en afstand',
+      (t) async {
+    final GameState state = jackState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+    });
+    expect(applied, isEmpty,
+        reason: 'uafgjort evne-valg må ikke flytte noget');
+    expect(find.text('11 frem'), findsOneWidget);
+    expect(find.text('1 frem med 2 brikker'), findsOneWidget);
+    // Det gamle, forklædte spørgsmål må IKKE være der længere.
+    expect(find.text('Hvor mange felter?'), findsNothing);
+  });
+
+  testWidgets('KNÆGTEN: vælger man 11 frem, bliver det ÉT træk på ÉN brik',
+      (t) async {
+    final GameState state = jackState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tap(find.text('11 frem'));
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+    });
+    expect(applied, hasLength(1));
+    expect(applied.single.steps, hasLength(1),
+        reason: 'ét stort træk — ikke to små');
+    // 5 + 11 tællende felter = 17, fordi felt 15 er et fremmed UD-felt og
+    // ikke tæller med. Ramte den 16, havde den talt UD-feltet.
+    expect(applied.single.steps.single.to, const TrackPosition(17));
+  });
+
+  testWidgets('KNÆGTEN: vælger man 1×1, kræver det TO brikker — ét træk med to steps',
+      (t) async {
+    final GameState state = jackState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tap(find.text('1 frem med 2 brikker'));
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+      await t.pumpAndSettle();
+      // Første brik må IKKE have udløst et træk i sig selv.
+      await t.tapAt(pieceSpot(t, state, 'p0.1'));
+    });
+    expect(applied, hasLength(1),
+        reason: 'de to tryk er ÉT træk, ikke to');
+    expect(applied.single.steps, hasLength(2));
+    expect(
+        applied.single.steps.map((MoveStep s) => s.pieceId).toSet(),
+        <String>{'p0.0', 'p0.1'},
+        reason: 'én brik hver, ikke samme brik to gange');
   });
 
   testWidgets('vælger man BYT, går trykket i byt-flowet — ikke flyt',
