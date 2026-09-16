@@ -414,14 +414,14 @@ int cardAbilityValue(CardRules rules, PlayingCard c) {
       : cfg.forwardSteps.reduce((int a, int b) => a > b ? a : b);
   v += ((reach > 13 ? 13 : reach) * 12) ~/ 10;
 
-  // Evnerne. Deling og baglæns vejer tungt, fordi de løser de stillinger
-  // hvor almindelige kort er døde.
-  if (cfg.splitTotal != null) v += 35;
-  if (cfg.backwardSteps != null) v += 30;
-  if (cfg.hasFwdThenBack) v += 30;
-  if (cfg.swap) v += 32;
-  if (cfg.hasMultiForward) v += 25;
-  if (cfg.jumpsBlockade) v += 12;
+  // MUTATION (test-manager, gentaget hul-tjek): alle seks direkte
+  // evne-tillæg fjernet med vilje for at bevise dækningen.
+  // if (cfg.splitTotal != null) v += 35;
+  // if (cfg.backwardSteps != null) v += 30;
+  // if (cfg.hasFwdThenBack) v += 30;
+  // if (cfg.swap) v += 32;
+  // if (cfg.hasMultiForward) v += 25;
+  // if (cfg.jumpsBlockade) v += 12;
 
   // At kunne VÆLGE SIN AFSTAND er en værdi i sig selv: esset (1 ELLER 11) er
   // stærkere end tallet siger, fordi det både kan det præcise lille skridt og
