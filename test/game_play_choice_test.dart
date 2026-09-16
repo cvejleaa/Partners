@@ -45,6 +45,20 @@ const PlayingCard jack = PlayingCard(Rank.jack, Suit.hearts);
 final CardRules p25 = effectiveCardRules(partners25, CardRules.defaults());
 final CardRules classic = CardRules.defaults();
 
+/// Admin-hybrid (findes ikke i nogen skibet variant): "1 ELLER 9 frem ELLER
+/// 1×1" — enkelt-brik-evnen har SELV to afstande, så et tryk i enkelt-tilstand
+/// er tvetydigt for netop den brik. Bruges KUN til at bevise, at rutningen i
+/// _handlePieceTap rent faktisk styrer noget: uden "&& _multiPieceMode !=
+/// false" ville et sådant tryk falde i splitflowets EGEN afstands-dialog
+/// ("Hvor mange felter?") i stedet for de inline "1 frem"/"9 frem"-knapper —
+/// præcis det forklædte spørgsmål, denne commit fjernede for knægten.
+const PlayingCard hybridTen = PlayingCard(Rank.ten, Suit.spades);
+final CardRules hybridRules = CardRules.defaults().withRank(
+  Rank.ten,
+  const CardRuleConfig(
+      forwardSteps: <int>[1, 9], multiPieces: 2, multiSteps: 1),
+);
+
 /// Kun ÉN brik på banen, langt fra både start og hjemstræk, så både 4 frem
 /// (→ felt 24) og 4 tilbage (→ felt 16) er lovlige for netop den brik.
 /// Resten står i start og kan intet med en firer — så de to eneste lovlige
@@ -178,6 +192,32 @@ GameState jackState() => makeState(
       ],
       hands: <List<PlayingCard>>[
         <PlayingCard>[jack],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
+
+/// Til [hybridTen]: p0.0 på felt 3 kan BÅDE 1 frem (→4) og 9 frem (→12) —
+/// tvetydigt i enkelt-tilstand. p0.1 på felt 40 gør 1×1 lovligt sammen med
+/// p0.0 (begge +1), så der reelt ER et evne-valg at træffe først.
+GameState hybridTenState() => makeState(
+      cardRules: hybridRules,
+      variant: classicVariant,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(3),
+          const TrackPosition(40),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[hybridTen],
         const <PlayingCard>[],
         const <PlayingCard>[],
         const <PlayingCard>[],
@@ -467,5 +507,35 @@ void main() {
     });
     expect(applied, isEmpty, reason: 'byt kræver to brikker og en bekræftelse');
     expect(find.textContaining('Byt:'), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // REGRESSION: rutningen i _handlePieceTap skal RESPEKTERE det valgte flow
+  // ("&& _multiPieceMode != false"), ellers falder et tryk i enkelt-tilstand
+  // ned i splitflowets EGEN afstands-dialog i stedet for de inline knapper.
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+      'REGRESSION: valgt enkelt-brik-evne spørger INLINE — aldrig det gamle "Hvor mange felter?"-ark',
+      (t) async {
+    final GameState state = hybridTenState();
+    await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      // To distinkte enkelt-briks-afstande (1 og 9 for BÅDE p0.0 og p0.1) →
+      // _singleAbilityLabel falder tilbage til den generiske knap.
+      await t.tap(find.text('Flyt én brik'));
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+      await t.pumpAndSettle();
+    });
+    // Det gamle, forklædte spørgsmål må ALDRIG stå her — det er splitflowets
+    // egen dialog, og enkelt-brik-evnen har allerede sit eget spørgsmål.
+    expect(find.text('Hvor mange felter?'), findsNothing,
+        reason:
+            'et tryk i valgt enkelt-tilstand må ikke falde i splitflowets afstands-ark');
+    // Det RIGTIGE spørgsmål: to inline knapper, én pr. afstand.
+    expect(find.text('1 frem'), findsOneWidget);
+    expect(find.text('9 frem'), findsOneWidget);
   });
 }
