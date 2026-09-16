@@ -405,34 +405,7 @@ int cardExtraAbilityCount(CardRules rules, PlayingCard c) {
 int cardAbilityValue(CardRules rules, PlayingCard c) {
   if (c.isExit) return 0; // kan intet andet end at sætte ud
   final CardRuleConfig cfg = rules.forRank(c.rank!);
-  int v = 25;
-
-  // Rækkevidde: komprimeret, og med aftagende værdi. Høje kort blokeres
-  // oftere og dør i slutspillet, hvor man skal ramme præcist.
-  final int reach = cfg.forwardSteps.isEmpty
-      ? (cfg.splitTotal ?? 0)
-      : cfg.forwardSteps.reduce((int a, int b) => a > b ? a : b);
-  v += ((reach > 13 ? 13 : reach) * 12) ~/ 10;
-
-  // Evnerne. Deling og baglæns vejer tungt, fordi de løser de stillinger
-  // hvor almindelige kort er døde.
-  if (cfg.splitTotal != null) v += 35;
-  if (cfg.backwardSteps != null) v += 30;
-  if (cfg.hasFwdThenBack) v += 30;
-  if (cfg.swap) v += 32;
-  if (cfg.hasMultiForward) v += 25;
-  if (cfg.jumpsBlockade) v += 12;
-
-  // At kunne VÆLGE er en værdi i sig selv: et kort med to muligheder er
-  // næsten altid spilleligt, og næsten altid bedre end den bedste af de to
-  // alene. Det er derfor esset (1 ELLER 11) er stærkere end tallet siger.
-  int options = cfg.forwardSteps.length;
-  if (cfg.backwardSteps != null) options++;
-  if (cfg.splitTotal != null) options++;
-  if (cfg.swap) options++;
-  if (cfg.hasFwdThenBack) options++;
-  if (cfg.hasMultiForward) options++;
-  if (options > 1) v += 20 * (options - 1);
-
-  return v;
+  // MUTATION (a) — maa ALDRIG merges: ren raekkevidde, ingen evne-tillaeg.
+  if (cfg.forwardSteps.isEmpty) return 0;
+  return cfg.forwardSteps.reduce((int a, int b) => a > b ? a : b);
 }
