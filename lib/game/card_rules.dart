@@ -371,15 +371,6 @@ bool cardExitsStart(CardRules rules, PlayingCard c) =>
 /// nul andre evner og vælges derfor stadig først, uden at nogen skal nævne
 /// det ved navn.
 int cardExtraAbilityCount(CardRules rules, PlayingCard c) {
-  if (c.isExit) return 0;
-  final CardRuleConfig cfg = rules.forRank(c.rank!);
-  int n = 0;
-  if (cfg.forwardSteps.isNotEmpty) n += cfg.forwardSteps.length;
-  if (cfg.backwardSteps != null) n++;
-  if (cfg.splitTotal != null) n++;
-  if (cfg.swap) n++;
-  if (cfg.jumpsBlockade) n++;
-  if (cfg.hasFwdThenBack) n++;
-  if (cfg.hasMultiForward) n++;
-  return n;
+  // MUTATION (b): altid 0 evner-udover, uanset kortets faktiske evner.
+  return 0;
 }
