@@ -6,6 +6,7 @@ import '../../models/move.dart';
 import '../../models/piece.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
+import '../card_rules.dart';
 import '../rules.dart';
 import 'ai_player.dart';
 
@@ -32,8 +33,12 @@ class HeuristicAi implements AiPlayer {
     // netop kan lave den fejl.)
     final bool iNeedStart =
         me.pieces.any((Piece p) => p.position is StartPosition);
+    // Udgangskortene udledes af de regler spillet FAKTISK spilles med —
+    // ikke af rangen. Har admin flyttet "ud af start" til en anden rang, er
+    // det dét kort AI'en skal holde på.
+    final CardRules rules = state.cardRules;
     final List<PlayingCard> exitCards =
-        hand.where((PlayingCard c) => c.canExitStart).toList();
+        hand.where((PlayingCard c) => cardExitsStart(rules, c)).toList();
     final int keepExit = iNeedStart ? 1 : 0; // behold mindst så mange selv
     final bool hasSurplusExit = exitCards.length > keepExit;
 
@@ -44,11 +49,14 @@ class HeuristicAi implements AiPlayer {
       // Foretræk at give det ENKELT-anvendelige UD/hjerte-kort væk (det kan kun
       // sætte ud) og selv beholde et alsidigt Es/Konge (kan også rykke). Ellers
       // giv det laveste exit-kort.
-      final List<PlayingCard> ud =
-          exitCards.where((PlayingCard c) => c.isExit).toList();
-      if (ud.isNotEmpty) return ud.first;
-      exitCards.sort((PlayingCard a, PlayingCard b) =>
-          _cardScore(a).compareTo(_cardScore(b)));
+      // Giv det udgangskort væk, der kan MINDST andet — behold det alsidige.
+      // Før stod reglen på kort-identitet ("giv UD-kortet"); nu på evnerne.
+      // Et UD-kort har nul andre evner og vælges derfor stadig først.
+      exitCards.sort((PlayingCard a, PlayingCard b) {
+        final int d = cardExtraAbilityCount(rules, a)
+            .compareTo(cardExtraAbilityCount(rules, b));
+        return d != 0 ? d : _cardScore(a).compareTo(_cardScore(b));
+      });
       return exitCards.first;
     }
 
@@ -58,7 +66,7 @@ class HeuristicAi implements AiPlayer {
         _cardScore(a).compareTo(_cardScore(b)));
     if (params.protectExitCard && iNeedStart && !hasSurplusExit) {
       final Iterable<PlayingCard> nonExit =
-          hand.where((PlayingCard c) => !c.canExitStart);
+          hand.where((PlayingCard c) => !cardExitsStart(rules, c));
       if (nonExit.isNotEmpty) return nonExit.first;
     }
     return hand.first;
@@ -97,10 +105,13 @@ class HeuristicAi implements AiPlayer {
     // Hvis vi har brikker i start, behold Es/Konge.
     final bool needStart =
         me.pieces.any((Piece p) => p.position is StartPosition);
+    final CardRules rules = state.cardRules;
     hand.sort((PlayingCard a, PlayingCard b) {
       if (needStart) {
-        if (a.canExitStart && !b.canExitStart) return 1;
-        if (!a.canExitStart && b.canExitStart) return -1;
+        final bool ae = cardExitsStart(rules, a);
+        final bool be = cardExitsStart(rules, b);
+        if (ae && !be) return 1;
+        if (!ae && be) return -1;
       }
       return _cardScore(a).compareTo(_cardScore(b));
     });

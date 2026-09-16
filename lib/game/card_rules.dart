@@ -348,3 +348,38 @@ List<String> deckSanityWarnings(CardRules rules) {
   }
   return warnings;
 }
+
+/// Kan [c] sætte en brik UD af start under DISSE regler?
+///
+/// Erstatter `PlayingCard.canExitStart`, som svarede på rangen
+/// (`rank == ace || rank == king`) og derfor løj, så snart admin flyttede
+/// evnen. Konsekvensen var ikke kosmetisk: AI'en forærede sit rigtige
+/// udgangskort til makkeren i byttet og beholdt et es, der ikke kunne komme
+/// ud — og sad så fast i start i flere runder.
+///
+/// Svaret hører hjemme her, hvor reglerne er. Kortet selv kender dem ikke,
+/// og kort-ansigtet (card_view.dart) tegnede allerede start-mærket ud fra
+/// netop dette felt — så spilleren SÅ mærket, mens AI'en ikke gjorde.
+bool cardExitsStart(CardRules rules, PlayingCard c) =>
+    c.isExit || rules.forRank(c.rank!).exitStart;
+
+/// Hvor mange evner har [c] UD OVER at kunne sætte ud?
+///
+/// Bruges til at afgøre, hvilket udgangskort der er mindst ærgerligt at give
+/// væk: det, der ikke kan andet. Før var reglen "giv UD-kortet væk, behold
+/// es/konge" — rigtigt spil, men skrevet på kort-identitet. Et UD-kort har
+/// nul andre evner og vælges derfor stadig først, uden at nogen skal nævne
+/// det ved navn.
+int cardExtraAbilityCount(CardRules rules, PlayingCard c) {
+  if (c.isExit) return 0;
+  final CardRuleConfig cfg = rules.forRank(c.rank!);
+  int n = 0;
+  if (cfg.forwardSteps.isNotEmpty) n += cfg.forwardSteps.length;
+  if (cfg.backwardSteps != null) n++;
+  if (cfg.splitTotal != null) n++;
+  if (cfg.swap) n++;
+  if (cfg.jumpsBlockade) n++;
+  if (cfg.hasFwdThenBack) n++;
+  if (cfg.hasMultiForward) n++;
+  return n;
+}

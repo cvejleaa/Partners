@@ -114,8 +114,6 @@ class PlayingCard {
     }
   }
 
-  bool get canExitStart => isExit || rank == Rank.ace || rank == Rank.king;
-
   @override
   String toString() => isExit ? 'UD♥' : '$rankLabel$suitSymbol';
 
