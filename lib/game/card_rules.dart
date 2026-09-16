@@ -417,7 +417,8 @@ int cardAbilityValue(CardRules rules, PlayingCard c) {
   // Evnerne. Deling og baglæns vejer tungt, fordi de løser de stillinger
   // hvor almindelige kort er døde.
   if (cfg.splitTotal != null) v += 35;
-  if (cfg.backwardSteps != null) v += 30;
+  // MUTATION: backwardSteps-tillæg fjernet.
+  // if (cfg.backwardSteps != null) v += 30;
   if (cfg.hasFwdThenBack) v += 30;
   if (cfg.swap) v += 32;
   if (cfg.hasMultiForward) v += 25;
