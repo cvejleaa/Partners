@@ -1076,10 +1076,12 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   bool _hasSeparateMultiAbility(GameState state, PlayingCard c) {
     if (c.isExit) return false;
     final cfg = state.cardRules.forRank(c.rank!);
-    if (!cfg.hasMultiForward) return false;
+    // MUTATION (b): accepterer nu ogsaa splitTotal.
+    if (!cfg.hasMultiForward && cfg.splitTotal == null) return false;
     return cfg.forwardSteps.isNotEmpty ||
         cfg.backwardSteps != null ||
-        cfg.hasFwdThenBack;
+        cfg.hasFwdThenBack ||
+        cfg.splitTotal != null;
   }
 
   /// Venter kortet på, at spilleren vælger mellem de to evner? Kun sandt når
