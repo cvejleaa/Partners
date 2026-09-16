@@ -736,37 +736,44 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       // Samme form som kortets eget valg ("Kortet kan to ting — vælg én:"),
       // et niveau længere nede: nu er det brikken, der kan flere ting.
       label = 'Denne brik kan flere ting — vælg én:';
-    } else if (_multiPieceMode == null && _multiChoicePending(state)) {
-      // FØR split-grenene: ellers ville tælleteksten ("N træk tilbage")
-      // stå og love en fordeling, spilleren ikke har valgt endnu.
-      label = 'Kortet kan to ting — vælg én:';
-    } else if (_isSplitCard(state, card)) {
-      final int rem = _splitRemaining(state);
-      label = _splitPath.isEmpty
-          ? 'Vælg første brik ($rem træk tilbage)'
-          : '$rem træk tilbage — vælg næste brik eller bekræft';
-    } else if (_isMultiPieceCard(state, card) && _multiPieceMode != false) {
-      // Multi-brik-kort (fx 1×1): tæl BRIKKER, ikke felter — "11 træk
-      // tilbage" ville være nonsens her.
-      final cfg = state.cardRules.forRank(card.rank!);
-      final int n = cfg.multiPieces ?? 2;
-      final int st = cfg.multiSteps ?? 1;
-      label = _splitPath.isEmpty
-          ? 'Vælg en brik (gult = lovligt træk)'
-          : 'Vælg brik ${_splitPath.length + 1} af $n ($st frem hver)';
-    } else if (_swapFlowActive(state, card)) {
-      label = _swapFirstPiece == null
-          ? 'Byt: vælg den første af to brikker'
-          : 'Byt: vælg brikken der byttes med';
     } else if (_awaitingChoice(state)) {
-      // Forklarer OGSÅ hvorfor ingen brik lyser — ellers ligner det mørke
-      // bræt en fejl.
+      // Dækker BEGGE uafgjorte valg (byt/flyt og een/flere brikker), og skal
+      // stå før flow-grenene: ellers ville tælleteksten ("N træk tilbage")
+      // love en fordeling, spilleren ikke har valgt endnu. Forklarer OGSÅ
+      // hvorfor ingen brik lyser — ellers ligner det mørke bræt en fejl.
       label = 'Kortet kan to ting — vælg én:';
-    } else if (!card.isExit && state.cardRules.forRank(card.rank!).swap) {
-      // Hybrid-kort i FLYT-tilstand: sig tilstanden, så den ikke er usynlig.
-      label = 'Flyt: vælg en brik (gult = lovligt træk)';
     } else {
-      label = 'Vælg en brik (gult = lovligt træk)';
+      switch (_activeFlow(state, card)) {
+        case _Flow.swap:
+          label = _swapFirstPiece == null
+              ? 'Byt: vælg den første af to brikker'
+              : 'Byt: vælg brikken der byttes med';
+          break;
+        case _Flow.multi:
+          if (_isSplitCard(state, card)) {
+            final int rem = _splitRemaining(state);
+            label = _splitPath.isEmpty
+                ? 'Vælg første brik ($rem træk tilbage)'
+                : '$rem træk tilbage — vælg næste brik eller bekræft';
+          } else {
+            // Multi-brik-kort (fx 1×1): tæl BRIKKER, ikke felter — "11 træk
+            // tilbage" ville være nonsens her.
+            final cfg = state.cardRules.forRank(card.rank!);
+            final int n = cfg.multiPieces ?? 2;
+            final int st = cfg.multiSteps ?? 1;
+            label = _splitPath.isEmpty
+                ? 'Vælg en brik (gult = lovligt træk)'
+                : 'Vælg brik ${_splitPath.length + 1} af $n ($st frem hver)';
+          }
+          break;
+        case _Flow.single:
+          label = !card.isExit && state.cardRules.forRank(card.rank!).swap
+              // Hybrid-kort i FLYT-tilstand: sig tilstanden, så den ikke er
+              // usynlig.
+              ? 'Flyt: vælg en brik (gult = lovligt træk)'
+              : 'Vælg en brik (gult = lovligt træk)';
+          break;
+      }
     }
     // Hybrid-kort (byt + bevægelse): giv en synlig vej til at skifte tilstand
     // — ellers er gen-tap på kortet den eneste (usynlige) vej tilbage.
@@ -913,9 +920,25 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     for (final Move m in _pieceChoice) {
       byEffect.putIfAbsent(_describeMove(state, m), () => m);
     }
+    // Sortér på AFSTAND, ikke på teksten. `String.compareTo` sorterer tal
+    // som tekst, så et kort med fx 1, 9 og 11 felter fremad gav rækkefølgen
+    // "1 frem", "11 frem", "9 frem" — elleve før ni (QC-fund). Hver knap
+    // gjorde det rigtige, men rækken så forkert ud. Samme sortering som
+    // _chooseSplitStep allerede bruger. Teksten er kun tie-break, så to lige
+    // lange træk (fx frem og hjem) får en stabil rækkefølge.
+    int reach(Move m) {
+      int total = 0;
+      for (final MoveStep st in m.steps) {
+        total += _stepDistance(state, st);
+      }
+      return total;
+    }
+
     final List<MapEntry<String, Move>> entries = byEffect.entries.toList()
-      ..sort((MapEntry<String, Move> a, MapEntry<String, Move> b) =>
-          a.key.compareTo(b.key));
+      ..sort((MapEntry<String, Move> a, MapEntry<String, Move> b) {
+        final int d = reach(a.value).compareTo(reach(b.value));
+        return d != 0 ? d : a.key.compareTo(b.key);
+      });
     return <Widget>[
       for (final MapEntry<String, Move> e in entries)
         FilledButton.tonal(
@@ -1052,6 +1075,26 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   ///
   /// ÉN afledt vagt, brugt af brik-tryk, highlightning OG statuslinjen —
   /// reglen blev før regnet forfra tre steder og kunne drive fra hinanden.
+  /// Hvilket flow et tryk på brættet havner i lige nu.
+  ///
+  /// RÆKKEFØLGEN ER REGLEN, og den lå før skrevet tre gange: i brik-trykket,
+  /// i highlightningen og i statusteksten. De to første havde byt FØRST; den
+  /// tredje havde multi først — og var altså allerede drevet fra de andre
+  /// (QC-fund). Sætter admin `swap` og `1×1` på samme kort, skrev
+  /// statuslinjen "Vælg en brik", mens trykket i virkeligheden gik i
+  /// byt-flowet. Teksten lovede noget andet end det, der skete.
+  ///
+  /// Derfor ét sted. `_isMultiPieceCard` afgøres af KORTET, ikke af flowet,
+  /// så den kan ikke selv se, at byt er aktivt — rækkefølgen er det eneste,
+  /// der afgør det.
+  _Flow _activeFlow(GameState state, PlayingCard card) {
+    if (_swapFlowActive(state, card)) return _Flow.swap;
+    if (_isMultiPieceCard(state, card) && _multiPieceMode != false) {
+      return _Flow.multi;
+    }
+    return _Flow.single;
+  }
+
   bool _awaitingChoice(GameState state) {
     if (_selectedCard == null) return false;
     // Byt ELLER flyt (25 års nier).
@@ -1150,7 +1193,8 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     if (_pieceChoice.isNotEmpty) {
       return <String>{_pieceChoice.first.steps.first.pieceId};
     }
-    if (card != null && _swapFlowActive(state, card)) {
+    if (card == null) return <String>{};
+    if (_activeFlow(state, card) == _Flow.swap) {
       // Kun BYT-parrene (positivt genkendt) — på et hybrid-kort må 9-frem-
       // trækkene ikke blande sig i byt-highlighten.
       final List<Move> swaps =
@@ -1170,9 +1214,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       }
       return set;
     }
-    if (card != null &&
-        _isMultiPieceCard(state, card) &&
-        _multiPieceMode != false) {
+    if (_activeFlow(state, card) == _Flow.multi) {
       // Højlight ALLE brikker der kan vælges som næste delskridt — uanset
       // hvor i m.steps de står. Brikker der allerede er valgt udelukkes.
       final Set<String> alreadyChosen = <String>{
@@ -1294,17 +1336,15 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // modale ark spærrede brættet; en inline-form gør ikke, så spærringen
     // skal skrives. Vejen ud er Annullér.
     if (_pieceChoice.isNotEmpty) return;
-    if (_swapFlowActive(state, _selectedCard!)) {
-      _handleSwapTap(state, pieceId);
-      return;
-    }
-    // `_isMultiPieceCard` afgøres af KORTET, ikke af det valgte flow. Har
-    // spilleren valgt enkelt-brik-evnen (11 frem), må split-flowet derfor
-    // ikke tage trykket alligevel — så ville statuslinjen skrive "vælg brik
-    // 1 af 2" oven på et valg om ét stort træk.
-    if (_isMultiPieceCard(state, _selectedCard!) && _multiPieceMode != false) {
-      _handleSplitTap(state, pieceId);
-      return;
+    switch (_activeFlow(state, _selectedCard!)) {
+      case _Flow.swap:
+        _handleSwapTap(state, pieceId);
+        return;
+      case _Flow.multi:
+        _handleSplitTap(state, pieceId);
+        return;
+      case _Flow.single:
+        break;
     }
     // Byt-par (hybrid-kortets anden tilstand) hører ikke hjemme i det
     // generiske flow — de vælges via byt-tilstanden.
@@ -1628,3 +1668,7 @@ class _SpectatorView extends StatelessWidget {
     );
   }
 }
+
+/// De tre flows et brik-tryk kan havne i. Se [_GamePlayViewState._activeFlow]
+/// — rækkefølgen mellem dem er reglen, og den hører ét sted hjemme.
+enum _Flow { swap, multi, single }

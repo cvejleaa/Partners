@@ -292,6 +292,85 @@ GameState hybridTenState() => makeState(
       ],
     );
 
+/// QC-FUND 1: admin kan sætte byt OG 1×1 på samme kort — admin-skærmen har
+/// ingen indbyrdes udelukkelse. Her er KUN byttet lovligt (der er kun én egen
+/// brik på banen, så 1×1 kan ikke lade sig gøre), og byt-flowet slås derfor
+/// til af sig selv. Før stod statuslinjen og sagde "Vælg en brik", fordi
+/// multi-grenen blev ramt først — teksten lovede et bevægelsestryk, mens
+/// trykket i virkeligheden gik i byt-flowet.
+final CardRules swapPlusMultiRules = CardRules.defaults().withRank(
+  Rank.ten,
+  const CardRuleConfig(swap: true, multiPieces: 2, multiSteps: 1),
+);
+
+GameState swapPlusMultiState() => makeState(
+      cardRules: swapPlusMultiRules,
+      variant: classicVariant,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(5),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        <PiecePosition>[
+          const TrackPosition(20),
+          const StartPosition(1, 1),
+          const StartPosition(1, 2),
+          const StartPosition(1, 3),
+        ],
+        for (int i = 2; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[hybridTen],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
+
+/// QC-FUND 2: tre fremad-afstande, hvor den tocifrede ligger MELLEM to
+/// encifrede i tekst-sortering. Alfabetisk gav "1 frem", "11 frem", "9 frem".
+final CardRules threeDistanceRules = CardRules.defaults().withRank(
+  Rank.ten,
+  const CardRuleConfig(forwardSteps: <int>[1, 9, 11]),
+);
+
+GameState threeDistanceState() => makeState(
+      cardRules: threeDistanceRules,
+      variant: classicVariant,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(5),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[hybridTen],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
+
+/// Står [first] før [second] i læserækkefølge (samme linje: venstre først;
+/// ellers øverste linje først)? Knapperne ligger i en Wrap, så en ren
+/// x-sammenligning ville lyve, hvis rækken brød om.
+bool _readsBefore(WidgetTester t, String first, String second) {
+  final Offset a = t.getTopLeft(find.text(first));
+  final Offset b = t.getTopLeft(find.text(second));
+  return a.dy < b.dy || (a.dy == b.dy && a.dx < b.dx);
+}
+
 Future<List<Move>> pumpAndPlay(
   WidgetTester tester,
   GameState state, {
@@ -587,6 +666,47 @@ void main() {
         applied.single.steps.map((MoveStep s) => s.pieceId).toSet(),
         <String>{'p0.0', 'p0.1'},
         reason: 'én brik hver, ikke samme brik to gange');
+  });
+
+  // -------------------------------------------------------------------------
+  // QC-fund efter knægten: to steder hvor fladen sagde noget andet end den
+  // gjorde. Begge kan kun nås gennem admins egne kort-opsætninger — og
+  // admin-skærmen håndhæver ingen udelukkelse mellem evnerne.
+  // -------------------------------------------------------------------------
+
+  testWidgets('QC-FUND: byt + 1×1 på samme kort — teksten skal sige BYT',
+      (t) async {
+    // Rækkefølgen mellem byt og multi lå skrevet tre steder: brik-tryk,
+    // highlight og statustekst. De to første havde byt først, den tredje
+    // havde multi først — altså allerede drevet fra hinanden. Resultatet var
+    // en statuslinje, der lovede et bevægelsestryk, mens trykket gik i
+    // byt-flowet.
+    final GameState state = swapPlusMultiState();
+    await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+    });
+    expect(find.text('Byt: vælg den første af to brikker'), findsOneWidget);
+    // Og det, der IKKE må stå: multi-grenens tekst.
+    expect(find.text('Vælg en brik (gult = lovligt træk)'), findsNothing,
+        reason: 'teksten må ikke love et bevægelsestryk, når byt er aktivt');
+  });
+
+  testWidgets('QC-FUND: tre afstande sorteres som TAL — 9 frem før 11 frem',
+      (t) async {
+    final GameState state = threeDistanceState();
+    await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+    });
+    // Alle tre skal være der...
+    expect(find.text('1 frem'), findsOneWidget);
+    expect(find.text('9 frem'), findsOneWidget);
+    expect(find.text('11 frem'), findsOneWidget);
+    // ...og i tal-rækkefølge. Tekst-sortering gav 1, 11, 9.
+    expect(_readsBefore(t, '1 frem', '9 frem'), isTrue);
+    expect(_readsBefore(t, '9 frem', '11 frem'), isTrue,
+        reason: 'elleve må ikke stå før ni');
   });
 
   testWidgets('vælger man BYT, går trykket i byt-flowet — ikke flyt',
