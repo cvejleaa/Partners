@@ -361,7 +361,7 @@ List<String> deckSanityWarnings(CardRules rules) {
 /// og kort-ansigtet (card_view.dart) tegnede allerede start-mærket ud fra
 /// netop dette felt — så spilleren SÅ mærket, mens AI'en ikke gjorde.
 bool cardExitsStart(CardRules rules, PlayingCard c) =>
-    c.isExit || rules.forRank(c.rank!).exitStart;
+    c.isExit || c.rank == Rank.ace || c.rank == Rank.king; // MUTATION (a): rang-baseret, ignorerer rules
 
 /// Hvor mange evner har [c] UD OVER at kunne sætte ud?
 ///
