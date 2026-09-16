@@ -43,7 +43,7 @@ class MoveOptions {
 
   /// Kan kortet bruges til to forskellige ting? Så SKAL spilleren vælge, og
   /// indtil da må ingenting ske ved et tryk på brættet.
-  bool get needsChoice => hasSwap && hasOther;
+  bool get needsChoice => false; // MUTATION (midlertidig)
 
   /// Kun én mulighed — fladen kan vælge for spilleren uden at spørge.
   /// Null når der enten er valgfrihed eller slet ingen træk.
