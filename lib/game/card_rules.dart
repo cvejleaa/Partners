@@ -414,14 +414,8 @@ int cardAbilityValue(CardRules rules, PlayingCard c) {
       : cfg.forwardSteps.reduce((int a, int b) => a > b ? a : b);
   v += ((reach > 13 ? 13 : reach) * 12) ~/ 10;
 
-  // Evnerne. Deling og baglæns vejer tungt, fordi de løser de stillinger
-  // hvor almindelige kort er døde.
-  if (cfg.splitTotal != null) v += 35;
-  if (cfg.backwardSteps != null) v += 30;
-  if (cfg.hasFwdThenBack) v += 30;
-  if (cfg.swap) v += 32;
-  if (cfg.hasMultiForward) v += 25;
-  if (cfg.jumpsBlockade) v += 12;
+  // MUTATION (b) - maa ALDRIG merges: evne-tillaeggene (split/backward/
+  // swap/multi/jump) fjernet herfra.
 
   // At kunne VÆLGE er en værdi i sig selv: et kort med to muligheder er
   // næsten altid spilleligt, og næsten altid bedre end den bedste af de to
