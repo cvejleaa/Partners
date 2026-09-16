@@ -192,6 +192,10 @@ GameResult playFullGame({
 }
 
 bool movesEquivalent(Move a, Move b) {
+  // MUTATION (test-manager): tving harnessen til at se ALLE træk som
+  // ulovlige, for at bevise at "safety"-stoppet fanges af en test.
+  return false;
+  /*
   if (a.card != b.card) return false;
   if (a.steps.length != b.steps.length) return false;
   for (int i = 0; i < a.steps.length; i++) {
@@ -199,6 +203,7 @@ bool movesEquivalent(Move a, Move b) {
     if (posKey(a.steps[i].to) != posKey(b.steps[i].to)) return false;
   }
   return true;
+  */
 }
 
 String posKey(PiecePosition p) {
