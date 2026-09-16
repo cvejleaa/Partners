@@ -91,17 +91,22 @@ void main() {
 
       expect(t.illegal, 0, reason: '$navn: ingen ulovlige træk');
 
-      // Løse bånd på de tal, der FØRST viste en (støj-)forringelse ved 20
-      // seeds. De blev kun printet, og en regression i netop dem ville
-      // derfor stå i et testoutput, ingen læser rutinemæssigt (QC-fund).
-      // Båndene er sat over det målte (smidte 14,1-19,4; tørke 2,7-3,5), så
-      // de ikke flakker ved små ændringer, men fanger et sammenbrud.
+      // GROVE bånd — en røgalarm, ikke en prøve på om byttet blev dummere.
+      //
+      // Det stod der før, og det er efterprøvet FORKERT: en realistisk
+      // byttefejl (AI'en giver sit eneste udgangskort væk) flyttede kun
+      // exit-tørken fra 3,5 til 3,7 og rørte slet ikke smidte hænder. Den
+      // sejlede lige igennem begge bånd. Fejlen blev fanget af en målrettet
+      // test — `test/ai_test.dart`: "byttet: AI'en forærer ikke sit EGET
+      // eneste udgangskort væk" — og det er DÉR den reelle dækning ligger.
+      //
+      // Båndene bliver stående, fordi de fanger et TOTALT sammenbrud (fx en
+      // AI der spiller tilfældigt), men de må ikke citeres som bevis for at
+      // byttet er testet. Målt: smidte 14,1-19,4; tørke 2,7-3,5.
       expect(t.avgDiscards, lessThan(25.0),
-          reason: '$navn: flere smidte hænder betyder flere døde kort '
-              'på hånden — målt 14,1-19,4');
+          reason: '$navn: sammenbrud i kortvalget — målt 14,1-19,4');
       expect(t.avgDrought, lessThan(5.0),
-          reason: '$navn: exit-tørke er prøven på om byttet blev dummere — '
-              'målt 2,7-3,5');
+          reason: '$navn: sammenbrud i udgangskort-valget — målt 2,7-3,5');
 
       // VAGTEN, ikke bare et tal. Med den gamle rang-tabel gav AI'en fireren
       // væk 2,67-4,36 gange pr. spil; med den evne-udledte 0,01-0,22.
