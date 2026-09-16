@@ -383,3 +383,56 @@ int cardExtraAbilityCount(CardRules rules, PlayingCard c) {
   if (cfg.hasMultiForward) n++;
   return n;
 }
+
+/// Hvad er kortet værd, udledt af hvad det KAN under disse regler?
+///
+/// Erstatter AI'ens faste rang-tabel (es 11, konge 10, … firer 1, toer 0),
+/// som var forkert på to måder under en tilpasset opsætning: den gav en
+/// baglæns-firer 1 — laveste ikke-nul — selv om baglæns fra eget UD-felt er
+/// spillets største enkelt-tempo, og den smed 25 års specialkort (4×1, 5↷,
+/// 7/+2−5) før en almindelig dame.
+///
+/// RÆKKEVIDDE ER IKKE HOVEDAKSEN. Det, der afgør partier, er evner og
+/// spillbarhed; rækkevidde er et lille tillæg. En formel med
+/// `værdi = max(forwardSteps)` ville rangere DAMEN over ESSET — en direkte
+/// forringelse i klassisk.
+///
+/// UD-EVNEN INDGÅR IKKE HER. Den er kontekst-afhængig: et udgangskort er
+/// uvurderligt med brikker i start og dødt uden. Kalderen lægger den på.
+///
+/// Vægtene er et gæt og skal behandles som ét. Det, der er testet, er
+/// RANGORDNINGEN — ikke tallene (se test/ai_card_value_test.dart).
+int cardAbilityValue(CardRules rules, PlayingCard c) {
+  if (c.isExit) return 0; // kan intet andet end at sætte ud
+  final CardRuleConfig cfg = rules.forRank(c.rank!);
+  int v = 25;
+
+  // Rækkevidde: komprimeret, og med aftagende værdi. Høje kort blokeres
+  // oftere og dør i slutspillet, hvor man skal ramme præcist.
+  final int reach = cfg.forwardSteps.isEmpty
+      ? (cfg.splitTotal ?? 0)
+      : cfg.forwardSteps.reduce((int a, int b) => a > b ? a : b);
+  v += ((reach > 13 ? 13 : reach) * 12) ~/ 10;
+
+  // Evnerne. Deling og baglæns vejer tungt, fordi de løser de stillinger
+  // hvor almindelige kort er døde.
+  if (cfg.splitTotal != null) v += 35;
+  if (cfg.backwardSteps != null) v += 30;
+  if (cfg.hasFwdThenBack) v += 30;
+  if (cfg.swap) v += 32;
+  if (cfg.hasMultiForward) v += 25;
+  if (cfg.jumpsBlockade) v += 12;
+
+  // At kunne VÆLGE er en værdi i sig selv: et kort med to muligheder er
+  // næsten altid spilleligt, og næsten altid bedre end den bedste af de to
+  // alene. Det er derfor esset (1 ELLER 11) er stærkere end tallet siger.
+  int options = cfg.forwardSteps.length;
+  if (cfg.backwardSteps != null) options++;
+  if (cfg.splitTotal != null) options++;
+  if (cfg.swap) options++;
+  if (cfg.hasFwdThenBack) options++;
+  if (cfg.hasMultiForward) options++;
+  if (options > 1) v += 20 * (options - 1);
+
+  return v;
+}

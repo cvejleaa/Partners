@@ -11,9 +11,17 @@ import '../rules.dart';
 import 'ai_player.dart';
 
 class HeuristicAi implements AiPlayer {
-  HeuristicAi({Random? rng}) : _rng = rng ?? Random();
+  HeuristicAi({Random? rng, this.useLegacyCardScore = false})
+      : _rng = rng ?? Random();
 
   final Random _rng;
+
+  /// KUN til målingen. Med true bruges den gamle faste rang-tabel, så ny og
+  /// gammel kortvurdering kan spilles mod hinanden i samme kørsel
+  /// (test/ai_card_value_test.dart). Viser målingen at den nye er bedre,
+  /// fjernes flaget igen — to kortvurderinger er to vagter om samme regel,
+  /// og den ene kan ændres uden at nogen test opdager det.
+  final bool useLegacyCardScore;
 
   @override
   PlayingCard chooseExchangeCard(GameState state, int playerIndex,
@@ -55,7 +63,7 @@ class HeuristicAi implements AiPlayer {
       exitCards.sort((PlayingCard a, PlayingCard b) {
         final int d = cardExtraAbilityCount(rules, a)
             .compareTo(cardExtraAbilityCount(rules, b));
-        return d != 0 ? d : _cardScore(a).compareTo(_cardScore(b));
+        return d != 0 ? d : _cardScore(rules, a).compareTo(_cardScore(rules, b));
       });
       return exitCards.first;
     }
@@ -63,7 +71,7 @@ class HeuristicAi implements AiPlayer {
     // Ellers giv det laveste-værdi kort — men behold mit exit-kort hvis jeg
     // selv skal bruge det og ikke har overskud.
     hand.sort((PlayingCard a, PlayingCard b) =>
-        _cardScore(a).compareTo(_cardScore(b)));
+        _cardScore(rules, a).compareTo(_cardScore(rules, b)));
     if (params.protectExitCard && iNeedStart && !hasSurplusExit) {
       final Iterable<PlayingCard> nonExit =
           hand.where((PlayingCard c) => !cardExitsStart(rules, c));
@@ -113,14 +121,21 @@ class HeuristicAi implements AiPlayer {
         if (ae && !be) return 1;
         if (!ae && be) return -1;
       }
-      return _cardScore(a).compareTo(_cardScore(b));
+      return _cardScore(rules, a).compareTo(_cardScore(rules, b));
     });
     return hand.first;
   }
 
   // ---------------------------------------------------------------------------
 
-  int _cardScore(PlayingCard c) {
+  int _cardScore(CardRules rules, PlayingCard c) {
+    if (!useLegacyCardScore) {
+      // UD-kortet er uvurderligt med brikker i start og dødt uden — men
+      // kalderne her bruger kun scoren til at rangere kort indbyrdes, og
+      // exit-hensynet er allerede håndteret ovenfor. Et rent UD-kort har
+      // ingen anden værdi, så det ryger nederst og gives væk først.
+      return cardAbilityValue(rules, c);
+    }
     if (c.isExit) return 12;
     switch (c.rank!) {
       case Rank.ace:
