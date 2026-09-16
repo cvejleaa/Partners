@@ -1088,9 +1088,14 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// så den kan ikke selv se, at byt er aktivt — rækkefølgen er det eneste,
   /// der afgør det.
   _Flow _activeFlow(GameState state, PlayingCard card) {
-    if (_swapFlowActive(state, card)) return _Flow.swap;
-    if (_isMultiPieceCard(state, card) && _multiPieceMode != false) {
-      return _Flow.multi;
+    // MUTATION c2: begge grene beregnes stadig (saa flutter analyze ikke kan
+    // fange dette som 'unused_element'/'dead_code'), men resultatet kasseres
+    // bevidst — mutationen isoleres til test-suiten, ikke linteren.
+    final bool swap = _swapFlowActive(state, card);
+    final bool multi =
+        _isMultiPieceCard(state, card) && _multiPieceMode != false;
+    if (swap || multi) {
+      // bevidst ingenting: falder altid til single herunder.
     }
     return _Flow.single;
   }
