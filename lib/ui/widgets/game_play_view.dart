@@ -835,7 +835,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             padding: const EdgeInsets.symmetric(horizontal: 8),
             minimumSize: const Size(0, 40),
             foregroundColor: Colors.amber),
-        onPressed: onTap,
+        // MUTATION (test-manager, midlertidig): onTap ignoreres med vilje for
+        // at bevise at Annullér-testene faktisk kræver, at kaldet rydder
+        // tilstanden. Rulles tilbage.
+        onPressed: () {},
         child: const Text('Annullér'),
       );
 
