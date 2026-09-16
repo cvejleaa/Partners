@@ -89,7 +89,9 @@ GameResult playFullGame({
         ],
       ),
   ];
-  final CardRules rules = cardRules ?? CardRules.defaults();
+  // MUTATION (c) - maa ALDRIG merges: cardRules-parameteren ignoreres igen
+  // (harnessen koerer altid klassisk, uanset hvad kalderen sendte).
+  final CardRules rules = CardRules.defaults();
   final GameState state = GameState(
     players: players,
     geometry: geom,
