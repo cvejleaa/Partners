@@ -850,7 +850,11 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             backgroundColor: const Color(0xFF3A3A3A),
             foregroundColor: Colors.white,
           ),
-          onPressed: () => _applyPieceChoice(e.value),
+          // MUTATION (b) — Test Manager 27cbbdd: knappen anvender altid
+          // FØRSTE træk i _pieceChoice, uanset hvilken etiket den viser.
+          // Skal gøre 'FIREREN: knappen anvender præcis DET træk' rød på
+          // TrackPosition(16)-assertionen.
+          onPressed: () => _applyPieceChoice(_pieceChoice.first),
           child: Text(e.key, style: const TextStyle(fontSize: 13)),
         ),
       TextButton(
