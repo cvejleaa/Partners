@@ -42,6 +42,11 @@ const PlayingCard ace = PlayingCard(Rank.ace, Suit.diamonds);
 
 /// 25 års knægt: 11 frem ELLER 1×1 — to FORSKELLIGE evner på samme kort.
 const PlayingCard jack = PlayingCard(Rank.jack, Suit.hearts);
+
+/// Klassisk syver: splitTotal alene — 7 på én brik ELLER delt over flere.
+/// IKKE to separate evner (se _hasSeparateMultiAbility): split-flowet
+/// spørger allerede brik for brik.
+const PlayingCard seven = PlayingCard(Rank.seven, Suit.spades);
 final CardRules p25 = effectiveCardRules(partners25, CardRules.defaults());
 final CardRules classic = CardRules.defaults();
 
@@ -178,6 +183,33 @@ GameState jackState() => makeState(
       ],
       hands: <List<PlayingCard>>[
         <PlayingCard>[jack],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
+
+/// REGRESSIONS-fixture for _hasSeparateMultiAbility: klassisk syver, to egne
+/// brikker langt fra hinanden (3 og 20), så BÅDE "7 på én brik" og en rigtig
+/// split (fx 3+4 på to brikker) er lovlige samtidig. Uden begge dele målte
+/// testen ingenting (MoveOptions.hasBothPieceCounts ville stå falsk uanset).
+GameState sevenState() => makeState(
+      cardRules: classic,
+      variant: classicVariant,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(3),
+          const TrackPosition(20),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[seven],
         const <PlayingCard>[],
         const <PlayingCard>[],
         const <PlayingCard>[],
@@ -467,5 +499,26 @@ void main() {
     });
     expect(applied, isEmpty, reason: 'byt kræver to brikker og en bekræftelse');
     expect(find.textContaining('Byt:'), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // REGRESSION: splitTotal er IKKE en separat evne (se _hasSeparateMultiAbility).
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+      'SYVEREN (klassisk): splitTotal alene må ALDRIG udløse "kortet kan to ting"',
+      (t) async {
+    // En delt syver laver også BÅDE ét- og fler-briks-træk (7 på én brik,
+    // eller fx 3+4 på to) — men det er samme evne brugt to måder, og
+    // split-flowet spørger allerede brik for brik. Uden denne test stod
+    // mutationen "_hasSeparateMultiAbility accepterer også splitTotal" grøn.
+    final GameState state = sevenState();
+    await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+    });
+    // Det FORKERTE spørgsmål må aldrig stå på en syver.
+    expect(find.text('Kortet kan to ting — vælg én:'), findsNothing);
+    // Det RIGTIGE spørgsmål — split-flowets eget — skal stå i stedet.
+    expect(find.textContaining('træk tilbage'), findsOneWidget);
   });
 }
