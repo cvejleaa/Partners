@@ -419,7 +419,8 @@ int cardAbilityValue(CardRules rules, PlayingCard c) {
   if (cfg.splitTotal != null) v += 35;
   if (cfg.backwardSteps != null) v += 30;
   if (cfg.hasFwdThenBack) v += 30;
-  if (cfg.swap) v += 32;
+  // MUTATION: swap-tillæg fjernet.
+  // if (cfg.swap) v += 32;
   if (cfg.hasMultiForward) v += 25;
   if (cfg.jumpsBlockade) v += 12;
 
