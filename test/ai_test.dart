@@ -130,4 +130,51 @@ void main() {
     expect(ai.chooseExchangeCard(state, 0), ace,
         reason: 'fireren er min eneste vej ud — den må ikke gives væk');
   });
+
+  // ---------------------------------------------------------------------------
+  // MUTATIONSFUND (test-manager): de to tests ovenfor har kun ÉT udgangskort i
+  // hånden hver — sorteringen i cardExtraAbilityCount har derfor intet at
+  // sortere imellem, og "returnér altid 0" ville stadig bestå dem. Denne test
+  // stiller TO udgangskort op med forskellig alsidighed, hvor det mindst
+  // alsidige (tieren, cardScore 7) skal gives væk frem for det mest alsidige
+  // (treeren, cardScore 0 — lavere end tieren). En tie-break der faldt tilbage
+  // til cardScore UDEN først at tælle evner ville derfor (forkert) vælge
+  // treeren, fordi dens score er lavest — det modsatte af "behold det
+  // alsidige". Bekræftet i CI: med cardExtraAbilityCount hardkodet til 0
+  // bliver denne test rød (Expected 10♣, Actual 3♥); uændret er den grøn.
+  // ---------------------------------------------------------------------------
+  final CardRules twoExitCards = CardRules.defaults()
+      .withRank(Rank.three,
+          const CardRuleConfig(exitStart: true, forwardSteps: <int>[3]))
+      .withRank(
+          Rank.ten, const CardRuleConfig(exitStart: true, forwardSteps: <int>[]));
+
+  test('byttet: mellem to udgangskort gives det MINST alsidige væk', () {
+    // Jeg har ingen brikker i start (overskud); makkeren (plads 2) skal ud.
+    final state = makeState(
+      cardRules: twoExitCards,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          for (int s = 0; s < 4; s++) TrackPosition(3 + s * 7),
+        ],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(1, s)],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(2, s)],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(3, s)],
+      ],
+      hands: <List<PlayingCard>>[
+        const <PlayingCard>[
+          PlayingCard(Rank.three, Suit.hearts),
+          PlayingCard(Rank.ten, Suit.clubs),
+        ],
+        for (int i = 1; i < 4; i++) const <PlayingCard>[],
+      ],
+    );
+    final ai = HeuristicAi(rng: Random(0));
+    // Tieren kan her KUN sætte ud; treeren kan også rykke 3 frem og er derfor
+    // mere alsidig. Giv tieren væk, behold treeren.
+    expect(
+        ai.chooseExchangeCard(state, 0), const PlayingCard(Rank.ten, Suit.clubs),
+        reason: 'det mindst alsidige udgangskort (tieren) skal gives væk — '
+            'ikke treeren, som også kan rykke frem');
+  });
 }
