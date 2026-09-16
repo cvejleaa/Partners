@@ -133,6 +133,18 @@ class BoardView extends StatelessWidget {
   static String debugVisualSig(GameState state) =>
       _BoardPainter._computeVisualSig(state);
 
+  /// KUN TIL TEST: de faktiske rotations-/skalerings-værdier brættet tegner
+  /// og tap-tester med. Eksponeret fordi et widget-tryk ellers må GÆTTE
+  /// geometrien — og et gæt, der rammer ved siden af, giver en tom, grøn test
+  /// (et tap på en tom plet flytter ingenting, uanset om koden er i stykker).
+  /// Samme kilde som [build] og [_handleTap], så testen følger med, hvis
+  /// brættet drejes anderledes.
+  @visibleForTesting
+  double get debugRotation => _rotation;
+
+  @visibleForTesting
+  double get debugScale => _scale;
+
   static Map<String, Offset> debugPieceCenters(
       GameState state, double dim, double rotation,
       {double scale = 1.0}) {
