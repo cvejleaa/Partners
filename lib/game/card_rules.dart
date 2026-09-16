@@ -421,7 +421,8 @@ int cardAbilityValue(CardRules rules, PlayingCard c) {
   if (cfg.hasFwdThenBack) v += 30;
   if (cfg.swap) v += 32;
   if (cfg.hasMultiForward) v += 25;
-  if (cfg.jumpsBlockade) v += 12;
+  // MUTATION: jumpsBlockade-tillæg fjernet.
+  // if (cfg.jumpsBlockade) v += 12;
 
   // At kunne VÆLGE SIN AFSTAND er en værdi i sig selv: esset (1 ELLER 11) er
   // stærkere end tallet siger, fordi det både kan det præcise lille skridt og
