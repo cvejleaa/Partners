@@ -1183,17 +1183,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             !_isSwapMove(m) && m.steps.first.pieceId == pieceId)
         .toList();
     if (matching.isEmpty) return;
-    if (matching.length == 1) {
-      // Kun ét træk for netop denne brik — der er intet at spørge om.
-      // Det er derfor kongen og essets "ud af start" ALDRIG giver knapper:
-      // en brik i start kan kun komme ud, og en brik på banen kan aldrig
-      // gå ud af start (rules.dart springer selv de andre over), så
-      // brik-trykket har allerede svaret.
-      setState(() => _pieceChoice = <Move>[]);
-      widget.onApplyMove(_mySeat, matching.first);
-    } else {
-      setState(() => _pieceChoice = matching);
-    }
+    // MUTATION (c) — Test Manager 27cbbdd: selv ét lovligt træk spørger nu
+    // (viser knapper) i stedet for at udføre straks. Skal gøre 'KONGEN:
+    // brikken har allerede svaret' rød.
+    setState(() => _pieceChoice = matching);
   }
 
   Future<void> _handleSplitTap(GameState state, String pieceId) async {
