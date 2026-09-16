@@ -75,6 +75,11 @@ GameResult playFullGame({
   AiParams params = kAiNormal,
 }) {
   final Random rng = Random(seed);
+  // BEGRÆNSNING, navngivet: geometri og spillerantal er hardkodet til
+  // klassisk (60 felter, 4 spillere, 4 brikker). Det er korrekt for både
+  // klassisk og 25 år, som deler geometri — men en variant med et andet
+  // bræt ville blive simuleret som klassisk og rapporteret under sit eget
+  // navn. Skal sådan en måles, skal playFullGame tage en VariantConfig.
   const BoardGeometry geom = BoardGeometry();
   final List<Player> players = <Player>[
     for (int i = 0; i < 4; i++)
@@ -141,7 +146,24 @@ GameResult playFullGame({
       final Move? move = ai(idx).chooseMove(state, idx, params: params);
       if (move != null) {
         final List<Move> legal = engine.legalMovesFor(idx, move.card);
-        if (!legal.any((Move m) => movesEquivalent(m, move))) illegalMoves++;
+        if (!legal.any((Move m) => movesEquivalent(m, move))) {
+          // STOP. "Mål, kast ikke" gælder fordelinger (hænder, smidte kort)
+          // — ikke et symptom på at motoren er inkonsistent. Anvender vi et
+          // ulovligt træk og spiller videre, er alle efterfølgende tal målt
+          // på en tilstand, der ikke kunne opstå i et rigtigt spil.
+          illegalMoves++;
+          return GameResult(
+            winningTeam: null,
+            handsPlayed: handsPlayed,
+            movesPlayed: movesPlayed,
+            captures: captures,
+            discards: discards,
+            illegalMoves: illegalMoves,
+            exitDrought: exitDrought,
+            playedByRank: playedByRank,
+            givenByRank: givenByRank,
+          );
+        }
         for (final MoveStep s in move.steps) {
           if (s.capturedPieceId != null) captures++;
         }

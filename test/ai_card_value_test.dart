@@ -68,6 +68,74 @@ void main() {
     });
   });
 
+  // ---------------------------------------------------------------------
+  // PAR-TESTS: hver evne-vægt isoleret.
+  //
+  // De fire rangordnings-tests ovenfor koder en påstand om SPILLET ("esset
+  // slår damen") og skal blive. Men de beviser ikke, at den enkelte
+  // evne-vægt findes: så længe kortet også har et fremad-træk, kunne
+  // evne-tillægget fjernes helt, og rangordningen holdt alligevel — en
+  // mutation af netop den linje stod grøn (TM-fund).
+  //
+  // Her varieres derfor ÉT flag ad gangen, med samme forwardSteps på begge
+  // sider. Det kunne ikke lade sig gøre før: "kan-vælge"-bonussen talte de
+  // samme evner én gang til, så et ekstra flag ændrede to ting på én gang.
+  // ---------------------------------------------------------------------
+  int valueOf(CardRuleConfig cfg) => cardAbilityValue(
+      CardRules.defaults().withRank(Rank.six, cfg),
+      const PlayingCard(Rank.six, Suit.clubs));
+
+  group('hver evne tæller for sig', () {
+    const CardRuleConfig basis = CardRuleConfig(forwardSteps: <int>[6]);
+
+    test('baglæns', () {
+      expect(
+          valueOf(const CardRuleConfig(
+              forwardSteps: <int>[6], backwardSteps: 6)),
+          greaterThan(valueOf(basis)));
+    });
+
+    test('byt', () {
+      expect(valueOf(const CardRuleConfig(forwardSteps: <int>[6], swap: true)),
+          greaterThan(valueOf(basis)));
+    });
+
+    test('sekvens (frem og så tilbage)', () {
+      expect(
+          valueOf(const CardRuleConfig(
+              forwardSteps: <int>[6], seqForward: 2, seqBackward: 5)),
+          greaterThan(valueOf(basis)));
+    });
+
+    test('flere brikker', () {
+      expect(
+          valueOf(const CardRuleConfig(
+              forwardSteps: <int>[6], multiPieces: 2, multiSteps: 1)),
+          greaterThan(valueOf(basis)));
+    });
+
+    test('blokade-spring', () {
+      expect(
+          valueOf(const CardRuleConfig(
+              forwardSteps: <int>[6], jumpsBlockade: true)),
+          greaterThan(valueOf(basis)));
+    });
+
+    test('deling', () {
+      // Delekortet har ingen forwardSteps — sammenlign derfor mod et kort med
+      // samme rækkevidde udtrykt som et almindeligt træk.
+      expect(valueOf(const CardRuleConfig(splitTotal: 6)),
+          greaterThan(valueOf(basis)));
+    });
+
+    test('flere afstande at vælge imellem tæller OGSÅ', () {
+      // Den bonus der er tilbage: at kunne vælge sin afstand. Esset (1 ELLER
+      // 11) er stærkere end det lange træk alene.
+      expect(valueOf(const CardRuleConfig(forwardSteps: <int>[1, 6])),
+          greaterThan(valueOf(basis)));
+    });
+  });
+
   test('UD-kortet har ingen egenværdi — dets værdi er kontekst', () {
     // Et rent UD-kort kan intet andet end at sætte ud. Er der ingen brikker
     // i start, er det dødt. Exit-hensynet ligger derfor i AI'en, hvor

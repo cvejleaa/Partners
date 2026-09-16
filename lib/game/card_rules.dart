@@ -423,15 +423,19 @@ int cardAbilityValue(CardRules rules, PlayingCard c) {
   if (cfg.hasMultiForward) v += 25;
   if (cfg.jumpsBlockade) v += 12;
 
-  // At kunne VÆLGE er en værdi i sig selv: et kort med to muligheder er
-  // næsten altid spilleligt, og næsten altid bedre end den bedste af de to
-  // alene. Det er derfor esset (1 ELLER 11) er stærkere end tallet siger.
-  int options = cfg.forwardSteps.length;
-  if (cfg.backwardSteps != null) options++;
-  if (cfg.splitTotal != null) options++;
-  if (cfg.swap) options++;
-  if (cfg.hasFwdThenBack) options++;
-  if (cfg.hasMultiForward) options++;
+  // At kunne VÆLGE SIN AFSTAND er en værdi i sig selv: esset (1 ELLER 11) er
+  // stærkere end tallet siger, fordi det både kan det præcise lille skridt og
+  // det lange træk.
+  //
+  // KUN forwardSteps tælles her. Før talte denne bonus også byt, deling,
+  // baglæns, sekvens og multi — men de har allerede hver sit tillæg ovenfor,
+  // og et tillæg ER prisen for at kunne det ekstra. At tælle dem to gange var
+  // samme påstand skrevet to steder, og det havde en konkret konsekvens:
+  // fjernede man ALLE evne-tillæggene, holdt options-bonussen alligevel
+  // rangordningen oppe for hvert kort der også havde et fremad-træk. Tre af
+  // de fem 25 års-specialkort kunne altså miste deres evne-vægt, uden at en
+  // eneste test blev rød (mutationsfund).
+  final int options = cfg.forwardSteps.length;
   if (options > 1) v += 20 * (options - 1);
 
   return v;
