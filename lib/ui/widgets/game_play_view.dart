@@ -1183,17 +1183,11 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             !_isSwapMove(m) && m.steps.first.pieceId == pieceId)
         .toList();
     if (matching.isEmpty) return;
-    if (matching.length == 1) {
-      // Kun ét træk for netop denne brik — der er intet at spørge om.
-      // Det er derfor kongen og essets "ud af start" ALDRIG giver knapper:
-      // en brik i start kan kun komme ud, og en brik på banen kan aldrig
-      // gå ud af start (rules.dart springer selv de andre over), så
-      // brik-trykket har allerede svaret.
-      setState(() => _pieceChoice = <Move>[]);
-      widget.onApplyMove(_mySeat, matching.first);
-    } else {
-      setState(() => _pieceChoice = matching);
-    }
+    // MUTATION (a) — Test Manager 27cbbdd: gammel tavs "vælg for spilleren"
+    // genindsat med vilje. Skal gøre 'FIREREN: et tryk på brikken flytter
+    // IKKE — den spørger' rød.
+    setState(() => _pieceChoice = <Move>[]);
+    widget.onApplyMove(_mySeat, matching.first);
   }
 
   Future<void> _handleSplitTap(GameState state, String pieceId) async {
