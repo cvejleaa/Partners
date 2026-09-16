@@ -27,7 +27,7 @@ import 'package:partners/models/variant_config.dart';
 
 import 'harness/full_game.dart';
 
-const int kSeeds = 20;
+const int kSeeds = 100;
 
 class Tally {
   int games = 0;
