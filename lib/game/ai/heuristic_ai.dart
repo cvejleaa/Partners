@@ -39,8 +39,10 @@ class HeuristicAi implements AiPlayer {
     final CardRules rules = state.cardRules;
     final List<PlayingCard> exitCards =
         hand.where((PlayingCard c) => cardExitsStart(rules, c)).toList();
-    final int keepExit = iNeedStart ? 1 : 0; // behold mindst så mange selv
-    final bool hasSurplusExit = exitCards.length > keepExit;
+    // MUTATION (test-manager, bånd-tjek): ignorerer eget behov — giver
+    // exit-kort væk til partner selv uden overskud, en realistisk
+    // "glemte at holde på sit eget udgangskort"-fejl.
+    final bool hasSurplusExit = exitCards.isNotEmpty;
 
     if (partnerNeedsStart &&
         (!params.protectExitCard ? exitCards.isNotEmpty : hasSurplusExit)) {
