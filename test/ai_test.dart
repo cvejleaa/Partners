@@ -130,4 +130,44 @@ void main() {
     expect(ai.chooseExchangeCard(state, 0), ace,
         reason: 'fireren er min eneste vej ud — den må ikke gives væk');
   });
+
+  /// To udgangskort, forskellig alsidighed: rangen der KUN sætter ud
+  /// (tieren, ingen fremad-skridt) over for rangen der BÅDE sætter ud og kan
+  /// rykke frem (treeren, forwardSteps [3]). cardExtraAbilityCount skal
+  /// afgøre rækkefølgen — ikke cardScore alene. Treerens cardScore (0) er
+  /// LAVERE end tierens (7), så en tie-break der falder tilbage til
+  /// cardScore uden at have talt evner først ville (forkert) give treeren
+  /// væk og beholde tieren — det modsatte af "behold det alsidige".
+  final CardRules twoExitCards = CardRules.defaults()
+      .withRank(
+          Rank.three, const CardRuleConfig(exitStart: true, forwardSteps: <int>[3]))
+      .withRank(Rank.ten, const CardRuleConfig(exitStart: true, forwardSteps: <int>[]));
+
+  test('byttet: mellem to udgangskort gives det MINST alsidige væk', () {
+    final state = makeState(
+      cardRules: twoExitCards,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          for (int s = 0; s < 4; s++) TrackPosition(3 + s * 7),
+        ],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(1, s)],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(2, s)],
+        <PiecePosition>[for (int s = 0; s < 4; s++) StartPosition(3, s)],
+      ],
+      hands: <List<PlayingCard>>[
+        const <PlayingCard>[
+          PlayingCard(Rank.three, Suit.hearts),
+          PlayingCard(Rank.ten, Suit.clubs),
+        ],
+        for (int i = 1; i < 4; i++) const <PlayingCard>[],
+      ],
+    );
+    final ai = HeuristicAi(rng: Random(0));
+    // Tieren kan KUN sætte ud her; treeren kan også rykke 3 frem og er derfor
+    // mere alsidig. Giv tieren væk, behold treeren.
+    expect(
+        ai.chooseExchangeCard(state, 0), const PlayingCard(Rank.ten, Suit.clubs),
+        reason: 'det mindst alsidige udgangskort (tieren) skal gives væk — '
+            'ikke treeren, som også kan rykke frem');
+  });
 }
