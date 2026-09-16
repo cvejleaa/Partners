@@ -920,25 +920,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     for (final Move m in _pieceChoice) {
       byEffect.putIfAbsent(_describeMove(state, m), () => m);
     }
-    // Sortér på AFSTAND, ikke på teksten. `String.compareTo` sorterer tal
-    // som tekst, så et kort med fx 1, 9 og 11 felter fremad gav rækkefølgen
-    // "1 frem", "11 frem", "9 frem" — elleve før ni (QC-fund). Hver knap
-    // gjorde det rigtige, men rækken så forkert ud. Samme sortering som
-    // _chooseSplitStep allerede bruger. Teksten er kun tie-break, så to lige
-    // lange træk (fx frem og hjem) får en stabil rækkefølge.
-    int reach(Move m) {
-      int total = 0;
-      for (final MoveStep st in m.steps) {
-        total += _stepDistance(state, st);
-      }
-      return total;
-    }
-
     final List<MapEntry<String, Move>> entries = byEffect.entries.toList()
-      ..sort((MapEntry<String, Move> a, MapEntry<String, Move> b) {
-        final int d = reach(a.value).compareTo(reach(b.value));
-        return d != 0 ? d : a.key.compareTo(b.key);
-      });
+      ..sort((MapEntry<String, Move> a, MapEntry<String, Move> b) =>
+          a.key.compareTo(b.key));
     return <Widget>[
       for (final MapEntry<String, Move> e in entries)
         FilledButton.tonal(
