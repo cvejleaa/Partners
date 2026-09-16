@@ -906,10 +906,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   ///
   /// ÉN afledt vagt, brugt af brik-tryk, highlightning OG statuslinjen —
   /// reglen blev før regnet forfra tre steder og kunne drive fra hinanden.
-  bool _awaitingChoice() =>
-      _selectedCard != null &&
-      _hybridSwapMode == null &&
-      MoveOptions.classify(_candidateMoves).needsChoice;
+  bool _awaitingChoice() => false;
 
   bool _isSwapCard(GameState state, PlayingCard c) {
     if (c.isExit) return false;
