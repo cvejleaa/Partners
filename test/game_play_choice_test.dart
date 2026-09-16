@@ -36,6 +36,9 @@ const PlayingCard four = PlayingCard(Rank.four, Suit.hearts);
 
 /// Klassisk konge: ud af start ELLER 13 frem — men ALDRIG for samme brik.
 const PlayingCard king = PlayingCard(Rank.king, Suit.clubs);
+
+/// Klassisk es: ud af start ELLER 1 frem ELLER 11 frem.
+const PlayingCard ace = PlayingCard(Rank.ace, Suit.diamonds);
 final CardRules p25 = effectiveCardRules(partners25, CardRules.defaults());
 final CardRules classic = CardRules.defaults();
 
@@ -60,6 +63,33 @@ GameState fourState() => makeState(
       ],
       hands: <List<PlayingCard>>[
         <PlayingCard>[four],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
+
+/// Esset, hvor BEGGE slags valg findes samtidig:
+/// p0.0 står på banen og kan både 1 frem (→ 21) og 11 frem (→ 32, felt 30 er
+/// et fremmed UD-felt og tæller ikke). p0.1 står i start og har præcis ÉT
+/// lovligt træk — ud af start. Netop den kombination udløste QC-fundet.
+GameState aceState() => makeState(
+      cardRules: classic,
+      variant: classicVariant,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(20),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[ace],
         const <PlayingCard>[],
         const <PlayingCard>[],
         const <PlayingCard>[],
@@ -293,6 +323,44 @@ void main() {
     expect(applied.single.exitsStart, isTrue);
     expect(find.text('Annullér'), findsNothing,
         reason: 'ingen knaprække må dukke op, når der intet er at vælge');
+  });
+
+  testWidgets('ESSET: brikken på banen tilbyder både 1 frem og 11 frem',
+      (t) async {
+    final GameState state = aceState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+    });
+    expect(applied, isEmpty);
+    expect(find.text('1 frem'), findsOneWidget);
+    expect(find.text('11 frem'), findsOneWidget);
+    // Og det, der IKKE må stå: ud-af-start hører til en ANDEN brik og må
+    // aldrig blandes ind i denne briks valg.
+    expect(find.text('Gå ud af start'), findsNothing);
+  });
+
+  testWidgets(
+      'QC-FUND: et tryk på en ANDEN brik må ikke udføre noget, mens valget står åbent',
+      (t) async {
+    // Fejlen: mens knapperne for p0.0 stod fremme, var brættet stadig
+    // tapbart. Et tryk på p0.1 — som har præcis ét lovligt træk — sendte den
+    // brik ud af start ØJEBLIKKELIGT, og valget for p0.0 forsvandt lydløst.
+    // Det modale ark spærrede brættet; den inline form skal spærre selv.
+    final GameState state = aceState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.1'));
+    });
+    expect(applied, isEmpty,
+        reason: 'p0.1 måtte ikke gå ud af start bag om det åbne valg');
+    // Og valget skal stadig stå åbent — ikke være tabt på gulvet.
+    expect(find.text('1 frem'), findsOneWidget);
+    expect(find.text('11 frem'), findsOneWidget);
   });
 
   testWidgets('vælger man BYT, går trykket i byt-flowet — ikke flyt',

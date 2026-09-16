@@ -333,7 +333,12 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         // SÅ lavt at selv minimums-brættet + de kompakte paneler/kort ikke kan
         // være der, scroller siden — så brættet aldrig krymper væk.
         final double minBoard = min(w, boardMin);
-        const double chrome = 225.0; // skøn: 2 kompakte panel-rækker + kort
+        // Skøn: 2 kompakte panel-rækker + kort. Statusrækken indgår IKKE i
+        // tallet, og den kan nu blive 2-3 linjer høj (etiket + en Wrap med
+        // lange knap-etiketter som "4 tilbage — slår Blå hjem"). Det giver
+        // ingen overflow — brættet sidder i en Expanded og krymper — men på
+        // en smal telefon bliver brættet mindre end tallet lover.
+        const double chrome = 225.0;
         final bool fits = h - chrome >= minBoard;
 
         // Kompakte hånd-kort (fill: false), så de fylder mindre end brættet.
@@ -719,7 +724,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     } else if (_pieceChoice.isNotEmpty) {
       // Samme form som kortets eget valg ("Kortet kan to ting — vælg én:"),
       // et niveau længere nede: nu er det brikken, der kan flere ting.
-      label = 'Brikken kan flere ting — vælg én:';
+      label = 'Denne brik kan flere ting — vælg én:';
     } else if (_isSplitCard(state, card)) {
       final int rem = _splitRemaining(state);
       label = _splitPath.isEmpty
@@ -791,14 +796,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
               onPressed: _commitSplit,
               child: const Text('Bekræft'),
             ),
-          TextButton(
-            style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                foregroundColor: Colors.amber),
-            onPressed: () => setState(() => _splitPath.clear()),
-            child: const Text('Annullér'),
-          ),
+          _cancelButton(() => setState(() => _splitPath.clear())),
         ],
     ];
     // Etiketten står OVER knapperne, ikke i samme Wrap. I én Wrap havner
@@ -825,6 +823,21 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       ],
     );
   }
+
+  /// Den ENE Annullér-knap. Betydningen er den samme begge steder den bruges:
+  /// kassér et valg, der endnu ikke er sendt nogen steder hen.
+  ///
+  /// Den lå før i to næsten identiske kopier med hvert sit trykmål (32 og 40
+  /// px). To kopier af samme knap driver fra hinanden — de havde allerede
+  /// gjort det.
+  Widget _cancelButton(VoidCallback onTap) => TextButton(
+        style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(0, 40),
+            foregroundColor: Colors.amber),
+        onPressed: onTap,
+        child: const Text('Annullér'),
+      );
 
   /// Knapperne for det ventende brik-valg: ét træk pr. DISTINKT virkning,
   /// plus en vej ud.
@@ -853,14 +866,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
           onPressed: () => _applyPieceChoice(e.value),
           child: Text(e.key, style: const TextStyle(fontSize: 13)),
         ),
-      TextButton(
-        style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            minimumSize: const Size(0, 40),
-            foregroundColor: Colors.amber),
-        onPressed: () => setState(() => _pieceChoice = <Move>[]),
-        child: const Text('Annullér'),
-      ),
+      _cancelButton(() => setState(() => _pieceChoice = <Move>[])),
     ];
   }
 
@@ -1168,6 +1174,14 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // flyt kan ikke fortrydes. Brættet er mørkt imens (se _highlightSet), så
     // der er heller ingen brik der inviterer til trykket.
     if (_awaitingChoice()) return;
+    // Samme regel ét niveau nede (QC-fund). Står brikkens eget valg åbent, er
+    // KUN den brik markeret — så et tryk et andet sted må heller ikke gøre
+    // noget. Uden denne vagt udførte et tryk på en anden brik med præcis ét
+    // lovligt træk dét træk ØJEBLIKKELIGT, og det åbne valg forsvandt
+    // lydløst: nøjagtig den fejl brugeren meldte, bare et niveau nede. Det
+    // modale ark spærrede brættet; en inline-form gør ikke, så spærringen
+    // skal skrives. Vejen ud er Annullér.
+    if (_pieceChoice.isNotEmpty) return;
     if (_swapFlowActive(state, _selectedCard!)) {
       _handleSwapTap(state, pieceId);
       return;
