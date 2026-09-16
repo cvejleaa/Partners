@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/rules.dart';
+import '../../game/move_options.dart';
 import '../../models/board.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
@@ -79,9 +80,18 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   String? _swapFirstPiece;
   final List<MoveStep> _splitPath = <MoveStep>[];
 
-  /// Hybrid-kort (byt + bevægelse, fx 25 års "Byt ELLER 9"): true når
-  /// spilleren har valgt BYT-tilstanden for det valgte kort.
-  bool _hybridSwapMode = false;
+  /// Hybrid-kort (byt + bevægelse, fx 25 års "Byt ELLER 9"): har spilleren
+  /// valgt byt-tilstanden?
+  ///
+  /// TRE tilstande, ikke to. `null` = spilleren har IKKE valgt endnu, og så
+  /// må et tryk på en brik ikke gøre noget.
+  ///
+  /// Før var det en bool, og et uafgjort valg var derfor lydløst "flyt": et
+  /// tryk ved siden af det gamle valg-ark — eller bare et gen-tryk på kortet
+  /// — kostede byt-muligheden, og næste tryk flyttede brikken uigenkaldeligt
+  /// (brugerfund). Feltet blev sat til false FIRE steder; kun ét af dem var
+  /// selve arket.
+  bool? _hybridSwapMode;
 
   /// Memo for canPlay (se _buildPlayArea).
   String? _canPlayKey;
@@ -157,7 +167,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       _selectedCard = null;
       _candidateMoves = <Move>[];
       _swapFirstPiece = null;
-      _hybridSwapMode = false;
+      _hybridSwapMode = null;
       _splitPath.clear();
     }
     if (phaseOrTurnChanged) {
@@ -652,6 +662,43 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     );
   }
 
+  /// Etiketten på flyt-knappen, UDLEDT af de træk motoren faktisk fandt.
+  ///
+  /// Aldrig et hardkodet "9 felter frem": hybrid-grenen rammer ethvert kort
+  /// med byt + en anden evne, og admin kan konfigurere kortene om (flere
+  /// fremad-tal, baglæns, split, multi). Et fast tal ville lyve på de kort
+  /// (QC-fund). Er der præcis ÉN måde at flytte på, siges den; ellers siges
+  /// kun at man kan flytte.
+  String _moveOptionLabel(GameState state) {
+    final Set<String> distinct = <String>{
+      for (final Move m in _candidateMoves)
+        if (!_isSwapMove(m)) _describeMove(state, m),
+    };
+    return distinct.length == 1 ? distinct.first : 'Flyt en brik';
+  }
+
+  /// En af de to tilstands-knapper. Markeringen er ikke kun farve: den valgte
+  /// har også et flueben, så forskellen ses uden farvesyn.
+  Widget _modeButton({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) =>
+      FilledButton.tonalIcon(
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          // 40 px høj: et trykmål man kan ramme med tommelen uden at sigte.
+          minimumSize: const Size(0, 40),
+          backgroundColor:
+              selected ? const Color(0xFF43A047) : const Color(0xFF3A3A3A),
+          foregroundColor: Colors.white,
+        ),
+        onPressed: onTap,
+        icon: Icon(selected ? Icons.check : icon, size: 18),
+        label: Text(label, style: const TextStyle(fontSize: 13)),
+      );
+
   Widget _statusRow(GameState state) {
     final card = _selectedCard;
     String label;
@@ -675,6 +722,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       label = _swapFirstPiece == null
           ? 'Byt: vælg den første af to brikker'
           : 'Byt: vælg brikken der byttes med';
+    } else if (_awaitingChoice()) {
+      // Forklarer OGSÅ hvorfor ingen brik lyser — ellers ligner det mørke
+      // bræt en fejl.
+      label = 'Kortet kan to ting — vælg én:';
     } else if (!card.isExit && state.cardRules.forRank(card.rank!).swap) {
       // Hybrid-kort i FLYT-tilstand: sig tilstanden, så den ikke er usynlig.
       label = 'Flyt: vælg en brik (gult = lovligt træk)';
@@ -683,10 +734,19 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     }
     // Hybrid-kort (byt + bevægelse): giv en synlig vej til at skifte tilstand
     // — ellers er gen-tap på kortet den eneste (usynlige) vej tilbage.
+    // Hybridkortet får to FASTE knapper i statuslinjen frem for et ark oven
+    // på brættet. Et inline-element kan ikke afvises ved et uheld — der er
+    // intet lag at trykke ved siden af, ingen browser-tilbage der lukker det,
+    // og intet ark der kan overleve sit eget kort. Hele default-problemet
+    // forsvinder med formen.
+    //
+    // Og beslutningen kræver, at man kan SE brættet (er der et byt værd at
+    // lave?). Et ark eller en dialog dækker netop dét (QC-fund).
     final bool isHybrid = card != null &&
         !card.isExit &&
         state.cardRules.forRank(card.rank!).swap &&
-        !_isSwapCard(state, card);
+        !_isSwapCard(state, card) &&
+        MoveOptions.classify(_candidateMoves).needsChoice;
     final bool isMultiStep = card != null && _isMultiPieceCard(state, card);
     final bool canCommit = isMultiStep && _firstFullyMatching() != null;
     return Wrap(
@@ -697,15 +757,20 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       children: <Widget>[
         Text(label,
             style: const TextStyle(color: Colors.white, fontSize: 13)),
-        if (isHybrid)
-          TextButton(
-            style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                foregroundColor: Colors.amber),
-            onPressed: () => _chooseHybridMode(card),
-            child: const Text('Skift'),
+        if (isHybrid) ...<Widget>[
+          _modeButton(
+            label: _moveOptionLabel(state),
+            icon: Icons.arrow_forward,
+            selected: _hybridSwapMode == false,
+            onTap: () => setState(() => _hybridSwapMode = false),
           ),
+          _modeButton(
+            label: 'Byt plads på to brikker',
+            icon: Icons.swap_horiz,
+            selected: _hybridSwapMode == true,
+            onTap: () => setState(() => _hybridSwapMode = true),
+          ),
+        ],
         if (isMultiStep && _splitPath.isNotEmpty) ...<Widget>[
           if (canCommit)
             FilledButton(
@@ -806,29 +871,25 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   void _selectCard(GameState state, Player me, PlayingCard c) {
     final rules = Rules(state.geometry);
     final List<Move> moves = rules.legalMoves(state, me, c);
+    // Et gen-tryk på det SAMME kort må ikke koste et valg, man allerede har
+    // truffet. Før nulstillede denne linje ubetinget til "flyt" — så et tryk
+    // på kortet, bare for at se det, sendte en valgt byt-tilstand lydløst
+    // tilbage til flyt, helt uden om valget (QC-fund).
+    final bool sameCard = _selectedCard == c;
+    final MoveOptions opts = MoveOptions.classify(moves);
     setState(() {
       _selectedCard = c;
       _candidateMoves = moves;
       _swapFirstPiece = null;
-      _hybridSwapMode = false;
       _splitPath.clear();
-    });
-    // Hybrid-kort (25 års "Byt ELLER 9"): kortet har BÅDE byt og bevægelse.
-    // Uden et eksplicit valg ville byt-parrene forurene det generiske flow
-    // (modstander-brikker highlightet, byt beskrevet som geometri). Spejl
-    // kortets "ELLER": spørg om tilstand med det samme.
-    if (!c.isExit) {
-      final cfg = state.cardRules.forRank(c.rank!);
-      if (cfg.swap && !_isSwapCard(state, c)) {
-        final bool hasSwaps = moves.any(_isSwapMove);
-        final bool hasOthers = moves.any((Move m) => !_isSwapMove(m));
-        if (hasSwaps && hasOthers) {
-          _chooseHybridMode(c);
-        } else if (hasSwaps) {
-          setState(() => _hybridSwapMode = true);
-        }
+      if (!sameCard) {
+        // Kan kortet to ting, står valget UAFGJORT (null) indtil spilleren
+        // svarer. Kan det kun én ting, vælger vi for hende — der er intet at
+        // spørge om. onlyOption er null ved nul lovlige træk, og så skal der
+        // heller ikke sættes en tilstand.
+        _hybridSwapMode = opts.onlyOption;
       }
-    }
+    });
   }
 
   /// Positiv byt-genkendelse — delegerer til den ENE delte vagt i
@@ -836,52 +897,19 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// fra hinanden.
   bool _isSwapMove(Move m) => isSwapMove(m);
 
-  Future<void> _chooseHybridMode(PlayingCard c) async {
-    final bool? swapMode = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            _grabber(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Text('Hvad vil du bruge kortet til?',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.arrow_forward),
-              title: const Text('Flyt en brik',
-                  style: TextStyle(fontSize: 16, color: Colors.black87)),
-              onTap: () => Navigator.of(ctx).pop(false),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.swap_horiz),
-              title: const Text('Byt to brikker',
-                  style: TextStyle(fontSize: 16, color: Colors.black87)),
-              onTap: () => Navigator.of(ctx).pop(true),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || _selectedCard != c) return;
-    setState(() => _hybridSwapMode = swapMode ?? false);
-  }
-
   /// Er byt-flowet aktivt for det valgte kort? Rene byt-kort altid; hybrid-
   /// kort kun når spilleren har valgt byt-tilstanden.
   bool _swapFlowActive(GameState state, PlayingCard c) =>
-      _isSwapCard(state, c) || _hybridSwapMode;
+      _isSwapCard(state, c) || _hybridSwapMode == true;
+
+  /// Venter kortet på, at spilleren vælger hvad det skal bruges til?
+  ///
+  /// ÉN afledt vagt, brugt af brik-tryk, highlightning OG statuslinjen —
+  /// reglen blev før regnet forfra tre steder og kunne drive fra hinanden.
+  bool _awaitingChoice() =>
+      _selectedCard != null &&
+      _hybridSwapMode == null &&
+      MoveOptions.classify(_candidateMoves).needsChoice;
 
   bool _isSwapCard(GameState state, PlayingCard c) {
     if (c.isExit) return false;
@@ -915,6 +943,14 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
   Set<String> _highlightSet(GameState state) {
     final card = _selectedCard;
+    // Mørkt bræt, indtil spilleren har valgt hvad kortet skal bruges til.
+    //
+    // Det er selve rettelsen. Før faldt et uafgjort hybridkort igennem til
+    // den generiske gren nedenfor og highlightede FLYT-brikkerne — brættet
+    // påstod altså en tilstand, der ikke var valgt, og pegede på præcis det
+    // tryk, brugeren klagede over. Et tomt bræt siger "jeg venter på dig"
+    // uden at kræve, at nogen læser en linje tekst.
+    if (_awaitingChoice()) return <String>{};
     if (card != null && _swapFlowActive(state, card)) {
       // Kun BYT-parrene (positivt genkendt) — på et hybrid-kort må 9-frem-
       // trækkene ikke blande sig i byt-highlighten.
@@ -1045,6 +1081,11 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   void _handlePieceTap(GameState state, String pieceId) {
     if (state.currentPlayerIndex != _mySeat) return;
     if (_selectedCard == null) return;
+    // Uafgjort valg: et tryk må ALDRIG flytte noget. Det var hele
+    // brugerfundet — man mistede byt-muligheden uden at have valgt, og et
+    // flyt kan ikke fortrydes. Brættet er mørkt imens (se _highlightSet), så
+    // der er heller ingen brik der inviterer til trykket.
+    if (_awaitingChoice()) return;
     if (_swapFlowActive(state, _selectedCard!)) {
       _handleSwapTap(state, pieceId);
       return;
