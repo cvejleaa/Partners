@@ -101,6 +101,27 @@ Future<List<Move>> pumpAndPlay(
   return applied;
 }
 
+/// Skærm-punktet hvor brættet FAKTISK tegner [pieceId].
+///
+/// HVORFOR IKKE BARE brættets midte: det var den første udgave af denne fil,
+/// og den beviste ingenting. Midten er et tomt felt — der er ingen brik at
+/// ramme, så `applied` stod tom, uanset om koden flyttede eller ej. Testen var
+/// grøn med fejlen genindsat. Punktet hentes derfor fra brættets EGEN
+/// geometri (samme kilde som tap-detektionen), og testen "flyt-valget flytter
+/// rent faktisk brikken" nedenfor er den positive kontrol: rammer dette punkt
+/// en dag ved siden af, bliver DEN rød, og så ved vi det.
+Offset pieceSpot(WidgetTester t, GameState state, String pieceId) {
+  final Finder board = find.byType(BoardView);
+  final BoardView view = t.widget<BoardView>(board);
+  final Rect r = t.getRect(board);
+  final Map<String, Offset> centers = BoardView.debugPieceCenters(
+      state, r.shortestSide, view.debugRotation,
+      scale: view.debugScale);
+  final Offset? c = centers[pieceId];
+  expect(c, isNotNull, reason: 'brættet tegner ingen brik ved id $pieceId');
+  return r.topLeft + c!;
+}
+
 void main() {
   testWidgets('kortet tilbyder BEGGE muligheder som knapper', (t) async {
     await pumpAndPlay(t, choiceState(), act: (t) async {
@@ -113,15 +134,39 @@ void main() {
   testWidgets('FUNDET: et brik-tryk flytter IKKE, mens valget er uafgjort',
       (t) async {
     // Kernen i rapporten. Før stod tilstanden lydløst på "flyt", og dette
-    // tryk flyttede brikken uigenkaldeligt.
-    final List<Move> applied =
-        await pumpAndPlay(t, choiceState(), act: (t) async {
+    // tryk flyttede brikken uigenkaldeligt. Trykket rammer p0.0 — den brik
+    // der KAN rykke 9 frem — så et "ingenting skete" her er et valg, ikke et
+    // forbier.
+    final GameState state = choiceState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
       await t.tap(find.byType(CardView).first);
       await t.pumpAndSettle();
-      await t.tapAt(t.getCenter(find.byType(BoardView)));
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
     });
     expect(applied, isEmpty,
         reason: 'ingen brik må flyttes, før spilleren har valgt');
+  });
+
+  testWidgets('POSITIV KONTROL: vælger man FLYT, flytter det SAMME tryk brikken',
+      (t) async {
+    // Denne test findes for at holde den forrige ærlig. Samme kort, samme
+    // punkt på brættet — eneste forskel er, at valget er truffet. Bliver
+    // denne rød (fx fordi geometrien er flyttet sig, og punktet rammer tomt),
+    // er den forrige tests "ingen træk" heller ikke længere et bevis.
+    final GameState state = choiceState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      // Ikke på tekst: flyt-knappens tekst er den konkrete beskrivelse af
+      // trækket, når der kun er ét (fx "Ryk 9 frem"). Ikonet er knappens
+      // stabile identitet.
+      await t.tap(find.byIcon(Icons.arrow_forward));
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+    });
+    expect(applied, hasLength(1),
+        reason: 'efter valget skal netop dette tryk flytte p0.0');
+    expect(applied.single.steps.first.pieceId, 'p0.0');
   });
 
   testWidgets('vælger man BYT, går trykket i byt-flowet — ikke flyt',
