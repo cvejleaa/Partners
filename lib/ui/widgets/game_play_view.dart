@@ -1088,10 +1088,6 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// så den kan ikke selv se, at byt er aktivt — rækkefølgen er det eneste,
   /// der afgør det.
   _Flow _activeFlow(GameState state, PlayingCard card) {
-    if (_swapFlowActive(state, card)) return _Flow.swap;
-    if (_isMultiPieceCard(state, card) && _multiPieceMode != false) {
-      return _Flow.multi;
-    }
     return _Flow.single;
   }
 
