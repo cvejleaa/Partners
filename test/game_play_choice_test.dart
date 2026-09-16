@@ -30,7 +30,59 @@ import 'test_helpers.dart';
 
 /// 25 års nier: "Byt ELLER 9" — et helt almindeligt kort, 4 i bunken.
 const PlayingCard nine = PlayingCard(Rank.nine, Suit.spades);
+
+/// Klassisk firer: 4 frem ELLER 4 tilbage — samme brik, to udfald.
+const PlayingCard four = PlayingCard(Rank.four, Suit.hearts);
+
+/// Klassisk konge: ud af start ELLER 13 frem — men ALDRIG for samme brik.
+const PlayingCard king = PlayingCard(Rank.king, Suit.clubs);
 final CardRules p25 = effectiveCardRules(partners25, CardRules.defaults());
+final CardRules classic = CardRules.defaults();
+
+/// Kun ÉN brik på banen, langt fra både start og hjemstræk, så både 4 frem
+/// (→ felt 24) og 4 tilbage (→ felt 16) er lovlige for netop den brik.
+/// Resten står i start og kan intet med en firer — så de to eneste lovlige
+/// træk i stillingen hører til p0.0.
+GameState fourState() => makeState(
+      cardRules: classic,
+      variant: classicVariant,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(20),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        for (int i = 1; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[four],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
+
+/// Alle egne brikker i start: kongens eneste lovlige træk er "ud af start".
+GameState kingState() => makeState(
+      cardRules: classic,
+      variant: classicVariant,
+      piecePositions: <List<PiecePosition>>[
+        for (int i = 0; i < 4; i++)
+          <PiecePosition>[
+            for (int s = 0; s < 4; s++) StartPosition(i, s),
+          ],
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[king],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+        const <PlayingCard>[],
+      ],
+    );
 
 /// En stilling hvor nieren KAN begge dele: min brik kan rykke 9 frem, og der
 /// står en modstanderbrik at bytte med.
@@ -167,6 +219,80 @@ void main() {
     expect(applied, hasLength(1),
         reason: 'efter valget skal netop dette tryk flytte p0.0');
     expect(applied.single.steps.first.pieceId, 'p0.0');
+  });
+
+  // -------------------------------------------------------------------------
+  // Brikkens eget valg: det hvide "Vælg træk"-ark er erstattet af de SAMME
+  // inline-knapper. Kortet her er en klassisk firer, hvor én brik kan begge
+  // retninger.
+  // -------------------------------------------------------------------------
+
+  testWidgets('FIREREN: et tryk på brikken flytter IKKE — den spørger',
+      (t) async {
+    final GameState state = fourState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+    });
+    expect(applied, isEmpty,
+        reason: 'brikken kan to ting — trykket må ikke vælge for spilleren');
+    // Indholdet, ikke bare at NOGET blev vist: begge retninger skal stå der,
+    // og de skal stå som de retninger de er.
+    expect(find.text('4 frem'), findsOneWidget);
+    expect(find.text('4 tilbage'), findsOneWidget);
+    expect(find.text('Annullér'), findsOneWidget,
+        reason: 'uden en vej ud er et inline-valg en fælde');
+  });
+
+  testWidgets('FIREREN: knappen anvender præcis DET træk, der står på den',
+      (t) async {
+    final GameState state = fourState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('4 tilbage'));
+    });
+    expect(applied, hasLength(1));
+    // 20 − 4 = 16. Vælger knappen det andet træk, lander den på 24, og
+    // dette tal gør testen rød.
+    expect(applied.single.steps.single.to, const TrackPosition(16),
+        reason: '"4 tilbage" skal føre BAGLÆNS, ikke fremad');
+  });
+
+  testWidgets('FIREREN: Annullér fortryder valget uden at flytte noget',
+      (t) async {
+    final GameState state = fourState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Annullér'));
+    });
+    expect(applied, isEmpty);
+    expect(find.text('4 frem'), findsNothing,
+        reason: 'knapperne skal være væk igen efter Annullér');
+  });
+
+  testWidgets('KONGEN: brikken har allerede svaret — ingen knapper, træk straks',
+      (t) async {
+    // Kernen i den afledte placering. Kongen kan "ud af start" ELLER "13
+    // frem", men aldrig for SAMME brik: en brik i start kan kun komme ud.
+    // Derfor må der ikke spørges om noget her.
+    final GameState state = kingState();
+    final List<Move> applied = await pumpAndPlay(t, state, act: (t) async {
+      await t.tap(find.byType(CardView).first);
+      await t.pumpAndSettle();
+      await t.tapAt(pieceSpot(t, state, 'p0.0'));
+    });
+    expect(applied, hasLength(1),
+        reason: 'ét lovligt træk for brikken → udfør det, spørg ikke');
+    expect(applied.single.exitsStart, isTrue);
+    expect(find.text('Annullér'), findsNothing,
+        reason: 'ingen knaprække må dukke op, når der intet er at vælge');
   });
 
   testWidgets('vælger man BYT, går trykket i byt-flowet — ikke flyt',

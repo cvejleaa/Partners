@@ -93,6 +93,17 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// selve arket.
   bool? _hybridSwapMode;
 
+  /// Trækvalget for ÉN brik, når netop dén brik kan flere ting med kortet
+  /// (fx fireren: frem eller tilbage; esset på banen: 1 eller 11).
+  ///
+  /// Tom = der venter intet valg. Det svarer til det gamle modale ark
+  /// ("Vælg træk"), men inline i statuslinjen, så brættet ikke dækkes —
+  /// beslutningen KRÆVER at man kan se stillingen. Etiketterne kommer fra
+  /// _describeMove og bærer derfor konsekvensen med ("4 tilbage — slår Blå
+  /// hjem"); det er hele grunden til at vælge det ene træk frem for det
+  /// andet, og en knap FØR brik-trykket kunne ikke sige det.
+  List<Move> _pieceChoice = <Move>[];
+
   /// Memo for canPlay (se _buildPlayArea).
   String? _canPlayKey;
   bool _canPlayMemo = false;
@@ -168,6 +179,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       _candidateMoves = <Move>[];
       _swapFirstPiece = null;
       _hybridSwapMode = null;
+      _pieceChoice = <Move>[];
       _splitPath.clear();
     }
     if (phaseOrTurnChanged) {
@@ -704,6 +716,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     String label;
     if (card == null) {
       label = 'Vælg et kort';
+    } else if (_pieceChoice.isNotEmpty) {
+      // Samme form som kortets eget valg ("Kortet kan to ting — vælg én:"),
+      // et niveau længere nede: nu er det brikken, der kan flere ting.
+      label = 'Brikken kan flere ting — vælg én:';
     } else if (_isSplitCard(state, card)) {
       final int rem = _splitRemaining(state);
       label = _splitPath.isEmpty
@@ -749,14 +765,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         MoveOptions.classify(_candidateMoves).needsChoice;
     final bool isMultiStep = card != null && _isMultiPieceCard(state, card);
     final bool canCommit = isMultiStep && _firstFullyMatching() != null;
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 8,
-      runSpacing: 4,
-      children: <Widget>[
-        Text(label,
-            style: const TextStyle(color: Colors.white, fontSize: 13)),
+    final List<Widget> controls = <Widget>[
         if (isHybrid) ...<Widget>[
           _modeButton(
             label: _moveOptionLabel(state),
@@ -771,6 +780,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             onTap: () => setState(() => _hybridSwapMode = true),
           ),
         ],
+        if (_pieceChoice.isNotEmpty) ..._pieceChoiceButtons(state),
         if (isMultiStep && _splitPath.isNotEmpty) ...<Widget>[
           if (canCommit)
             FilledButton(
@@ -790,8 +800,73 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
             child: const Text('Annullér'),
           ),
         ],
+    ];
+    // Etiketten står OVER knapperne, ikke i samme Wrap. I én Wrap havner
+    // teksten på linje med en knap, så snart der er mere end to, og bliver
+    // klemt sammen til et par tegn pr. linje.
+    if (controls.isEmpty) {
+      return Text(label,
+          style: const TextStyle(color: Colors.white, fontSize: 13));
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 13)),
+        const SizedBox(height: 6),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: controls,
+        ),
       ],
     );
+  }
+
+  /// Knapperne for det ventende brik-valg: ét træk pr. DISTINKT virkning,
+  /// plus en vej ud.
+  ///
+  /// Annullér-knappen er ikke pynt. Det gamle ark kunne afvises ved at trykke
+  /// ved siden af; uden en udvej ville et inline-valg være en fælde, man kun
+  /// slipper ud af ved at spille et træk, man ikke ville.
+  List<Widget> _pieceChoiceButtons(GameState state) {
+    final Map<String, Move> byEffect = <String, Move>{};
+    for (final Move m in _pieceChoice) {
+      byEffect.putIfAbsent(_describeMove(state, m), () => m);
+    }
+    final List<MapEntry<String, Move>> entries = byEffect.entries.toList()
+      ..sort((MapEntry<String, Move> a, MapEntry<String, Move> b) =>
+          a.key.compareTo(b.key));
+    return <Widget>[
+      for (final MapEntry<String, Move> e in entries)
+        FilledButton.tonal(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            // Samme 40 px trykmål som kortets tilstands-knapper.
+            minimumSize: const Size(0, 40),
+            backgroundColor: const Color(0xFF3A3A3A),
+            foregroundColor: Colors.white,
+          ),
+          onPressed: () => _applyPieceChoice(e.value),
+          child: Text(e.key, style: const TextStyle(fontSize: 13)),
+        ),
+      TextButton(
+        style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(0, 40),
+            foregroundColor: Colors.amber),
+        onPressed: () => setState(() => _pieceChoice = <Move>[]),
+        child: const Text('Annullér'),
+      ),
+    ];
+  }
+
+  void _applyPieceChoice(Move m) {
+    setState(() => _pieceChoice = <Move>[]);
+    widget.onApplyMove(_mySeat, m);
   }
 
   Widget _handCards({
@@ -881,6 +956,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       _selectedCard = c;
       _candidateMoves = moves;
       _swapFirstPiece = null;
+      _pieceChoice = <Move>[];
       _splitPath.clear();
       if (!sameCard) {
         // Kan kortet to ting, står valget UAFGJORT (null) indtil spilleren
@@ -951,6 +1027,12 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // tryk, brugeren klagede over. Et tomt bræt siger "jeg venter på dig"
     // uden at kræve, at nogen læser en linje tekst.
     if (_awaitingChoice()) return <String>{};
+    // Venter et trækvalg for én brik, er det KUN den brik, der er i spil.
+    // Ellers ville brættet invitere til et tryk et andet sted, mens
+    // spørgsmålet stod åbent — samme fejl som nierens, i det små.
+    if (_pieceChoice.isNotEmpty) {
+      return <String>{_pieceChoice.first.steps.first.pieceId};
+    }
     if (card != null && _swapFlowActive(state, card)) {
       // Kun BYT-parrene (positivt genkendt) — på et hybrid-kort må 9-frem-
       // trækkene ikke blande sig i byt-highlighten.
@@ -1102,9 +1184,15 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         .toList();
     if (matching.isEmpty) return;
     if (matching.length == 1) {
+      // Kun ét træk for netop denne brik — der er intet at spørge om.
+      // Det er derfor kongen og essets "ud af start" ALDRIG giver knapper:
+      // en brik i start kan kun komme ud, og en brik på banen kan aldrig
+      // gå ud af start (rules.dart springer selv de andre over), så
+      // brik-trykket har allerede svaret.
+      setState(() => _pieceChoice = <Move>[]);
       widget.onApplyMove(_mySeat, matching.first);
     } else {
-      _showMoveChoice(state, matching);
+      setState(() => _pieceChoice = matching);
     }
   }
 
@@ -1295,59 +1383,6 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     if (!mounted) return;
     setState(() => _swapFirstPiece = null);
     if (ok == true) widget.onApplyMove(_mySeat, move);
-  }
-
-  Future<void> _showMoveChoice(GameState state, List<Move> options) async {
-    final Map<String, Move> byEffect = <String, Move>{};
-    for (final Move m in options) {
-      byEffect.putIfAbsent(_describeMove(state, m), () => m);
-    }
-    final entries = byEffect.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-    final Move? chosen = await showModalBottomSheet<Move>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              _grabber(),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Text('Vælg træk',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87)),
-              ),
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: entries.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, int i) => ListTile(
-                    title: Text(entries[i].key,
-                        style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500)),
-                    onTap: () => Navigator.of(ctx).pop(entries[i].value),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (chosen != null && mounted) widget.onApplyMove(_mySeat, chosen);
   }
 
   String _describeMove(GameState state, Move m) {
