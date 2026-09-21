@@ -100,10 +100,7 @@ class PlayerPanel extends StatelessWidget {
 
     // Linje 2: antal kort tilbage (🂠 N / "smidt") og — skubbet til højre —
     // det sidst spillede kort som lille thumbnail.
-    final Widget countRow = LayoutBuilder(
-      builder: (BuildContext ctx, BoxConstraints c) =>
-          _countRow(roomForChip: c.maxWidth >= _kChipMinWidth),
-    );
+    final Widget countRow = _countRow();
 
     // Starteren får en klar amber ramme + glød, så det er tydeligt hvem der
     // starter runden — også når det ikke er deres tur.
@@ -168,19 +165,17 @@ class PlayerPanel extends StatelessWidget {
     return box;
   }
 
-  /// Mindste bredde hvor chippen (det kort du gav) kan være med.
+  /// Linje 2 i panelet: antal kort, det kort du gav denne spiller, og til
+  /// højre det sidst spillede kort.
   ///
-  /// Under den falder den væk. Chippen er en HJÆLP, ikke kerne-information:
-  /// kortantallet og det sidst spillede kort skal ikke klemmes for den.
-  /// Talt efter det faste indhold: ikon 11 + 4 + antal (~28 ved "smidt") +
-  /// sidst spillede kort 22 ≈ 65, plus chippens ≈ 36.
-  static const double _kChipMinWidth = 110;
-
-  /// Linje 2 i panelet. [roomForChip] måles af en LayoutBuilder — et
-  /// Flexible med FittedBox var IKKE nok: de 8 px foran chippen er FAST
-  /// indhold, og rækken lå i forvejen tæt på sin grænse. Resultatet var en
-  /// overflow på 11 px på en 320 px telefon, fundet af testen, ikke af øjet.
-  Widget _countRow({required bool roomForChip}) {
+  /// HER LÅ EN GRÆNSE PÅ 110 px, der skjulte chippen på smalle paneler, med
+  /// den begrundelse at den ellers gav overflow. Det var forkert. Målt ligger
+  /// den reelle overflow-grænse ved ~56 px, og den er den SAMME med og uden
+  /// chippen — det var `lastCard` som `Spacer` + fast bredde, der flød over,
+  /// og det er rettet nedenfor. Grænsen beskyttede altså intet, kunne fjernes
+  /// uden at en eneste test blev rød, og skjulte chippen i et helt
+  /// bredde-interval, hvor den fint kunne vises.
+  Widget _countRow() {
     final double countSize = compact ? 12 : 13;
     final double cardW = compact ? 22 : 34;
     return Row(
@@ -189,7 +184,7 @@ class PlayerPanel extends StatelessWidget {
         const SizedBox(width: 4),
         Text(satOut ? 'smidt' : '$cardCount',
             style: TextStyle(fontSize: countSize, color: Colors.white)),
-        if (givenByMe != null && roomForChip) ...<Widget>[
+        if (givenByMe != null) ...<Widget>[
           const SizedBox(width: 8),
           // flex 3 mod Spacer'ens 1: uden det deler de to den knappe plads
           // ligeligt, og chippen mangler netop dét, den ikke fik. FittedBox

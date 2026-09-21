@@ -194,11 +194,17 @@ void main() {
         ),
       ));
       await t.pumpAndSettle();
-      // Chippen KAN være faldet væk (den er en hjælp, ikke kerne-info) —
-      // pointen med testen er, at rækken ikke flyder over. En overflow gør
-      // pump'en ovenfor til en fejl af sig selv.
-      expect(panelFor(t, 2).givenByMe, seven,
-          reason: 'panelet får stadig kortet — visningen afgør selv pladsen');
+      // Pointen er, at rækken ikke flyder over: en overflow gør pump'en
+      // ovenfor til en fejl af sig selv. Og chippen skal FAKTISK tegnes —
+      // ellers ville testen bestå på et panel, der bare havde skjult den.
+      expect(panelFor(t, 2).givenByMe, seven);
+      expect(
+          find.descendant(
+              of: find.byWidgetPredicate(
+                  (Widget w) => w is PlayerPanel && w.player.index == 2),
+              matching: find.byIcon(Icons.arrow_forward)),
+          findsOneWidget,
+          reason: 'chippen skal vises ved 320 px, ikke skjules');
     });
 
     testWidgets('KONTROL: panelet overflower heller ikke UDEN chippen',
