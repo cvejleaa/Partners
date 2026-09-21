@@ -18,6 +18,8 @@ class PlayerPanel extends StatelessWidget {
     this.compact = false,
     this.colorOverride,
     this.online,
+    this.givenByMe,
+    this.givenSpent = false,
   });
 
   final Player player;
@@ -33,6 +35,20 @@ class PlayerPanel extends StatelessWidget {
   /// Lokal vis-farve der overstyrer [player.color] (farve-rotation). null =
   /// brug spillerens rigtige farve.
   final Color? colorOverride;
+
+  /// Kortet DU gav denne spiller i byttet. null = ingen chip.
+  ///
+  /// Kun modtagerens panel får den, og kun for det kort du selv gav — aldrig
+  /// hvad andre gav hinanden. Du så kortet da du gav det, og modtageren har
+  /// det på hånden, så begge ved det i forvejen; appen husker det bare.
+  final PlayingCard? givenByMe;
+
+  /// Er kortet brugt? Så dæmpes chippen, og pilen bliver til et flueben.
+  ///
+  /// Ikke KUN opacitet: en markering der alene er svagere, forsvinder for
+  /// den der skruer ned for lysstyrken eller ser dårligt. Ikonet bærer
+  /// forskellen positivt.
+  final bool givenSpent;
 
   /// Online-status i et online-spil: true = til stede, false = væk, null =
   /// vis ingen markør (fx AI-plads eller lokalt spil).
@@ -86,6 +102,29 @@ class PlayerPanel extends StatelessWidget {
         const SizedBox(width: 4),
         Text(satOut ? 'smidt' : '$cardCount',
             style: TextStyle(fontSize: countSize, color: Colors.white)),
+        if (givenByMe != null) ...<Widget>[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Semantics(
+              label: givenSpent
+                  ? 'Kortet du gav, ${givenByMe!}, er spillet'
+                  : 'Du gav ${givenByMe!}',
+              child: Opacity(
+                opacity: givenSpent ? 0.38 : 1.0,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(givenSpent ? Icons.check : Icons.arrow_forward,
+                        size: compact ? 10 : 11, color: Colors.white70),
+                    const SizedBox(width: 2),
+                    CardView(
+                        card: givenByMe!, rules: rules, width: cardW * 0.72),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
         if (lastCard != null) ...<Widget>[
           const Spacer(),
           CardView(card: lastCard!, rules: rules, width: cardW),

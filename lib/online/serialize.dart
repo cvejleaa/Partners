@@ -102,6 +102,9 @@ Map<String, dynamic> gameStateToMap(GameState s) => {
         for (final e in s.exchangeBuffer.entries)
           '${e.key}': e.value == null ? null : cardToMap(e.value!),
       },
+      'ga': <String, dynamic>{
+        for (final e in s.givenAway.entries) '${e.key}': cardToMap(e.value),
+      },
       'so': s.sittingOut.toList(),
     };
 
@@ -112,6 +115,18 @@ GameState gameStateFromMap(Map<String, dynamic> m, {dynamic variantsRaw}) {
     eb.forEach((k, v) {
       exchange[int.parse(k as String)] =
           v == null ? null : cardFromMap(Map<String, dynamic>.from(v as Map));
+    });
+  }
+  // Afgivne kort. DEFENSIV: feltet findes ikke i spil, der blev gemt før
+  // det. Et manglende 'ga' er derfor et tomt map, ikke en fejl — det gamle
+  // spil viser bare ingen chip.
+  final given = <int, PlayingCard>{};
+  final ga = m['ga'];
+  if (ga is Map) {
+    ga.forEach((k, v) {
+      if (v == null) return;
+      given[int.parse(k as String)] =
+          cardFromMap(Map<String, dynamic>.from(v as Map));
     });
   }
   // Manglende 'vid' (spil gemt før variant-feltet, eller en gammel log) →
@@ -150,6 +165,7 @@ GameState gameStateFromMap(Map<String, dynamic> m, {dynamic variantsRaw}) {
         (m['scnt'] as List).map((e) => (e as num).toInt()).toList(),
     cardRules: CardRules.fromJson(Map<String, dynamic>.from(m['cr'] as Map)),
     exchangeBuffer: exchange,
+    givenAway: given,
     sittingOut: (m['so'] as List?)?.map((e) => (e as num).toInt()).toSet() ??
         <int>{},
     variant: variant,

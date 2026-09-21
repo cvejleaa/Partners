@@ -517,6 +517,19 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     );
   }
 
+  /// Kortet DU gav [p] i denne hånd — eller null, hvis det ikke er dig, der
+  /// gav, eller modtageren ikke er [p].
+  ///
+  /// Kun MIT eget: `givenAway` rummer hvad alle fire gav, men modstandernes
+  /// bytter er ikke mine at kende. Og først i spille-fasen — i byttefasen
+  /// ligger kortet stadig synligt i min egen hånd.
+  PlayingCard? _givenTo(GameState state, Player p) {
+    if (_mySeat < 0) return null; // tilskuer
+    if (state.phase != GamePhase.play) return null;
+    if (p.index != state.variant.partnerFor(_mySeat)) return null;
+    return state.givenAway[_mySeat];
+  }
+
   Widget _panel(GameState state, Player p, {bool compact = false}) =>
       PlayerPanel(
         player: p,
@@ -534,6 +547,15 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         lastCard: widget.lastPlayedCards[p.index],
         compact: compact,
         colorOverride: _displayColor(state, p.index),
+        givenByMe: _givenTo(state, p),
+        // "Brugt" afgøres på modtagerens hånd, ikke på en bogføring af
+        // spillede kort: ligger kortet der ikke længere, er det ude af
+        // spillet. Kort er entydige (rang+kulør, UD med eget id), så der er
+        // ingen anden kopi at forveksle det med.
+        givenSpent: () {
+          final PlayingCard? g = _givenTo(state, p);
+          return g != null && !p.hand.contains(g);
+        }(),
       );
 
   Widget _buildHumanArea(GameState state, Player me,

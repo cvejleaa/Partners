@@ -23,11 +23,13 @@ class GameState {
     List<int>? starterCounts,
     CardRules? cardRules,
     Map<int, PlayingCard?>? exchangeBuffer,
+    Map<int, PlayingCard>? givenAway,
     Set<int>? sittingOut,
     VariantConfig? variant,
   })  : cardRules = cardRules ?? CardRules.defaults(),
         starterCounts = starterCounts ?? List<int>.filled(4, 0),
         exchangeBuffer = exchangeBuffer ?? <int, PlayingCard?>{},
+        givenAway = givenAway ?? <int, PlayingCard>{},
         sittingOut = sittingOut ?? <int>{},
         variant = variant ?? classicVariant;
 
@@ -55,6 +57,19 @@ class GameState {
   /// Gemmer det kort, hver spiller har valgt at bytte med sin partner, indtil
   /// alle har valgt og byttet kan udføres.
   final Map<int, PlayingCard?> exchangeBuffer;
+
+  /// Hvad hver spiller GAV VÆK i byttet — og som modtageren altså har på
+  /// hånden i denne runde.
+  ///
+  /// Eget felt, ikke en genbrug af [exchangeBuffer]. Bufferen ryddes med
+  /// vilje, når byttet er afviklet, og FIRE steder uden for motoren læser den
+  /// som "har denne spiller afgivet endnu?" (AI-afgivelse to steder,
+  /// venter-på-teksten, og en ændrings-nøgle). De er alle låst inde i
+  /// byttefasen i dag — men lod man bufferen stå fyldt ind i spillet, ville de
+  /// afhænge af en usagt antagelse, ingen af dem selv udtrykker.
+  ///
+  /// Ryddes ved hver ny hånd, ligesom bufferen.
+  final Map<int, PlayingCard> givenAway;
 
   /// Spillere der har SMIDT deres hånd (kunne ikke spille noget) og sidder over
   /// resten af runden. Adskiller sig fra en spiller der har lagt sit sidste

@@ -31,6 +31,7 @@ class GameEngine extends ChangeNotifier {
 
   void startNewHand() {
     state.exchangeBuffer.clear();
+    state.givenAway.clear();
     state.sittingOut.clear();
     // Ny kortgiver-cyklus (samme startende spiller i 3 runder): saml alle 56
     // kort og bland, så der igen er 4 af hver slags. Inden for en cyklus deles
@@ -104,6 +105,9 @@ class GameEngine extends ChangeNotifier {
               'exchangeRule ${state.variant.exchangeRule} er ikke implementeret endnu');
       }
       incoming[receiver] = card;
+      // Husk hvad giveren gav. Bufferen ryddes lige nedenfor; uden dette
+      // felt er kortet væk i samme øjeblik byttet er afviklet.
+      state.givenAway[giver.index] = card;
     }
     incoming.forEach((int idx, PlayingCard card) {
       state.players[idx].hand.add(card);
