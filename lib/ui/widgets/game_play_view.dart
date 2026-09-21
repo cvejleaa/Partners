@@ -526,7 +526,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   PlayingCard? _givenTo(GameState state, Player p) {
     if (_mySeat < 0) return null; // tilskuer
     if (state.phase != GamePhase.play) return null;
-    if (p.index != state.variant.partnerFor(_mySeat)) return null;
+    // MUTATION E: guard fjernet med vilje.
     return state.givenAway[_mySeat];
   }
 
