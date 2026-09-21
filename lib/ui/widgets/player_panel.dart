@@ -226,10 +226,23 @@ class PlayerPanel extends StatelessWidget {
             ),
           ),
         ],
-        if (lastCard != null) ...<Widget>[
-          const Spacer(),
-          CardView(card: lastCard!, rules: rules, width: cardW),
-        ],
+        if (lastCard != null)
+          // ÆLDRE FEJL, fundet af kontrol-testen: rækken flød over med 2,6 px
+          // på en 320 px telefon også UDEN den nye chip. Spacer + et kort med
+          // FAST bredde kan ikke give efter, når panelet klemmes.
+          //
+          // Expanded + FittedBox giver kortet resten af pladsen og skalerer
+          // det ned i stedet for at flyde ud. Align holder det i højre side,
+          // så udseendet er uændret, når der ER plads.
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: CardView(card: lastCard!, rules: rules, width: cardW),
+              ),
+            ),
+          ),
       ],
     );
   }
