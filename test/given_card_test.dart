@@ -156,10 +156,9 @@ void main() {
       // Den forrige udgave sagde "er spillet" til skærmlæsere — forkert i
       // netop det tilfælde, designet er bygget omkring (smidt hånd).
       await pump(t, givenState(partnerHolds: false));
-      final Tooltip tip = t.widget<Tooltip>(find.descendant(
-          of: find.byWidgetPredicate(
-              (Widget w) => w is PlayerPanel && w.player.index == 2),
-          matching: find.byType(Tooltip)));
+      // Ikke byType(Tooltip): panelet indeholder flere. Find chippens egen.
+      final Tooltip tip = t.widget<Tooltip>(find.byWidgetPredicate((Widget w) =>
+          w is Tooltip && (w.message ?? '').startsWith('Du gav')));
       expect(tip.message, contains('ikke længere på hånden'));
       expect(tip.message, isNot(contains('spillet')));
     });
@@ -195,8 +194,44 @@ void main() {
         ),
       ));
       await t.pumpAndSettle();
+      // Chippen KAN være faldet væk (den er en hjælp, ikke kerne-info) —
+      // pointen med testen er, at rækken ikke flyder over. En overflow gør
+      // pump'en ovenfor til en fejl af sig selv.
       expect(panelFor(t, 2).givenByMe, seven,
-          reason: 'chippen skal stadig være der — bare skaleret ned');
+          reason: 'panelet får stadig kortet — visningen afgør selv pladsen');
+    });
+
+    testWidgets('KONTROL: panelet overflower heller ikke UDEN chippen',
+        (t) async {
+      // Så et rødt udfald ovenfor kan henføres til chippen og ikke til et
+      // panel, der i forvejen var for trangt. Uden denne kontrol ved jeg
+      // ikke, om jeg har fundet fejlen eller skabt den.
+      t.view.physicalSize = const Size(320 * 3, 640 * 3);
+      t.view.devicePixelRatio = 3.0;
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+
+      final GameState state = givenState(partnerHolds: true);
+      state.givenAway.clear(); // ingen chip
+      await t.pumpWidget(ProviderScope(
+        overrides: <Override>[
+          boardMinPxProvider.overrideWith((ref) => Stream<double>.value(240)),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: GamePlayView(
+              state: state,
+              mySeat: 0,
+              lastPlayedCards: const <int, PlayingCard>{2: nine},
+              onApplyMove: (int seat, Move m) {},
+              onPass: (int seat) {},
+              onSubmitExchange: (int seat, PlayingCard c) {},
+            ),
+          ),
+        ),
+      ));
+      await t.pumpAndSettle();
+      expect(panelFor(t, 2).givenByMe, isNull);
     });
 
     testWidgets('vises ikke i byttefasen — dér ligger kortet i min egen hånd',

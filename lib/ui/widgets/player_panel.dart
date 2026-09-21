@@ -65,8 +65,6 @@ class PlayerPanel extends StatelessWidget {
     final Color dotColor = colorOverride ?? player.color;
     final double dotSize = compact ? 12 : 16;
     final double nameSize = compact ? 12.5 : 14;
-    final double countSize = compact ? 12 : 13;
-    final double cardW = compact ? 22 : 34;
 
     // Linje 1: farveprik + navn.
     final Widget nameRow = Row(
@@ -102,54 +100,9 @@ class PlayerPanel extends StatelessWidget {
 
     // Linje 2: antal kort tilbage (🂠 N / "smidt") og — skubbet til højre —
     // det sidst spillede kort som lille thumbnail.
-    final Widget countRow = Row(
-      children: <Widget>[
-        Icon(Icons.filter_none, size: compact ? 11 : 12, color: Colors.white70),
-        const SizedBox(width: 4),
-        Text(satOut ? 'smidt' : '$cardCount',
-            style: TextStyle(fontSize: countSize, color: Colors.white)),
-        if (givenByMe != null) ...<Widget>[
-          const SizedBox(width: 8),
-          // flex 3 mod Spacer'ens 1: uden det deler de to den knappe plads
-          // ligeligt, og chippen mangler netop dét, den ikke fik. FittedBox
-          // fordi chippens indre Row har FAST bredde (ikon + CardView) —
-          // Flexible forhindrer kun at RÆKKEN overflower, ikke at chippens
-          // eget indhold gør det.
-          Flexible(
-            flex: 3,
-            child: Tooltip(
-              message: givenSpent
-                  ? 'Du gav ${player.name} $givenByMe — ikke længere på hånden'
-                  : 'Du gav ${player.name} $givenByMe',
-              child: Opacity(
-                opacity: givenSpent ? 0.38 : 1.0,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                          givenSpent
-                              ? Icons.remove_circle_outline
-                              : Icons.arrow_forward,
-                          size: compact ? 10 : 11,
-                          color: Colors.white70),
-                      const SizedBox(width: 2),
-                      CardView(
-                          card: givenByMe!, rules: rules, width: cardW * 0.72),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-        if (lastCard != null) ...<Widget>[
-          const Spacer(),
-          CardView(card: lastCard!, rules: rules, width: cardW),
-        ],
-      ],
+    final Widget countRow = LayoutBuilder(
+      builder: (BuildContext ctx, BoxConstraints c) =>
+          _countRow(roomForChip: c.maxWidth >= _kChipMinWidth),
     );
 
     // Starteren får en klar amber ramme + glød, så det er tydeligt hvem der
@@ -213,6 +166,72 @@ class PlayerPanel extends StatelessWidget {
     // etiketten er flyttet op mellem panelerne (se game_play_view) for at
     // spare højde.
     return box;
+  }
+
+  /// Mindste bredde hvor chippen (det kort du gav) kan være med.
+  ///
+  /// Under den falder den væk. Chippen er en HJÆLP, ikke kerne-information:
+  /// kortantallet og det sidst spillede kort skal ikke klemmes for den.
+  /// Talt efter det faste indhold: ikon 11 + 4 + antal (~28 ved "smidt") +
+  /// sidst spillede kort 22 ≈ 65, plus chippens ≈ 36.
+  static const double _kChipMinWidth = 110;
+
+  /// Linje 2 i panelet. [roomForChip] måles af en LayoutBuilder — et
+  /// Flexible med FittedBox var IKKE nok: de 8 px foran chippen er FAST
+  /// indhold, og rækken lå i forvejen tæt på sin grænse. Resultatet var en
+  /// overflow på 11 px på en 320 px telefon, fundet af testen, ikke af øjet.
+  Widget _countRow({required bool roomForChip}) {
+    final double countSize = compact ? 12 : 13;
+    final double cardW = compact ? 22 : 34;
+    return Row(
+      children: <Widget>[
+        Icon(Icons.filter_none, size: compact ? 11 : 12, color: Colors.white70),
+        const SizedBox(width: 4),
+        Text(satOut ? 'smidt' : '$cardCount',
+            style: TextStyle(fontSize: countSize, color: Colors.white)),
+        if (givenByMe != null && roomForChip) ...<Widget>[
+          const SizedBox(width: 8),
+          // flex 3 mod Spacer'ens 1: uden det deler de to den knappe plads
+          // ligeligt, og chippen mangler netop dét, den ikke fik. FittedBox
+          // fordi chippens indre Row har FAST bredde (ikon + CardView) —
+          // Flexible forhindrer kun at RÆKKEN overflower, ikke at chippens
+          // eget indhold gør det.
+          Flexible(
+            flex: 3,
+            child: Tooltip(
+              message: givenSpent
+                  ? 'Du gav ${player.name} $givenByMe — ikke længere på hånden'
+                  : 'Du gav ${player.name} $givenByMe',
+              child: Opacity(
+                opacity: givenSpent ? 0.38 : 1.0,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                          givenSpent
+                              ? Icons.remove_circle_outline
+                              : Icons.arrow_forward,
+                          size: compact ? 10 : 11,
+                          color: Colors.white70),
+                      const SizedBox(width: 2),
+                      CardView(
+                          card: givenByMe!, rules: rules, width: cardW * 0.72),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (lastCard != null) ...<Widget>[
+          const Spacer(),
+          CardView(card: lastCard!, rules: rules, width: cardW),
+        ],
+      ],
+    );
   }
 }
 
