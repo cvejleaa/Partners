@@ -43,7 +43,13 @@ class PlayerPanel extends StatelessWidget {
   /// det på hånden, så begge ved det i forvejen; appen husker det bare.
   final PlayingCard? givenByMe;
 
-  /// Er kortet brugt? Så dæmpes chippen, og pilen bliver til et flueben.
+  /// Er kortet ude af modtagerens hånd? Så dæmpes chippen, og pilen bliver
+  /// til et "fjernet"-ikon.
+  ///
+  /// IKKE "spillet". Kortet forlader også hånden, hvis modtageren måtte SMIDE
+  /// den (kunne ikke rykke). Et flueben stod her først og lovede "spillet" —
+  /// og det var forkert i netop det tilfælde, designet er bygget omkring.
+  /// Ordlyd og ikon siger nu det, der faktisk vides: kortet er væk.
   ///
   /// Ikke KUN opacitet: en markering der alene er svagere, forsvinder for
   /// den der skruer ned for lysstyrken eller ser dårligt. Ikonet bærer
@@ -104,22 +110,36 @@ class PlayerPanel extends StatelessWidget {
             style: TextStyle(fontSize: countSize, color: Colors.white)),
         if (givenByMe != null) ...<Widget>[
           const SizedBox(width: 8),
+          // flex 3 mod Spacer'ens 1: uden det deler de to den knappe plads
+          // ligeligt, og chippen mangler netop dét, den ikke fik. FittedBox
+          // fordi chippens indre Row har FAST bredde (ikon + CardView) —
+          // Flexible forhindrer kun at RÆKKEN overflower, ikke at chippens
+          // eget indhold gør det.
           Flexible(
-            child: Semantics(
-              label: givenSpent
-                  ? 'Kortet du gav, ${givenByMe!}, er spillet'
-                  : 'Du gav ${givenByMe!}',
+            flex: 3,
+            child: Tooltip(
+              message: givenSpent
+                  ? 'Du gav ${player.name} $givenByMe — ikke længere på hånden'
+                  : 'Du gav ${player.name} $givenByMe',
               child: Opacity(
                 opacity: givenSpent ? 0.38 : 1.0,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(givenSpent ? Icons.check : Icons.arrow_forward,
-                        size: compact ? 10 : 11, color: Colors.white70),
-                    const SizedBox(width: 2),
-                    CardView(
-                        card: givenByMe!, rules: rules, width: cardW * 0.72),
-                  ],
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                          givenSpent
+                              ? Icons.remove_circle_outline
+                              : Icons.arrow_forward,
+                          size: compact ? 10 : 11,
+                          color: Colors.white70),
+                      const SizedBox(width: 2),
+                      CardView(
+                          card: givenByMe!, rules: rules, width: cardW * 0.72),
+                    ],
+                  ),
                 ),
               ),
             ),

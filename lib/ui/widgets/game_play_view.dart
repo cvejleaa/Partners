@@ -530,33 +530,33 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     return state.givenAway[_mySeat];
   }
 
-  Widget _panel(GameState state, Player p, {bool compact = false}) =>
-      PlayerPanel(
-        player: p,
-        rules: state.cardRules,
-        isCurrent: state.currentPlayerIndex == p.index,
-        cardCount: p.hand.length,
-        // Online-markør: kun i online-spil (onlineSeats != null) og kun for
-        // menneskelige pladser. AI-pladser får ingen markør.
-        online: widget.onlineSeats == null || !p.isHuman
-            ? null
-            : widget.onlineSeats!.contains(p.index),
-        isStarter: state.starterIndex == p.index,
-        satOut: state.phase == GamePhase.play &&
-            state.sittingOut.contains(p.index),
-        lastCard: widget.lastPlayedCards[p.index],
-        compact: compact,
-        colorOverride: _displayColor(state, p.index),
-        givenByMe: _givenTo(state, p),
-        // "Brugt" afgøres på modtagerens hånd, ikke på en bogføring af
-        // spillede kort: ligger kortet der ikke længere, er det ude af
-        // spillet. Kort er entydige (rang+kulør, UD med eget id), så der er
-        // ingen anden kopi at forveksle det med.
-        givenSpent: () {
-          final PlayingCard? g = _givenTo(state, p);
-          return g != null && !p.hand.contains(g);
-        }(),
-      );
+  Widget _panel(GameState state, Player p, {bool compact = false}) {
+    final PlayingCard? given = _givenTo(state, p);
+    return PlayerPanel(
+      player: p,
+      rules: state.cardRules,
+      isCurrent: state.currentPlayerIndex == p.index,
+      cardCount: p.hand.length,
+      // Online-markør: kun i online-spil (onlineSeats != null) og kun for
+      // menneskelige pladser. AI-pladser får ingen markør.
+      online: widget.onlineSeats == null || !p.isHuman
+          ? null
+          : widget.onlineSeats!.contains(p.index),
+      isStarter: state.starterIndex == p.index,
+      satOut: state.phase == GamePhase.play &&
+          state.sittingOut.contains(p.index),
+      lastCard: widget.lastPlayedCards[p.index],
+      compact: compact,
+      colorOverride: _displayColor(state, p.index),
+      givenByMe: given,
+      // "Ude af hånden" afgøres på modtagerens hånd, ikke på en bogføring af
+      // spillede kort: ligger kortet der ikke længere, er det ude af spillet
+      // — uanset om det blev spillet eller hånden blev smidt. Kort er
+      // entydige (rang+kulør, UD med eget id), så der er ingen anden kopi at
+      // forveksle det med.
+      givenSpent: given != null && !p.hand.contains(given),
+    );
+  }
 
   Widget _buildHumanArea(GameState state, Player me,
       {required bool showPanel, required bool fill}) {

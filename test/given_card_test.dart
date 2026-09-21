@@ -127,7 +127,7 @@ void main() {
           findsOneWidget);
     });
 
-    testWidgets('dæmpes når kortet er brugt — og skifter til flueben',
+    testWidgets('dæmpes når kortet er ude af hånden — og ikonet skifter',
         (t) async {
       await pump(t, givenState(partnerHolds: false));
       expect(panelFor(t, 2).givenSpent, isTrue);
@@ -135,12 +135,68 @@ void main() {
           (Widget w) => w is PlayerPanel && w.player.index == 2);
       // Forskellen er ikke KUN svagere farve: ikonet bærer den positivt, så
       // den også ses ved lav lysstyrke eller nedsat syn.
-      expect(find.descendant(of: makker, matching: find.byIcon(Icons.check)),
+      //
+      // Og det er IKKE et flueben. Et flueben lover "spillet" — men kortet
+      // forlader også hånden, hvis modtageren måtte SMIDE den. Ikonet siger
+      // det, der faktisk vides: kortet er væk.
+      expect(
+          find.descendant(
+              of: makker, matching: find.byIcon(Icons.remove_circle_outline)),
           findsOneWidget);
+      expect(find.descendant(of: makker, matching: find.byIcon(Icons.check)),
+          findsNothing,
+          reason: 'et flueben ville påstå at kortet blev SPILLET');
       expect(
           find.descendant(
               of: makker, matching: find.byIcon(Icons.arrow_forward)),
           findsNothing);
+    });
+
+    testWidgets('teksten påstår ikke at kortet blev spillet', (t) async {
+      // Den forrige udgave sagde "er spillet" til skærmlæsere — forkert i
+      // netop det tilfælde, designet er bygget omkring (smidt hånd).
+      await pump(t, givenState(partnerHolds: false));
+      final Tooltip tip = t.widget<Tooltip>(find.descendant(
+          of: find.byWidgetPredicate(
+              (Widget w) => w is PlayerPanel && w.player.index == 2),
+          matching: find.byType(Tooltip)));
+      expect(tip.message, contains('ikke længere på hånden'));
+      expect(tip.message, isNot(contains('spillet')));
+    });
+
+    testWidgets('klemmer ikke panelet på en smal telefon', (t) async {
+      // Panelet er 152 px bredt i komprimeret tilstand, og chippen lægger
+      // sig på en linje, der i forvejen har kortantal OG det sidst spillede
+      // kort. Ingen test rørte en smal skærm før — og Flexible forhindrer
+      // kun at RÆKKEN overflower, ikke at chippens eget indhold gør det.
+      // Flutter fejler testen ved en overflow, så denne pump ER assertionen.
+      t.view.physicalSize = const Size(320 * 3, 640 * 3);
+      t.view.devicePixelRatio = 3.0;
+      addTearDown(t.view.resetPhysicalSize);
+      addTearDown(t.view.resetDevicePixelRatio);
+
+      final GameState state = givenState(partnerHolds: true);
+      // Med et sidst-spillet kort OGSÅ i rækken er pladsen strammest.
+      await t.pumpWidget(ProviderScope(
+        overrides: <Override>[
+          boardMinPxProvider.overrideWith((ref) => Stream<double>.value(240)),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: GamePlayView(
+              state: state,
+              mySeat: 0,
+              lastPlayedCards: const <int, PlayingCard>{2: nine},
+              onApplyMove: (int seat, Move m) {},
+              onPass: (int seat) {},
+              onSubmitExchange: (int seat, PlayingCard c) {},
+            ),
+          ),
+        ),
+      ));
+      await t.pumpAndSettle();
+      expect(panelFor(t, 2).givenByMe, seven,
+          reason: 'chippen skal stadig være der — bare skaleret ned');
     });
 
     testWidgets('vises ikke i byttefasen — dér ligger kortet i min egen hånd',
