@@ -67,7 +67,7 @@ void main() {
     }
 
     for (final double w in <double>[
-      60, 70, 80, 90, 95, 100, 105, 108, 110, 112, 115, 120, 130, 140, 150, 152
+      for (double x = 55; x <= 75; x += 1) x,
     ]) {
       final bool ofWith = await overflowsAt(w, withChip: true);
       final bool ofWithout = await overflowsAt(w, withChip: false);
