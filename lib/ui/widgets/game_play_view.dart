@@ -526,7 +526,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   PlayingCard? _givenTo(GameState state, Player p) {
     if (_mySeat < 0) return null; // tilskuer
     if (state.phase != GamePhase.play) return null;
-    // MUTATION (d): receiver-tjekket er fjernet — ALLE paneler får chippen.
+    if (p.index != state.variant.partnerFor(_mySeat)) return null;
     return state.givenAway[_mySeat];
   }
 
@@ -552,10 +552,8 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         // spillede kort: ligger kortet der ikke længere, er det ude af
         // spillet. Kort er entydige (rang+kulør, UD med eget id), så der er
         // ingen anden kopi at forveksle det med.
-        givenSpent: () {
-          final PlayingCard? g = _givenTo(state, p);
-          return g != null && !p.hand.contains(g);
-        }(),
+        // MUTATION (e): altid false.
+        givenSpent: false,
       );
 
   Widget _buildHumanArea(GameState state, Player me,
