@@ -105,9 +105,7 @@ class GameEngine extends ChangeNotifier {
               'exchangeRule ${state.variant.exchangeRule} er ikke implementeret endnu');
       }
       incoming[receiver] = card;
-      // Husk hvad giveren gav. Bufferen ryddes lige nedenfor; uden dette
-      // felt er kortet væk i samme øjeblik byttet er afviklet.
-      state.givenAway[giver.index] = card;
+      // MUTATION (a): givenAway fyldes IKKE.
     }
     incoming.forEach((int idx, PlayingCard card) {
       state.players[idx].hand.add(card);
