@@ -552,8 +552,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
         // spillede kort: ligger kortet der ikke længere, er det ude af
         // spillet. Kort er entydige (rang+kulør, UD med eget id), så der er
         // ingen anden kopi at forveksle det med.
-        // MUTATION (e): altid false.
-        givenSpent: false,
+        givenSpent: () {
+          final PlayingCard? g = _givenTo(state, p);
+          return g != null && !p.hand.contains(g);
+        }(),
       );
 
   Widget _buildHumanArea(GameState state, Player me,

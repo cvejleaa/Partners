@@ -114,7 +114,8 @@ class PlayerPanel extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Icon(givenSpent ? Icons.check : Icons.arrow_forward,
+                    // MUTATION (f): ikon-skiftet er fjernet, kun Opacity er tilbage.
+                    Icon(Icons.arrow_forward,
                         size: compact ? 10 : 11, color: Colors.white70),
                     const SizedBox(width: 2),
                     CardView(
