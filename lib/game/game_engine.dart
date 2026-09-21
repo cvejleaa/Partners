@@ -31,7 +31,7 @@ class GameEngine extends ChangeNotifier {
 
   void startNewHand() {
     state.exchangeBuffer.clear();
-    // MUTATION (b): givenAway ryddes IKKE.
+    state.givenAway.clear();
     state.sittingOut.clear();
     // Ny kortgiver-cyklus (samme startende spiller i 3 runder): saml alle 56
     // kort og bland, så der igen er 4 af hver slags. Inden for en cyklus deles

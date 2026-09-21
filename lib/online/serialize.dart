@@ -120,15 +120,8 @@ GameState gameStateFromMap(Map<String, dynamic> m, {dynamic variantsRaw}) {
   // Afgivne kort. DEFENSIV: feltet findes ikke i spil, der blev gemt før
   // det. Et manglende 'ga' er derfor et tomt map, ikke en fejl — det gamle
   // spil viser bare ingen chip.
+  // MUTATION (c): 'ga' læses aldrig; given er altid tomt.
   final given = <int, PlayingCard>{};
-  final ga = m['ga'];
-  if (ga is Map) {
-    ga.forEach((k, v) {
-      if (v == null) return;
-      given[int.parse(k as String)] =
-          cardFromMap(Map<String, dynamic>.from(v as Map));
-    });
-  }
   // Manglende 'vid' (spil gemt før variant-feltet, eller en gammel log) →
   // klassisk. Et UKENDT id bevares derimod (variantFromRaw bygger på
   // variantForState, ikke den klampende variantFromId): state skrives
