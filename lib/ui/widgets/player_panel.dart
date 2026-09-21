@@ -174,7 +174,7 @@ class PlayerPanel extends StatelessWidget {
   /// kortantallet og det sidst spillede kort skal ikke klemmes for den.
   /// Talt efter det faste indhold: ikon 11 + 4 + antal (~28 ved "smidt") +
   /// sidst spillede kort 22 ≈ 65, plus chippens ≈ 36.
-  static const double _kChipMinWidth = 110;
+  static const double _kChipMinWidth = 0; // MUTATION C
 
   /// Linje 2 i panelet. [roomForChip] måles af en LayoutBuilder — et
   /// Flexible med FittedBox var IKKE nok: de 8 px foran chippen er FAST
