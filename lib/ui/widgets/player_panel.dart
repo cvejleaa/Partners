@@ -200,7 +200,7 @@ class PlayerPanel extends StatelessWidget {
             flex: 3,
             child: Tooltip(
               message: givenSpent
-                  ? 'Du gav ${player.name} $givenByMe — ikke længere på hånden'
+                  ? 'Du gav ${player.name} $givenByMe — er spillet'
                   : 'Du gav ${player.name} $givenByMe',
               child: Opacity(
                 opacity: givenSpent ? 0.38 : 1.0,
@@ -212,7 +212,7 @@ class PlayerPanel extends StatelessWidget {
                     children: <Widget>[
                       Icon(
                           givenSpent
-                              ? Icons.remove_circle_outline
+                              ? Icons.check
                               : Icons.arrow_forward,
                           size: compact ? 10 : 11,
                           color: Colors.white70),
