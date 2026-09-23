@@ -1,3 +1,4 @@
+import 'dart:math' show Random;
 import 'dart:ui' show Color;
 
 import '../game/card_rules.dart';
@@ -62,7 +63,6 @@ class VariantConfig {
     this.exitCardCount = 4,
     this.onePlayerPerTeam = false,
     this.goalBounce = false,
-    this.onlineReady = true,
     this.tableColor = const Color(0xFF0E2A1A),
     this.feltColor = const Color(0xFF14331F),
     // Husets grønne (bruges også af "din tur"-chippen): hvid 13px-tekst har
@@ -146,18 +146,6 @@ class VariantConfig {
   /// for at trækket er ulovligt (husreglen for alle andre varianter, se
   /// docs/regler.md §11). Læses her — aldrig af variantens navn.
   final bool goalBounce;
-
-  /// Kan varianten spilles ONLINE? Duo kan ikke endnu: online-oprettelsen,
-  /// lobbyen, statistikken og replay'et antager fire mennesker på fire
-  /// pladser. Lobbyens liste udelader den, og værtens start
-  /// ([lobbyVariantFromDoc]) starter den som klassisk.
-  ///
-  /// NAVNGIVET HUL: det er en KLIENT-vagt (værtens start), ikke en server-
-  /// vagt. Et fjendtligt medlem kan skrive `state.vid = 'duo'` direkte i et
-  /// igangværende spil; en rigtig vagt ville være en Firestore-regel på
-  /// `state.vid` med et angreb i firestore-tests/rules.test.mjs. Skaden er
-  /// begrænset til det ene spil, som angriberen selv deltager i.
-  final bool onlineReady;
 
   /// Variantens visuelle identitet i SPILLET (ambient bekræftelse — badgen
   /// bærer informationen, farven bekræfter den). Klassisk = de eksisterende
@@ -350,8 +338,8 @@ const VariantConfig partnersDuo = VariantConfig(
   id: 'duo',
   name: 'Partners Duo',
   description: '1 mod 1 — du styrer to sæt (ring og prik), hvert med sit eget '
-      'mål. Et for stort kort rykker brikken baglæns i målet. Kun mod '
-      'computeren indtil videre.',
+      'mål. Et for stort kort rykker brikken baglæns i målet. Spil mod '
+      'computeren her, eller mod en ven under Online.',
   // Pladen: ♥ + felt 1-10 pr. kvart = 44 felter (♥ tæller ikke ved passage),
   // 3 målcirkler og 3 brikker pr. sæt.
   segments: 4,
@@ -361,7 +349,6 @@ const VariantConfig partnersDuo = VariantConfig(
   exchangeRule: ExchangeRule.opponentSwap,
   onePlayerPerTeam: true,
   goalBounce: true,
-  onlineReady: false,
   // 30 kort: 10 værdier × 3 (ejer-talt), ingen rene UD-kort.
   deckRanks: <Rank>[
     Rank.ace, Rank.two, Rank.three, Rank.four, Rank.five,
@@ -664,13 +651,9 @@ VariantConfig variantFromRaw(String? id, dynamic variantsRaw) {
 
 /// Picker-listen (setup/lobby): indbyggede + ikke-arkiverede customs,
 /// materialiseret. Ét sted, så de to pickers ikke driver fra hinanden.
-///
-/// [online] udelader varianter, der ikke kan spilles online endnu (Duo).
-List<VariantConfig> selectableVariantsFrom(dynamic variantsRaw,
-        {bool online = false}) =>
+List<VariantConfig> selectableVariantsFrom(dynamic variantsRaw) =>
     <VariantConfig>[
-      for (final VariantConfig v in kAllVariants)
-        if (!online || v.onlineReady) v,
+      ...kAllVariants,
       for (final String id in customVariantIdsFrom(variantsRaw))
         variantFromRaw(id, variantsRaw),
     ];
@@ -787,15 +770,23 @@ String? _metaString(dynamic variantsRaw, String id, String key) {
 /// Varianten et ONLINE spil startes med (startGameFromLobby), materialiseret
 /// fra lobby-doc'ets egen cardRulesVariants-kopi (se [variantFromRaw]).
 ///
-/// Den ENE online-vagt: en indbygget variant, der ikke kan spilles online
-/// ([VariantConfig.onlineReady] = false, fx Duo), startes som klassisk.
-/// Lobbyens liste viser den ikke, men doc'ets variantId kan skrives af
-/// ethvert medlem — derfor ligger vagten HER, hvor spillets state bygges,
-/// og ikke i valget. Genkendes positivt (en indbygget variant med
-/// onlineReady false), ikke på fravær.
+/// Den ENE læser af lobbyens variant — start, lobby-skærm, "Mine spil" og
+/// pladsreglerne (LobbySeats) bruger den samme, så det viste er det, der
+/// startes. Kun VÆRTEN kan skrive variantId (firestore.rules:
+/// variantUnchangedOrHost).
 VariantConfig lobbyVariantFromDoc(Map<String, dynamic> doc) {
   final String? id =
       doc['variantId'] is String ? doc['variantId'] as String : null;
-  final VariantConfig v = variantFromRaw(id, doc['cardRulesVariants']);
-  return (kAllVariants.contains(v) && !v.onlineReady) ? classicVariant : v;
+  return variantFromRaw(id, doc['cardRulesVariants']);
+}
+
+/// Tilfældig start-spiller blandt pladserne MED en hånd (Duo: 0 og 1). Den
+/// ENE vælger — lokalt og online. Klassisk trækker [rng] præcis som før
+/// (`nextInt(4)` over plads 0-3).
+int pickStarter(VariantConfig v, Random rng) {
+  final List<int> handSeats = <int>[
+    for (int i = 0; i < 4; i++)
+      if (v.hasHand(i)) i,
+  ];
+  return handSeats[rng.nextInt(handSeats.length)];
 }

@@ -173,10 +173,6 @@ final selectedVariantAdminProvider = Provider<VariantAdminConfig>((ref) {
 final selectableVariantsProvider = Provider<List<VariantConfig>>((ref) =>
     selectableVariantsFrom(ref.watch(variantCardRulesProvider).toRawJson()));
 
-/// Lobbyens liste: kun varianter, der kan spilles online (ikke Duo endnu).
-final onlineSelectableVariantsProvider = Provider<List<VariantConfig>>((ref) =>
-    selectableVariantsFrom(ref.watch(variantCardRulesProvider).toRawJson(),
-        online: true));
 
 class VariantCardRulesController extends StateNotifier<VariantsAdminState> {
   VariantCardRulesController({this.errorSink, this.sourceSink})

@@ -643,6 +643,16 @@ class _StatsBody extends StatelessWidget {
                     '(${s.worstRival!.value.games - s.worstRival!.value.wins}/${s.worstRival!.value.games})'),
           if (singleGame && s.partnerStats.isNotEmpty)
             _statRow('Makker', s.partnerStats.values.first.displayName),
+          // Duo (1 mod 1): head-to-head i stedet for makker/rival — "Mod Bo
+          // i Duo: 7–5" er hele pointen med et to-mands-spil.
+          if (!singleGame && s.topDuoOpponent != null)
+            _statRow(
+                'Duo mod ${s.topDuoOpponent!.value.displayName}',
+                '${s.topDuoOpponent!.value.wins}–'
+                    '${s.topDuoOpponent!.value.games - s.topDuoOpponent!.value.wins}'),
+          if (singleGame && s.duoOpponentStats.isNotEmpty)
+            _statRow('Modstander (Duo)',
+                s.duoOpponentStats.values.first.displayName),
         ]),
         _section('Stil & strategi', <Widget>[
           // "Delekort", ikke "7'er": i 25 år ligger delingen på 4×1-kortet —

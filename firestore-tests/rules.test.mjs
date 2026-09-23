@@ -549,11 +549,9 @@ describe('games/{game}', () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game()));
     await assertFails(deleteDoc(doc(as('mallory'), 'games/G1')));
   });
-  // variantId (variant-valg i lobbyen) ligger BEVIDST i samme skrive-flade som
-  // de øvrige lobby-felter (aiLevel/names). Disse to vagter fastholder den flade
-  // netop for variant-feltet, så en fremtidig stramning/mutation af games-
-  // update-reglen fanges på variant-stien og ikke kun på seq/aiLevel.
-  it('en siddende spiller må sætte variantId (variant vælges i lobbyen)', async () => {
+  // variantId (variant-valg i lobbyen) må skrives af VÆRTEN (alice i
+  // game()-fixturet) — se variantUnchangedOrHost og angrebene nedenfor.
+  it('værten må sætte variantId (variant vælges i lobbyen)', async () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game({ status: 'lobby' })));
     await assertSucceeds(
       updateDoc(doc(as('alice'), 'games/G1'), { variantId: 'p25' }));
@@ -562,6 +560,87 @@ describe('games/{game}', () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game()));
     await assertFails(
       updateDoc(doc(as('mallory'), 'games/G1'), { variantId: 'p25' }));
+  });
+
+  // ---- VARIANT-VALG ER VÆRTENS + PARTNERS DUO (spejlede pladser) ----
+  //
+  // Duo: to spillere på fire pladser; plads 2/3 er spejle af 0/1 (samme uid).
+  // othersSeatsKept er mængde-baseret, så uden duoSeatsMirrored kunne en
+  // fremmed overtage en spejl-plads (værtens uid står jo stadig på plads 0).
+  // Og uden variantUnchangedOrHost kunne han i SAMME skrivning skifte
+  // varianten væk fra Duo og dermed omgå spejl-kravet (QC-fund på planen).
+  const duoLobby = (over) => ({
+    hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+    variantId: 'duo', uids: ['alice', 'bob', 'alice', 'bob'], ...over,
+  });
+
+  it('ANGREB: en gæst i lobbyen må IKKE skifte variant (kun værten)', async () => {
+    await seed((db) => setDoc(doc(db, 'games/VAR1'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      variantId: 'classic', uids: ['alice', 'bob', null, null],
+    }));
+    await assertFails(
+      updateDoc(doc(as('bob'), 'games/VAR1'), { variantId: 'p25' }));
+    // Værten må.
+    await assertSucceeds(
+      updateDoc(doc(as('alice'), 'games/VAR1'), { variantId: 'p25' }));
+  });
+
+  it('ANGREB: en fremmed må IKKE tage en Duo-spejlplads', async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO1'), duoLobby({
+      members: ['alice'], uids: ['alice', null, 'alice', null],
+    })));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/DUO1'),
+        { uids: ['alice', null, 'mallory', null] }));
+  });
+
+  it('ANGREB: modstanderen må IKKE bryde spejlet (omrokere sig til plads 2)',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO2'), duoLobby()));
+    await assertFails(updateDoc(doc(as('bob'), 'games/DUO2'),
+        { uids: ['alice', 'bob', 'bob', 'bob'] }));
+  });
+
+  it('ANGREB: variant-skift + spejlplads i ÉN skrivning er afvist', async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO3'), duoLobby()));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/DUO3'), {
+      variantId: 'classic', uids: ['alice', 'bob', 'mallory', 'bob'],
+    }));
+  });
+
+  it('TILLADT: gæsten tager hånd-pladsen MED spejl i en Duo-lobby', async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO4'), duoLobby({
+      members: ['alice'], uids: ['alice', null, 'alice', null],
+    })));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/DUO4'),
+        { uids: ['alice', 'bob', 'alice', 'bob'] }));
+  });
+
+  it('TILLADT: værten skifter fra Duo til klassisk og rydder spejlene',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO5'), duoLobby()));
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/DUO5'), {
+      variantId: 'classic', uids: ['alice', 'bob', null, null],
+    }));
+  });
+
+  it('TILLADT: et spillende Duo-spil kan skrives (træk, seen)', async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO6'),
+        duoLobby({ status: 'playing', state: { ph: 'play', cp: 1, hn: 1 } })));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/DUO6'),
+        { 'state.cp': 0, seq: 1 }));
+  });
+
+  it('TILLADT: lokalt Duo-spil (mode ai, intet variantId) — seen virker',
+      async () => {
+    // Lokale Duo-spil gemmes med [a,null,a,null] og kun state.vid — ingen
+    // variantId på topniveau. Spejl-kravet må ikke ramme dem.
+    await seed((db) => setDoc(doc(db, 'games/DUO7'), {
+      hostUid: 'alice', status: 'over', mode: 'ai', members: ['alice'],
+      uids: ['alice', null, 'alice', null], state: { vid: 'duo' },
+    }));
+    await assertSucceeds(
+      updateDoc(doc(as('alice'), 'games/DUO7'), { 'seen.alice': 3 }));
   });
 });
 

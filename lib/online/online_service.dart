@@ -21,6 +21,7 @@ import '../models/player.dart';
 import '../models/playing_card.dart';
 import '../models/variant_config.dart';
 import 'friends_service.dart';
+import 'lobby_seats.dart';
 import 'serialize.dart';
 
 /// Navnet på Firestore-databasen i projekt partners-8d4aa.
@@ -164,6 +165,12 @@ class GameSummary {
   /// kopi) — badgen i listen skal vise custom-varianters farve/mærke uden
   /// registry-opslag.
   final VariantConfig variant;
+
+  /// Deltagernes navne — én gang pr. SPILLER (Duo: ikke "Anna, Bo, Anna,
+  /// Bo") og uden tomme pladser.
+  List<String> get participants => playerNamesOnce(variant, playerNames)
+      .where((String n) => n.trim().isNotEmpty)
+      .toList();
 
   /// Spil-fase for igangværende spil ('play', 'exchange', …). Null = ukendt.
   final String? phase;
@@ -379,13 +386,18 @@ enum LobbyNeed {
 /// `aiSeats` må mangle. Lobby-skærmen indekserede hårdt `uids[i]` for i<4 —
 /// det var sikkert dér, men denne funktion kaldes for HVERT doc i
 /// "Mine spil"-forespørgslen, også gamle og skæve.
+///
+/// Kun pladser MED en hånd tæller ([variant]; Duo: 0 og 1). Talt pr. plads
+/// ville en Duo-vært alene ([a, null, a, null]) have "to udfyldte pladser"
+/// og kunne starte en tom lobby.
 bool lobbyCanStart(
-    List<dynamic> uids, List<dynamic> aiSeats, Map<String, dynamic> ready) {
-  final int n = uids.length < 4 ? uids.length : 4;
+    List<dynamic> uids, List<dynamic> aiSeats, Map<String, dynamic> ready,
+    {VariantConfig variant = classicVariant}) {
   int filled = 0;
   bool anyHuman = false;
   bool allHumansReady = true;
-  for (int i = 0; i < n; i++) {
+  for (final int i in lobbyPlayableSeats(variant)) {
+    if (i >= uids.length) continue;
     final dynamic u = uids[i];
     final bool ai = i < aiSeats.length && aiSeats[i] == true;
     if (u != null || ai) filled++;
@@ -409,7 +421,8 @@ LobbyNeed? lobbyNeedFromDoc(Map<String, dynamic> d, String uid) {
       : <String, dynamic>{};
   // Sidder jeg overhovedet med? Ellers er det en invitation.
   if (!uids.contains(uid)) return LobbyNeed.invitation;
-  final bool canStart = lobbyCanStart(uids, aiSeats, ready);
+  final bool canStart =
+      lobbyCanStart(uids, aiSeats, ready, variant: lobbyVariantFromDoc(d));
   if (canStart && d['hostUid'] == uid) return LobbyNeed.canStart;
   // Rækkefølgen her er ikke tilfældig: canStart kræver at ALLE mennesker er
   // klar — mig selv iberegnet — så "jeg er ikke klar" og "kan startes" kan
@@ -822,12 +835,7 @@ class OnlineService {
   }
 
   /// Standard-paletten (rød, blå, grøn, gul).
-  static const List<int> kPalette = <int>[
-    0xFFE53935,
-    0xFF1E88E5,
-    0xFF43A047,
-    0xFFFDD835,
-  ];
+  static const List<int> kPalette = kLobbyPalette;
 
   /// Farverne på de fire pladser, med værtens [hostColor] på plads 0.
   ///
@@ -982,7 +990,8 @@ class OnlineService {
 
     // Invitér de øvrige menneskelige spillere fra det gamle spil.
     final friends = FriendsService();
-    for (final u in oldUids) {
+    // Én invitation pr. SPILLER: i Duo står modstanderen på to pladser.
+    for (final u in oldUids.toSet()) {
       if (u == null || u == me.uid) continue;
       try {
         await invite(code, u as String);
@@ -1006,30 +1015,13 @@ class OnlineService {
       final snap = await tx.get(ref);
       if (!snap.exists) throw 'Spillet findes ikke';
       final d = snap.data()!;
-      final uids = List<dynamic>.from(d['uids'] as List);
-      final names = List<dynamic>.from(d['names'] as List);
-      final colors = List<dynamic>.from(d['colors'] as List);
-      if (uids[seat] != null && uids[seat] != uid) throw 'Pladsen er taget';
-      // Frigør en evt. plads brugeren allerede sad på (skift af plads).
-      for (int i = 0; i < uids.length; i++) {
-        if (uids[i] == uid && i != seat) {
-          uids[i] = null;
-          names[i] = 'Åben';
-        }
-      }
-      uids[seat] = uid;
-      names[seat] = name;
-      colors[seat] = colorValue;
-      // En menneskelig spiller på pladsen ophæver evt. AI-markering.
-      final aiSeats = d['aiSeats'] is List
-          ? List<dynamic>.from(d['aiSeats'] as List)
-          : <dynamic>[false, false, false, false];
-      if (seat < aiSeats.length) aiSeats[seat] = false;
+      // Pladsskift, AI-ophævelse og Duo-spejlet ligger i LobbySeats.join —
+      // ét sted, testet uden Firestore. Kaster LobbyError med en tekst til
+      // brugeren (fx Duos spejl-plads eller en taget plads).
+      final LobbySeats seats = LobbySeats.fromDoc(d)
+          .join(lobbyVariantFromDoc(d), seat, uid, name, colorValue);
       tx.update(ref, <String, dynamic>{
-        'uids': uids,
-        'names': names,
-        'colors': colors,
-        'aiSeats': aiSeats,
+        ...seats.toUpdate(),
         'members': FieldValue.arrayUnion(<String>[uid]),
         'ready.$uid': false,
       });
@@ -1234,7 +1226,7 @@ class OnlineService {
       rules,
       stored: storedOverridesFor(d['cardRulesVariants'], variant.id),
     );
-    final state = _initialState(names, colors, uids, resolved, variant);
+    final state = onlineInitialState(names, colors, uids, resolved, variant);
     await ref.update(<String, dynamic>{
       'status': 'playing',
       'state': gameStateToMap(state),
@@ -1281,16 +1273,37 @@ class OnlineService {
       {Map<String, dynamic>? entry}) async {
     final bool builtin =
         kAllVariants.any((VariantConfig v) => v.id == variantId);
-    if (!isWellFormedVariantId(variantId) || (!builtin && entry == null)) {
-      await _games.doc(code).update(<String, dynamic>{
-        'variantId': classicVariant.id,
+    final bool valid =
+        isWellFormedVariantId(variantId) && (builtin || entry != null);
+    final String newId = valid ? variantId : classicVariant.id;
+    // En transaktion: skiftet til/fra Duo flytter og spejler pladserne
+    // (LobbySeats.switchVariant), og det skal ske på de pladser, der står i
+    // doc'et NU — ikke på et snapshot fra før en gæst satte sig.
+    await _db.runTransaction((tx) async {
+      final ref = _games.doc(code);
+      final snap = await tx.get(ref);
+      if (!snap.exists) throw 'Spillet findes ikke';
+      final d = snap.data()!;
+      final VariantConfig from = lobbyVariantFromDoc(d);
+      final Map<String, dynamic> after = <String, dynamic>{
+        ...d,
+        'variantId': newId,
+        if (entry != null)
+          'cardRulesVariants': <String, dynamic>{
+            ...(d['cardRulesVariants'] is Map
+                ? Map<String, dynamic>.from(d['cardRulesVariants'] as Map)
+                : <String, dynamic>{}),
+            newId: entry,
+          },
+      };
+      final VariantConfig to = lobbyVariantFromDoc(after);
+      final LobbySeats seats = LobbySeats.fromDoc(d).switchVariant(from, to);
+      tx.update(ref, <Object, Object?>{
+        'variantId': newId,
+        if (valid && entry != null)
+          FieldPath(<String>['cardRulesVariants', newId]): entry,
+        ...seats.toUpdate(),
       });
-      return;
-    }
-    await _games.doc(code).update(<Object, Object?>{
-      'variantId': variantId,
-      if (entry != null)
-        FieldPath(<String>['cardRulesVariants', variantId]): entry,
     });
   }
 
@@ -1301,18 +1314,12 @@ class OnlineService {
       final snap = await tx.get(ref);
       if (!snap.exists) throw 'Spillet findes ikke';
       final d = snap.data()!;
-      final uids = List<dynamic>.from(d['uids'] as List);
-      if (uids[seat] != null) throw 'Pladsen er taget af en spiller';
-      final aiSeats = d['aiSeats'] is List
-          ? List<dynamic>.from(d['aiSeats'] as List)
-          : <dynamic>[false, false, false, false];
-      while (aiSeats.length < 4) {
-        aiSeats.add(false);
-      }
-      aiSeats[seat] = ai;
-      final names = List<dynamic>.from(d['names'] as List);
-      names[seat] = ai ? 'Computer' : 'Åben';
-      tx.update(ref, <String, dynamic>{'aiSeats': aiSeats, 'names': names});
+      final LobbySeats seats =
+          LobbySeats.fromDoc(d).fillAi(lobbyVariantFromDoc(d), seat, ai);
+      tx.update(ref, <String, dynamic>{
+        'aiSeats': seats.aiSeats,
+        'names': seats.names,
+      });
     });
   }
 
@@ -1364,48 +1371,6 @@ class OnlineService {
   /// hvis startspilleren forsvandt før sit første træk (QC-fund).
   static Duration? timeSinceLastAction(Map<String, dynamic> d) =>
       waitedSince(_tsMs(d['lastActionAt']), DateTime.now());
-
-  GameState _initialState(List<String> names, List<int> colors, List uids,
-      CardRules rules, VariantConfig variant) {
-    // NB: online-lobbyen er 4-sædet (names/colors/uids/aiSeats er 4-lange), så
-    // spiller-loopet og start-spilleren er hardkodet til 4. Brik-antal og
-    // geometri tages fra varianten. Klassisk og p25 er begge 4-spiller; en
-    // variant med playerCount≠4 (fx Partners+ 6) kan derfor endnu ikke oprettes
-    // online — det kræver en N-sædet lobby (fase 4).
-    final players = <Player>[
-      for (int i = 0; i < 4; i++)
-        Player(
-          index: i,
-          name: uids[i] != null ? names[i] : 'AI ${i + 1}',
-          color: Color(colors[i]),
-          isHuman: uids[i] != null,
-          pieces: <Piece>[
-            for (int s = 0; s < variant.piecesPerPlayer; s++)
-              Piece(id: 'p$i.$s', ownerIndex: i, position: StartPosition(i, s)),
-          ],
-        ),
-    ];
-    // Tilfældig start-spiller — ikke altid værten (plads 0/den der inviterede).
-    final int starter = Random().nextInt(4);
-    // [rules] er de FÆRDIGT opløste kortregler (startGameFromLobby har kørt
-    // effectiveCardRules). Der opløses BEVIDST ikke igen her — én resolver, ét
-    // sted, ellers genanvendes kode-seedet tavst oven på admins gemte valg.
-    final s = GameState(
-      players: players,
-      geometry: variant.geometry,
-      deck: Deck.fresh(),
-      discard: <PlayingCard>[],
-      dealerIndex: starter,
-      currentPlayerIndex: starter,
-      phase: GamePhase.setup,
-      handNumber: 0,
-      starterIndex: starter,
-      cardRules: rules,
-      variant: variant,
-    );
-    GameEngine(state: s).startNewHand();
-    return s;
-  }
 
   /// Marker at den aktuelle bruger har set indlæg op til (eksklusivt) [count].
   Future<void> markSeen(String code, int count) async {
@@ -1657,7 +1622,9 @@ GameSummary gameSummaryFromDoc(
     // En lobby viser den variant, der faktisk startes (lobbyVariantFromDoc,
     // samme funktion som startGameFromLobby).
     final VariantConfig variant =
-        (status == 'playing' && state is Map && state['vid'] is String)
+        // Også for afsluttede spil: lokale Duo-spil (mode 'ai') har intet
+        // variantId på topniveau, kun state.vid.
+        (status != 'lobby' && state is Map && state['vid'] is String)
             ? variantFromRaw(state['vid'] as String, d['cardRulesVariants'])
             : lobbyVariantFromDoc(d);
     // Arkiv-felter. Vinderen læses fra STATE ('wt') som autoritet: topniveau-
@@ -1693,11 +1660,12 @@ GameSummary gameSummaryFromDoc(
           ? Map<String, dynamic>.from(d['ready'] as Map)
           : <String, dynamic>{};
       final List<String> notReady = <String>[];
-      final int n = uidsL.length < 4 ? uidsL.length : 4;
-      for (int i = 0; i < n; i++) {
+      // Kun pladser med en hånd: en Duo-spiller sidder på to pladser, men
+      // er én spiller (og spejl-pladsen er ikke "åben").
+      openSeats = lobbyOpenSeats(variant, uidsL, aiL);
+      for (final int i in lobbyPlayableSeats(variant)) {
+        if (i >= uidsL.length) continue;
         final dynamic u = uidsL[i];
-        final bool ai = i < aiL.length && aiL[i] == true;
-        if (u == null && !ai) openSeats++;
         if (u != null && ready['$u'] != true) {
           notReady.add(i < names.length ? names[i] : '?');
         }
@@ -1742,3 +1710,55 @@ int? _tsMs(dynamic v) {
     if (v is int) return v;
     return null;
   }
+
+/// Spillets start-state for et online-spil fra lobbyens lister. Top-level
+/// (ikke en metode på servicen), så den kan testes uden Firestore.
+GameState onlineInitialState(List<String> names, List<int> colors, List uids,
+    CardRules rules, VariantConfig variant, {Random? rng}) {
+  // NB: online-lobbyen er 4-sædet (names/colors/uids/aiSeats er 4-lange), så
+  // spiller-loopet og start-spilleren er hardkodet til 4. Brik-antal og
+  // geometri tages fra varianten. Klassisk og p25 er begge 4-spiller; en
+  // variant med playerCount≠4 (fx Partners+ 6) kan derfor endnu ikke oprettes
+  // online — det kræver en N-sædet lobby (fase 4).
+  // Duo: plads 2/3 afledes HELT af den plads, der styrer dem
+  // (controllerOf) — doc'ets uids[2]/[3] læses ikke. Så får en fremmed uid
+  // på en spejl-plads ingen virkning i spillet, og en AI-modstander hedder
+  // det samme på begge sine sæt. Klassisk: controllerOf(i) == i.
+  final players = <Player>[
+    for (int i = 0; i < 4; i++)
+      Player(
+        index: i,
+        name: uids[variant.controllerOf(i)] != null
+            ? names[variant.controllerOf(i)]
+            : 'AI ${variant.controllerOf(i) + 1}',
+        color: Color(colors[variant.controllerOf(i)]),
+        isHuman: uids[variant.controllerOf(i)] != null,
+        pieces: <Piece>[
+          for (int s = 0; s < variant.piecesPerPlayer; s++)
+            Piece(id: 'p$i.$s', ownerIndex: i, position: StartPosition(i, s)),
+        ],
+      ),
+  ];
+  // Tilfældig start-spiller — ikke altid værten — blandt pladser MED en
+  // hånd. nextInt(4) kunne i Duo give plads 2/3: efter byttet fik den
+  // håndløse plads turen, og spillet hang (fund i kortlægningen).
+  final int starter = pickStarter(variant, rng ?? Random());
+  // [rules] er de FÆRDIGT opløste kortregler (startGameFromLobby har kørt
+  // effectiveCardRules). Der opløses BEVIDST ikke igen her — én resolver, ét
+  // sted, ellers genanvendes kode-seedet tavst oven på admins gemte valg.
+  final s = GameState(
+    players: players,
+    geometry: variant.geometry,
+    deck: Deck.forVariant(variant),
+    discard: <PlayingCard>[],
+    dealerIndex: starter,
+    currentPlayerIndex: starter,
+    phase: GamePhase.setup,
+    handNumber: 0,
+    starterIndex: starter,
+    cardRules: rules,
+    variant: variant,
+  );
+  GameEngine(state: s).startNewHand();
+  return s;
+}

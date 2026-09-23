@@ -139,11 +139,7 @@ class GameController extends StateNotifier<GameState> {
     // starter et nyt spil.
     // Kun blandt pladser med en hånd (Duo: 0 og 1). Klassisk: alle fire, og
     // RNG'en trækkes præcis som før.
-    final List<int> handSeats = <int>[
-      for (int i = 0; i < players.length; i++)
-        if (variant.hasHand(i)) i,
-    ];
-    final int starter = handSeats[_rng.nextInt(handSeats.length)];
+    final int starter = pickStarter(variant, _rng);
     final GameState s = GameState(
       players: players,
       geometry: geom,

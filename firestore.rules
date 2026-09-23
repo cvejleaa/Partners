@@ -141,6 +141,28 @@ service cloud.firestore {
             && request.resource.data.get('seen', {})
                 .get(request.auth.uid, 0) is int;
       }
+      // Kun VÆRTEN vælger variant. Stod feltet frit (som før), kunne enhver i
+      // en åben lobby skifte spillet — og i Duo omgå spejl-kravet nedenfor i
+      // ÉN skrivning: {variantId:'classic', uids:[a,b,m,b]} (QC-fund på
+      // planen). Klienten skriver kun feltet fra setVariant, som værten kalder
+      // (lobbyen og revanchen, hvor kalderen ER den nye vært).
+      function variantUnchangedOrHost() {
+        return request.resource.data.get('variantId', null) ==
+                resource.data.get('variantId', null)
+            || request.auth.uid == resource.data.get('hostUid', '');
+      }
+      // Partners Duo: to spillere på fire pladser — plads 2 og 3 er SPEJLE af
+      // 0 og 1 (samme uid). Uden kravet kunne en fremmed (eller modstanderen)
+      // skrive sig på en spejl-plads: othersSeatsKept er mængde-baseret, og
+      // værtens uid står der jo stadig på plads 0. Genkendt positivt på
+      // variant-id'et; klassiske spil og lokale Duo-spil uden variantId (mode
+      // 'ai', [a,null,a,null]) berøres ikke.
+      function duoSeatsMirrored() {
+        return request.resource.data.get('variantId', '') != 'duo'
+            || (request.resource.data.get('uids', []).size() == 4
+                && request.resource.data.uids[2] == request.resource.data.uids[0]
+                && request.resource.data.uids[3] == request.resource.data.uids[1]);
+      }
       allow read: if isSignedIn();
       // Oprettelse: kun med sig selv som vært, som eneste medlem og som
       // eneste besatte plads. (Status er bevidst fri: online-spil oprettes
@@ -166,6 +188,8 @@ service cloud.firestore {
         && request.resource.data.get('hostUid', '') ==
              resource.data.get('hostUid', '')
         && statusUnchangedOrSeated()
+        && variantUnchangedOrHost()
+        && duoSeatsMirrored()
         && (
           selfSeated() ||
           // .get() også her: husets konvention i denne fil er, at et doc uden

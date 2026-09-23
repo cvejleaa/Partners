@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../game/ai/ai_player.dart';
+import '../../game/move_text.dart';
 import '../../game/progress.dart';
 import '../../models/board.dart';
 import '../../models/game_state.dart';
@@ -447,14 +448,13 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
             final int? margin = winMarginFields(state);
             final bool? viewerWon =
                 mySeat < 0 ? null : (mySeat % 2 == winner);
-            // Vinderholdets navne + farver (pladser winner, winner+2).
+            // Vinderholdets navne + farver — én pr. SPILLER (winnerSeats:
+            // i Duo står en spiller på to pladser, ikke "Anna og Anna").
             final winnerNames = <String>[];
             final winnerColors = <Color>[];
-            for (int i = 0; i < state.players.length; i++) {
-              if (i % 2 == winner) {
-                winnerNames.add(i < names.length ? names[i] : 'Spiller');
-                winnerColors.add(state.players[i].color);
-              }
+            for (final int i in winnerSeats(state, winner)) {
+              winnerNames.add(i < names.length ? names[i] : 'Spiller');
+              winnerColors.add(state.players[i].color);
             }
             final String oldCode = widget.code;
             // Kortregnskabet for PRÆCIS dette parti. Beregnes her, hvor doc'et
@@ -617,7 +617,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       // dem er dét man kom tilbage for. Findes ingen, står den på det første.
       int selected = 0;
       for (int k = 0; k < items.length; k++) {
-        if (touchesSeat(items[k], mySeat)) {
+        if (touchesSeat(items[k], mySeat, variant: state.variant)) {
           selected = k;
           break;
         }
@@ -662,6 +662,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           for (final Player p in state.players) p.color.toARGB32(),
         ],
         cardRules: state.cardRules,
+        variant: state.variant,
         log: <Map<String, dynamic>>[
           for (final dynamic e in log) Map<String, dynamic>.from(e as Map),
         ],
@@ -759,7 +760,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     final List<ReplayStory> stories = <ReplayStory>[
       for (final Map<String, dynamic> m in _replayItems)
         storyFor(m,
-            mySeat: mySeat, names: names, geometry: state.variant.geometry),
+            mySeat: mySeat,
+            names: names,
+            geometry: state.variant.geometry,
+            variant: state.variant),
     ];
     // TM-fund: et EKSAKT strengmatch talte for lavt. Rammer ét træk mig to
     // gange (fx +2−5-sekvensen), skriver storyFor "Slog din brik hjem (2 i

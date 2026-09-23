@@ -43,6 +43,7 @@ class UserStats {
     this.gamesAiOnly = 0,
     Map<String, PairStats>? partnerStats,
     Map<String, PairStats>? rivalStats,
+    Map<String, PairStats>? duoOpponentStats,
     this.totalThinkSeconds = 0,
     this.thinkCount = 0,
     this.fastestThinkSeconds,
@@ -71,7 +72,8 @@ class UserStats {
     this.oppPiecesSentHome = 0,
   })  : favoriteStarter = favoriteStarter ?? <String, int>{},
         partnerStats = partnerStats ?? <String, PairStats>{},
-        rivalStats = rivalStats ?? <String, PairStats>{};
+        rivalStats = rivalStats ?? <String, PairStats>{},
+        duoOpponentStats = duoOpponentStats ?? <String, PairStats>{};
 
   final String uid;
   String displayName;
@@ -104,6 +106,12 @@ class UserStats {
   // Makkerskab / rivalitet (key = anden uid)
   Map<String, PairStats> partnerStats;
   Map<String, PairStats> rivalStats;
+
+  /// Partners Duo: head-to-head mod hver modstander (1 mod 1). Holdt ude af
+  /// [rivalStats] (klassiske sidemænd) og [partnerStats] (i Duo er
+  /// "makkeren" dit eget andet sæt), så ingen af dem skifter betydning med
+  /// varianten. wins = MINE sejre mod modstanderen.
+  Map<String, PairStats> duoOpponentStats;
 
   // Tænketid
   double totalThinkSeconds;
@@ -212,6 +220,14 @@ class UserStats {
     return list.isEmpty ? rivalStats.entries.first : list.first;
   }
 
+  /// Duo-modstanderen med flest fælles spil (profilens "Duo mod …").
+  MapEntry<String, PairStats>? get topDuoOpponent {
+    if (duoOpponentStats.isEmpty) return null;
+    final list = duoOpponentStats.entries.toList()
+      ..sort((a, b) => b.value.games.compareTo(a.value.games));
+    return list.first;
+  }
+
   // ---- Firestore round-trip ----
 
   /// [withTimestamp] = false bruges for kopierne inde i `byVariant`-mappet:
@@ -239,6 +255,8 @@ class UserStats {
         'gamesAiOnly': gamesAiOnly,
         'partnerStats': partnerStats.map((k, v) => MapEntry(k, v.toJson())),
         'rivalStats': rivalStats.map((k, v) => MapEntry(k, v.toJson())),
+        'duoOpponentStats':
+            duoOpponentStats.map((k, v) => MapEntry(k, v.toJson())),
         'totalThinkSeconds': totalThinkSeconds,
         'thinkCount': thinkCount,
         'fastestThinkSeconds': fastestThinkSeconds,
@@ -318,6 +336,10 @@ class UserStats {
                   PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
           <String, PairStats>{},
       rivalStats: (m['rivalStats'] as Map?)?.map((k, v) =>
+              MapEntry(k as String,
+                  PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
+          <String, PairStats>{},
+      duoOpponentStats: (m['duoOpponentStats'] as Map?)?.map((k, v) =>
               MapEntry(k as String,
                   PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
           <String, PairStats>{},
@@ -485,6 +507,7 @@ int? _timestampMs(dynamic v) {
 /// sted, så [_applyGame] kan køres på flere spande uden genberegning.
 class _GameFacts {
   _GameFacts({
+    required this.variant,
     required this.uids,
     required this.names,
     required this.winningTeam,
@@ -512,6 +535,9 @@ class _GameFacts {
     required this.unseenByTeam,
   });
 
+  /// Spillets variant — afgør hvilke pladser der er SPILLERE (Duo: to
+  /// spillere på fire pladser).
+  final VariantConfig variant;
   final List<dynamic> uids;
   final List<dynamic> names;
   final int? winningTeam;
@@ -621,6 +647,7 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
       playerColors: List<int>.filled(4, 0xFF000000),
       cardRules: cardRules,
       log: log,
+      variant: variant,
     );
     for (final ev in replay.events) {
       captureGivenBySeat[ev.player] =
@@ -796,6 +823,7 @@ _GameFacts _deriveGame(Map<String, dynamic> game) {
   }
 
   return _GameFacts(
+    variant: variant,
     uids: uids,
     names: names,
     winningTeam: winningTeam,
@@ -847,8 +875,22 @@ void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
   final cardsDiscardedBySeat = f.cardsDiscardedBySeat;
   final protectionBySeat = f.protectionBySeat;
 
-  // Update bucket pr. spiller.
+  final VariantConfig variant = f.variant;
+  // Summen af et plads-nøglet tal over de pladser, SPILLEREN på [seat] styrer
+  // (klassisk: kun [seat]; Duo: begge sæt — fx slag på dit prik-sæt).
+  int ofPlayer(Map<int, int> m, int seat) {
+    int t = 0;
+    for (final int s in variant.seatsControlledBy(seat)) {
+      t += m[s] ?? 0;
+    }
+    return t;
+  }
+
+  // Update bucket pr. SPILLER — kun pladser med en hånd. I Duo står samme
+  // uid på to pladser; talt pr. plads fik man to spil, to sejre og dobbelt
+  // sejrsstime ud af ét parti.
   for (int seat = 0; seat < uids.length; seat++) {
+    if (!variant.hasHand(seat)) continue;
     final uid = uids[seat] as String?;
     if (uid == null) continue;
     final name = seat < names.length ? names[seat] as String : 'Spiller';
@@ -902,18 +944,18 @@ void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
     }
 
     // Slag.
-    final caps = captureGivenBySeat[seat] ?? 0;
+    final caps = ofPlayer(captureGivenBySeat, seat);
     s.totalCaptures += caps;
     s.captureGames += 1;
     if (caps > s.maxCapturesInGame) s.maxCapturesInGame = caps;
-    s.timesCaptured += captureReceivedBySeat[seat] ?? 0;
-    s.homeStretchEntries += homeStretchEntriesBySeat[seat] ?? 0;
+    s.timesCaptured += ofPlayer(captureReceivedBySeat, seat);
+    s.homeStretchEntries += ofPlayer(homeStretchEntriesBySeat, seat);
 
     // Stil.
-    s.split7Count += splitCount[seat] ?? 0;
-    s.solid7Count += solidCount[seat] ?? 0;
-    s.swapCount += swapCount[seat] ?? 0;
-    s.protectionCount += protectionBySeat[seat] ?? 0;
+    s.split7Count += ofPlayer(splitCount, seat);
+    s.solid7Count += ofPlayer(solidCount, seat);
+    s.swapCount += ofPlayer(swapCount, seat);
+    s.protectionCount += ofPlayer(protectionBySeat, seat);
     final opener = openerCount[seat];
     if (opener != null) {
       for (final e in opener.entries) {
@@ -922,8 +964,8 @@ void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
     }
 
     // Pass.
-    s.passCount += passBySeat[seat] ?? 0;
-    s.totalCardsDiscarded += cardsDiscardedBySeat[seat] ?? 0;
+    s.passCount += ofPlayer(passBySeat, seat);
+    s.totalCardsDiscarded += ofPlayer(cardsDiscardedBySeat, seat);
 
     // Kortregnskab: mit par mod modstanderparret. KUN i spil hvor alle fire
     // pladser er mennesker — et heldregnskab mod computeren siger intet, og
@@ -965,8 +1007,26 @@ void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
       }
     }
 
+    // Duo (1 mod 1): head-to-head mod modstanderen, talt ÉN gang — hans
+    // hånd-plads, ikke også hans andet sæt. Ingen makker (det er dig selv).
+    if (isFullyOnline && variant.seatsShareController) {
+      final Set<String> seen = <String>{};
+      for (int o = 0; o < uids.length; o++) {
+        if (!variant.hasHand(o) || variant.teamOf(o) == variant.teamOf(seat)) {
+          continue;
+        }
+        final String? oppUid = uids[o] as String?;
+        if (oppUid == null || !seen.add(oppUid)) continue;
+        final PairStats ds =
+            s.duoOpponentStats.putIfAbsent(oppUid, () => PairStats());
+        ds.displayName =
+            o < names.length ? names[o] as String : ds.displayName;
+        ds.games += 1;
+        if (won) ds.wins += 1;
+      }
+    }
     // Makker (overfor) og rivaler (sidemand).
-    if (isFullyOnline) {
+    if (isFullyOnline && !variant.seatsShareController) {
       final partnerSeat = (seat + 2) % 4;
       final partnerUid = uids[partnerSeat] as String?;
       if (partnerUid != null) {

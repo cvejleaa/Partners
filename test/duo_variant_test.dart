@@ -94,37 +94,15 @@ void main() {
     });
   });
 
-  group('kun lokalt — ikke online', () {
-    test('lobbyens liste udelader Duo, opsætningens liste har den', () {
+  group('online', () {
+    test('Duo står i variantlisten (også lobbyens)', () {
       expect(selectableVariantsFrom(null).map((VariantConfig v) => v.id),
-          contains('duo'));
-      expect(
-          selectableVariantsFrom(null, online: true)
-              .map((VariantConfig v) => v.id),
-          isNot(contains('duo')));
-      expect(
-          selectableVariantsFrom(null, online: true)
-              .map((VariantConfig v) => v.id),
-          containsAll(<String>['classic', 'p25']));
+          containsAll(<String>['classic', 'p25', 'duo']));
     });
 
-    test('et lobby-doc med variantId duo startes som klassisk', () {
+    test('et lobby-doc med variantId duo startes som Duo', () {
       expect(lobbyVariantFromDoc(<String, dynamic>{'variantId': 'duo'}).id,
-          'classic');
-      // Et fjendtligt custom-entry på 'duo' må ikke smugle den igennem.
-      expect(
-          lobbyVariantFromDoc(<String, dynamic>{
-            'variantId': 'duo',
-            'cardRulesVariants': <String, dynamic>{
-              'duo': <String, dynamic>{'custom': true, 'rules': {}},
-            },
-          }).id,
-          'classic');
-      // De online-klare varianter slipper uændret igennem.
-      expect(lobbyVariantFromDoc(<String, dynamic>{'variantId': 'p25'}).id,
-          'p25');
-      expect(lobbyVariantFromDoc(<String, dynamic>{'variantId': 'classic'}).id,
-          'classic');
+          'duo');
     });
 
     test('et custom-entry på et indbygget id omformer det ikke', () {
@@ -132,6 +110,16 @@ void main() {
         'duo': <String, dynamic>{'custom': true, 'rules': {}, 'name': 'Falsk'},
       });
       expect(identical(v, partnersDuo), isTrue);
+      expect(
+          identical(
+              lobbyVariantFromDoc(<String, dynamic>{
+                'variantId': 'duo',
+                'cardRulesVariants': <String, dynamic>{
+                  'duo': <String, dynamic>{'custom': true, 'rules': {}},
+                },
+              }),
+              partnersDuo),
+          isTrue);
     });
   });
 

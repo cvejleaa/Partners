@@ -13,6 +13,7 @@
 import '../game/progress.dart';
 import '../models/board.dart';
 import '../models/piece.dart';
+import '../models/variant_config.dart';
 import 'serialize.dart';
 
 /// Hvor hårdt skridtet ramte MIG. Tonen bæres visuelt (farve/ikon) — ikke af
@@ -75,25 +76,32 @@ class ReplayStory {
 /// Kvarteret kommer fra GEOMETRIEN, ikke fra et hardkodet 15: Partners+ har
 /// 6 segmenter à 13 felter, og et fast tal ville navngive hvert eneste felt
 /// forkert dén dag varianten kommer.
+///
+/// Duo: en spiller ejer to sæt (plads s og s+2) med samme navn — "dit felt 8"
+/// eller "Bos felt 8" ville ikke sige HVILKET. Sættets mærke fra brættet
+/// kommer med: "dit prik-felt 8", "Bos ring-hjemstræk".
 String fieldName(
   PiecePosition pos, {
   required int mySeat,
   required List<String> names,
   required BoardGeometry geometry,
+  VariantConfig variant = classicVariant,
 }) {
   String whose(int owner) {
-    if (owner == mySeat) return 'dit';
+    if (isMySet(variant, owner, mySeat)) return 'dit';
     if (owner < 0 || owner >= names.length) return 'et';
     return '${names[owner]}s';
   }
 
   if (pos is StartPosition) {
-    return pos.ownerIndex == mySeat
-        ? 'din start'
-        : '${whose(pos.ownerIndex)} start';
+    final String tag = setTag(variant, pos.ownerIndex);
+    return isMySet(variant, pos.ownerIndex, mySeat)
+        ? 'din ${tag}start'
+        : '${whose(pos.ownerIndex)} ${tag}start';
   }
   if (pos is HomeStretchPosition) {
-    return '${whose(pos.ownerIndex)} hjemstræk';
+    return '${whose(pos.ownerIndex)} ${setTag(variant, pos.ownerIndex)}'
+        'hjemstræk';
   }
   if (pos is TrackPosition) {
     final int quarter = geometry.trackLength ~/ geometry.segments;
@@ -102,8 +110,9 @@ String fieldName(
     final int within = pos.index % quarter;
     // Kvarterets første felt ER UD-feltet — brættet skriver "UD" der, ikke et
     // tal, så det må teksten heller ikke.
-    if (within == 0) return '${whose(owner)} UD-felt';
-    return '${whose(owner)} felt $within';
+    final String tag = setTag(variant, owner);
+    if (within == 0) return '${whose(owner)} ${tag}UD-felt';
+    return '${whose(owner)} ${tag}felt $within';
   }
   return 'banen';
 }
@@ -132,13 +141,32 @@ int? stepsAdvanced(
       fieldsToFinish(geometry, owner, to);
 }
 
+/// Er sættet på plads [owner] MIT? Klassisk: kun min egen plads. Duo: begge
+/// de sæt, jeg styrer ([VariantConfig.controllerOf]) — prik-sættet er også
+/// mit, selvom brikkerne står på plads mySeat+2.
+bool isMySet(VariantConfig variant, int owner, int mySeat) =>
+    mySeat >= 0 &&
+    owner >= 0 &&
+    owner < 4 &&
+    variant.controllerOf(owner) == mySeat;
+
+/// Sættets mærke foran et ord ("ring-", "prik-") — kun i varianter, hvor en
+/// spiller har to sæt i samme farve. Ellers tom.
+String setTag(VariantConfig variant, int owner) {
+  if (!variant.seatsShareController || owner < 0 || owner >= 4) return '';
+  return variant.hasHand(owner) ? 'ring-' : 'prik-';
+}
+
 /// Fortællingen om ét logget træk, set fra [mySeat].
 ReplayStory storyFor(
   Map<String, dynamic> entry, {
   required int mySeat,
   required List<String> names,
   required BoardGeometry geometry,
+  VariantConfig variant = classicVariant,
 }) {
+  String fname(PiecePosition p) => fieldName(p,
+      mySeat: mySeat, names: names, geometry: geometry, variant: variant);
   final int seat = (entry['player'] as num?)?.toInt() ?? -1;
   final bool byAi = entry['ai'] == true;
   final bool mine = seat == mySeat;
@@ -173,7 +201,9 @@ ReplayStory storyFor(
     // Byttet rammer MIG, hvis en af de to brikker er min.
     final int? o0 = ownerOfPieceId(steps[0]['pieceId'] as String?);
     final int? o1 = ownerOfPieceId(steps[1]['pieceId'] as String?);
-    final int? mineIdx = o0 == mySeat ? 0 : (o1 == mySeat ? 1 : null);
+    final int? mineIdx = (o0 != null && isMySet(variant, o0, mySeat))
+        ? 0
+        : ((o1 != null && isMySet(variant, o1, mySeat)) ? 1 : null);
     if (mineIdx == null) {
       return ReplayStory(
         actor: actor,
@@ -184,30 +214,32 @@ ReplayStory storyFor(
     final Map<String, dynamic> s = steps[mineIdx];
     final PiecePosition was = posOf(s, 'from');
     final PiecePosition now = posOf(s, 'to');
-    final String fromName =
-        fieldName(was, mySeat: mySeat, names: names, geometry: geometry);
-    final String toName =
-        fieldName(now, mySeat: mySeat, names: names, geometry: geometry);
+    final String fromName = fname(was);
+    final String toName = fname(now);
+    // Afstanden måles mod BRIKKENS eget mål — i Duo er prik-sættets mål et
+    // andet end hånd-pladsens.
+    final int pieceOwner = (mineIdx == 0 ? o0 : o1)!;
+    final String myPiece = 'din ${setTag(variant, pieceOwner)}brik';
     // RETNINGEN afgør tonen — ikke hvem der trykkede (QC-fund). Et byt der
     // sender min brik FREM er godt for mig, også når en modstander gjorde
     // det; en rød "ked af det"-stribe på dét ville være et falsk signal.
-    final int? left = fieldsToFinishOrNull(geometry, mySeat, now);
-    final int? before = fieldsToFinishOrNull(geometry, mySeat, was);
+    final int? left = fieldsToFinishOrNull(geometry, pieceOwner, now);
+    final int? before = fieldsToFinishOrNull(geometry, pieceOwner, was);
     final int? delta =
         (left == null || before == null) ? null : before - left;
     String? outcome;
     ReplayTone tone = ReplayTone.neutral;
     if (delta != null && delta < 0) {
-      outcome = 'Din brik røg ${-delta} felter længere væk'
+      outcome = '${_cap(myPiece)} røg ${-delta} felter længere væk'
           '${left == null ? '' : ' — nu $left fra mål'}';
       tone = ReplayTone.sad;
     } else if (delta != null && delta > 0) {
-      outcome = 'Din brik kom $delta felter nærmere mål';
+      outcome = '${_cap(myPiece)} kom $delta felter nærmere mål';
       tone = ReplayTone.good;
     }
     return ReplayStory(
       actor: actor,
-      action: 'byttede din brik fra $fromName til $toName',
+      action: 'byttede $myPiece fra $fromName til $toName',
       outcome: outcome,
       tone: tone,
       byAi: byAi,
@@ -229,8 +261,7 @@ ReplayStory storyFor(
   final int owner = ownerOfPieceId(first['pieceId'] as String?) ?? seat;
   final PiecePosition from = posOf(first, 'from');
   final PiecePosition to = posOf(steps.length == 1 ? first : steps.last, 'to');
-  final String where =
-      fieldName(to, mySeat: mySeat, names: names, geometry: geometry);
+  final String where = fname(to);
 
   String action;
   if (steps.length > 2) {
@@ -251,15 +282,35 @@ ReplayStory storyFor(
             : 'rykkede ${-adv} tilbage til $where';
   }
 
-  final int hitsOnMe =
-      mySeat < 0 ? 0 : hitOwners.where((int? o) => o == mySeat).length;
+  // Duo: en spiller kan slå sit EGET andet sæt hjem (landing på det er et
+  // slag). Det er hverken et angreb på mig eller en sejr — en egen,
+  // neutral formulering, og det tæller ikke som "slået af de andre".
+  final int actorCtl =
+      (seat >= 0 && seat < 4) ? variant.controllerOf(seat) : seat;
+  final List<int?> selfHits = <int?>[
+    for (final int? o in hitOwners)
+      if (o != null && o >= 0 && o < 4 && variant.controllerOf(o) == actorCtl)
+        o,
+  ];
+  final List<int?> hitsByOthers = <int?>[
+    for (final int? o in hitOwners)
+      if (!selfHits.contains(o)) o,
+  ];
+  final int hitsOnMe = mySeat < 0
+      ? 0
+      : hitsByOthers
+          .where((int? o) => o != null && isMySet(variant, o, mySeat))
+          .length;
 
   String? outcome;
   ReplayTone tone = ReplayTone.neutral;
   if (hitOwners.isNotEmpty && hitsOnMe > 0) {
+    final int victim = hitsByOthers.firstWhere(
+        (int? o) => o != null && isMySet(variant, o, mySeat))!;
+    final String myPiece = 'din ${setTag(variant, victim)}brik';
     outcome = hitOwners.length == 1
-        ? 'Slog din brik hjem'
-        : 'Slog din brik hjem (${hitOwners.length} i alt)';
+        ? 'Slog $myPiece hjem'
+        : 'Slog $myPiece hjem (${hitOwners.length} i alt)';
     // Et træk kan BÅDE slå og brænde (fx +2−5, der sender to brikker hjem).
     // Før overtrumfede brændingen slaget helt, så beskeden om DIN brik
     // forsvandt (TM-fund).
@@ -267,6 +318,8 @@ ReplayStory storyFor(
     tone = ReplayTone.sad;
   } else if (burned) {
     outcome = 'Brændte sin egen brik hjem';
+  } else if (selfHits.isNotEmpty && hitsByOthers.isEmpty) {
+    outcome = 'Slog sin egen ${setTag(variant, selfHits.first!)}brik hjem';
   } else if (hitOwners.isNotEmpty) {
     final int? victim = hitOwners.first;
     final String who =
@@ -279,7 +332,7 @@ ReplayStory storyFor(
     // Kun godt for mig, hvis det var MIT hold der slog — og aldrig som
     // jubel over en navngiven modspiller, kun som en rolig markering.
     if (seat % 2 == mySeat % 2 && mySeat >= 0) tone = ReplayTone.good;
-  } else if (to is HomeStretchPosition && owner == mySeat) {
+  } else if (to is HomeStretchPosition && isMySet(variant, owner, mySeat)) {
     tone = ReplayTone.good;
   }
 
@@ -350,12 +403,18 @@ ReplayMoves movesOf(Map<String, dynamic> entry) {
 /// Bruges til at åbne brættet på det skridt man kom tilbage for. Det er IKKE
 /// nok at spørge hvem der trak: en modstander der slår min brik hjem, eller
 /// bytter med den, rører den i høj grad.
-bool touchesSeat(Map<String, dynamic> entry, int seat) {
+///
+/// Duo: også mit andet sæt (plads seat+2) er mit.
+bool touchesSeat(Map<String, dynamic> entry, int seat,
+    {VariantConfig variant = classicVariant}) {
   if (seat < 0) return false;
   if ((entry['player'] as num?)?.toInt() == seat) return true;
   final ReplayMoves m = movesOf(entry);
   for (final String id in m.highlight) {
-    if (ownerOfPieceId(id) == seat) return true;
+    final int? o = ownerOfPieceId(id);
+    if (o != null && isMySet(variant, o, seat)) return true;
   }
   return false;
 }
+
+String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);

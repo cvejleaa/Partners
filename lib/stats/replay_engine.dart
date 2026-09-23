@@ -13,6 +13,7 @@ import '../models/game_state.dart';
 import '../models/piece.dart';
 import '../models/player.dart';
 import '../models/playing_card.dart';
+import '../models/variant_config.dart';
 import '../online/serialize.dart';
 
 /// Et enkelt rekonstrueret hændelses-objekt fra et træk.
@@ -102,12 +103,14 @@ ReplayResult replayGame({
   required List<int> playerColors,
   required CardRules cardRules,
   required List<Map<String, dynamic>> log,
+  VariantConfig variant = classicVariant,
 }) {
   final state = _freshState(
       playerNames: playerNames,
       isHuman: isHuman,
       colors: playerColors,
-      cardRules: cardRules);
+      cardRules: cardRules,
+      variant: variant);
   final events = <ReplayEvent>[];
 
   Map<String, PiecePosition> snapshot() => <String, PiecePosition>{
@@ -192,7 +195,7 @@ ReplayResult replayGame({
       // Selv-brænd: 2+ modstandere (en dobbelt) → den flyttende brik slås selv
       // hjem; ingen modstander slås.
       if (enemies.length >= 2) {
-        for (int slot = 0; slot < 4; slot++) {
+        for (int slot = 0; slot < state.variant.piecesPerPlayer; slot++) {
           if (state.pieceAt(StartPosition(mover.ownerIndex, slot)) == null) {
             mover.position = StartPosition(mover.ownerIndex, slot);
             mover.hasLeftStart = false;
@@ -205,7 +208,7 @@ ReplayResult replayGame({
       // Slag på enlig modstander: send hjem (første ledige slot).
       for (final occ in enemies) {
         captured.add(occ.id);
-        for (int slot = 0; slot < 4; slot++) {
+        for (int slot = 0; slot < state.variant.piecesPerPlayer; slot++) {
           if (state.pieceAt(StartPosition(occ.ownerIndex, slot)) == null) {
             occ.position = StartPosition(occ.ownerIndex, slot);
             occ.hasLeftStart = false;
@@ -241,16 +244,14 @@ ReplayResult replayGame({
   return ReplayResult(events: events, finalState: state);
 }
 
-// NB: antager klassisk geometri (60/4) og 4 brikker pr. spiller. Det matcher
-// klassisk OG Partners 25 år (p25), som er strukturelt lig klassisk — kun
-// kortreglerne (der trådes ind via [cardRules]) adskiller. Bliver FORKERT hvis
-// en fremtidig variant med anden geometri/brik-antal skal replayes; generalisér
-// da via variant (se GameState.variant og docs/partners-varianter.md).
+// Geometri, brik-antal og bunke fra [variant] (Duo: 44 felter, 3 brikker pr.
+// sæt, 30 kort). Klassisk og 25 år er uændrede (60/4, 4 brikker).
 GameState _freshState({
   required List<String> playerNames,
   required List<bool> isHuman,
   required List<int> colors,
   required CardRules cardRules,
+  required VariantConfig variant,
 }) {
   final players = <Player>[
     for (int i = 0; i < playerNames.length; i++)
@@ -260,20 +261,21 @@ GameState _freshState({
         color: i < colors.length ? Color(colors[i]) : Colors.black,
         isHuman: isHuman[i],
         pieces: <Piece>[
-          for (int s = 0; s < 4; s++)
+          for (int s = 0; s < variant.piecesPerPlayer; s++)
             Piece(id: 'p$i.$s', ownerIndex: i, position: StartPosition(i, s)),
         ],
       ),
   ];
   return GameState(
     players: players,
-    geometry: const BoardGeometry(),
-    deck: Deck.fresh(),
+    geometry: variant.geometry,
+    deck: Deck.forVariant(variant),
     discard: <PlayingCard>[],
     dealerIndex: 0,
     currentPlayerIndex: 0,
     phase: GamePhase.play,
     handNumber: 1,
     cardRules: cardRules,
+    variant: variant,
   );
 }

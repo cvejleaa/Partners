@@ -250,14 +250,28 @@ hyggeonkel.dk
 Udgivet 2022 (Årets Familiespil 2022, nomineret til Guldbrikken). Alder 8+,
 spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
 
-**I APPEN (2026-09-23):** Duo kan vælges i opsætningen og spilles MOD
-COMPUTEREN — ikke online endnu (`onlineReady: false`: lobbyens liste udelader
-den, og `lobbyVariantFromDoc` starter et online-doc med `duo` som klassisk).
-Et spillers to sæt har samme farve og skelnes med et mærke: RING på sættet ved
-hånd-pladsen, PRIK på det andet — på brikkerne og i sættets start- og
-målbrønde. Kendte huller, navngivet: computerens trækvurdering vægter dit
-andet sæt som en "makker"; replay-teksten kender ikke tilbageslag (replay
-dækker ikke computer-spil); statistikken har ingen Duo-opdeling.
+**I APPEN (2026-09-23):** Duo kan spilles mod computeren (opsætningen) og
+ONLINE mod en ven ("Opret Duo (1 mod 1)" på Online-siden, eller variant-listen
+i lobbyen). Et spillers to sæt har samme farve og skelnes med et mærke: RING på
+sættet ved hånd-pladsen, PRIK på det andet — på brikkerne og i sættets start- og
+målbrønde.
+
+Online gemmes pladserne SPEJLET: `uids = [a, b, a, b]` (plads 2/3 = plads 0/1),
+som lokale Duo-spil. Lobbyen tilbyder kun de to hånd-pladser
+(`lib/online/lobby_seats.dart`), og Firestore-reglen `duoSeatsMirrored` afviser
+en skrivning, der bryder spejlet; kun værten må skifte variant
+(`variantUnchangedOrHost`). Statistikken tæller én gang pr. spiller og har et
+eget head-to-head-regnskab (`duoOpponentStats`, profilens "Duo mod …").
+
+Kendte huller, navngivet:
+- Computerens trækvurdering vægter dit andet sæt som en "makker".
+- Byttefasen sender ingen push: den, der ikke lavede sidste træk, får ingen
+  besked om at vælge byttekort (gælder også klassisk; mærkes mest i 1 mod 1).
+- Byttekortene og hænderne ligger i det fælles spil-dokument og kan aflæses af
+  en modstander med egen klient (gælder alle varianter; i Duo er modtageren
+  din eneste modstander).
+- Ingen tur-autoritet på serveren (gælder alle varianter).
+- Ingen tutorial om Duo.
 
 **KILDE: æskens egen regelbog (side 3-4) og pladen, fotograferet af ejeren
 2026-09-23.** Alt nedenfor uden markering står i den tekst. Det, der stadig er
@@ -422,7 +436,6 @@ parathed. Status nu:
 | `onePlayerPerTeam` | ja (Duo trin 2) — `controllerOf`, `hasHand`, `handCount`, starter-rotation |
 | `deckRanks`, `copiesPerRank`, `exitCardCount` | ja (Duo trin 1) — `Deck.forVariant` |
 | `goalBounce` | ja (Duo trin 7) — bounce-back i `_advanceFrom`; UI'et beskriver tilbageslaget via `MoveStep.distance` |
-| `onlineReady` | ja — lobbyens variantliste og `lobbyVariantFromDoc` (online-start) |
 | `fieldsPerSegment` | ja — `trackLength` |
 | `playerCount`, `goalCircles`*, `handSize`, `dealsPerDealer` | **nej** — stadig kun påstande |
 

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../game/ai/ai_player.dart';
 import '../../models/variant_config.dart';
 import '../../online/friends_service.dart';
+import '../../online/lobby_seats.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
 import '../../state/variant_card_rules_controller.dart';
@@ -280,9 +281,7 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
   /// [now] gives af kalderen — se date_labels: to etiketter i samme frame må
   /// ikke kunne lande på hver sin side af et årsskifte.
   Widget _archiveTile(BuildContext context, GameSummary g, DateTime now) {
-    final List<String> participants = g.playerNames
-        .where((String n) => n.trim().isNotEmpty && n != 'Åben')
-        .toList();
+    final List<String> participants = g.participants;
     // Uset rapport: SPOIL ikke udfaldet — det er netop dét man åbner for.
     // Ellers står resultatet med ORD (ikke kun farve/emoji), så det kan
     // læses af alle og i et smalt vindue.
@@ -334,9 +333,7 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     final bool canDelete =
         (user != null && g.hostUid == user.uid) || isAdmin(user);
     // Deltagere: udelad tomme pladser ('Åben'). Viser hvem man spiller med.
-    final List<String> participants = g.playerNames
-        .where((n) => n.trim().isNotEmpty && n != 'Åben')
-        .toList();
+    final List<String> participants = g.participants;
     // Kun for spil der hverken er lobby eller i gang: en lobby faar ALTID en
     // linje fra lobbyStatusText/chippen nedenfor, saa en 'Venter i lobby'-
     // gren her ville vaere doed kode (QC-fund).
@@ -491,6 +488,46 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     }
   }
 
+  /// Opret et spil (evt. som [variant]), invitér de valgte venner og åbn
+  /// lobbyen. Varianten sættes FØR invitationerne, så de inviterede ser det
+  /// rigtige spil fra start.
+  Future<void> _createGame(BuildContext context, OnlineService svc,
+      {VariantConfig? variant}) async {
+    // Vis først dialog hvor man kan vælge venner at invitere.
+    // Brugere uden venner ser blot et hint og kan trykke "Opret".
+    final List<FriendRef>? invitees =
+        await showDialog<List<FriendRef>>(
+      context: context,
+      builder: (_) => const _InviteFriendsDialog(),
+    );
+    if (invitees == null) return; // brugeren annullerede
+    final code = await svc.createGame(
+      colorValue: kPalette.first.color.toARGB32(),
+      rules: ref.read(cardRulesProvider),
+    );
+    if (variant != null && context.mounted) {
+      await runLobbyAction(
+          context, svc.setVariant(code, variant.id));
+    }
+    // Send invitationer til markerede venner. Fejl pr. ven må ikke
+    // forhindre at lobbyen åbnes.
+    if (invitees.isNotEmpty) {
+      final friends = ref.read(friendsServiceProvider);
+      for (final f in invitees) {
+        try {
+          await svc.invite(code, f.uid);
+          await friends.sendGameInvite(f.uid, code);
+        } catch (_) {
+          // Ignorér en enkelt fejl — vis evt. snackbar nedenfor.
+        }
+      }
+    }
+    if (context.mounted) {
+      Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => LobbyScreen(code: code)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final svc = ref.read(onlineServiceProvider);
@@ -517,37 +554,18 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
             FilledButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('Opret nyt spil'),
-              onPressed: () async {
-                // Vis først dialog hvor man kan vælge venner at invitere.
-                // Brugere uden venner ser blot et hint og kan trykke "Opret".
-                final List<FriendRef>? invitees =
-                    await showDialog<List<FriendRef>>(
-                  context: context,
-                  builder: (_) => const _InviteFriendsDialog(),
-                );
-                if (invitees == null) return; // brugeren annullerede
-                final code = await svc.createGame(
-                  colorValue: kPalette.first.color.toARGB32(),
-                  rules: ref.read(cardRulesProvider),
-                );
-                // Send invitationer til markerede venner. Fejl pr. ven må ikke
-                // forhindre at lobbyen åbnes.
-                if (invitees.isNotEmpty) {
-                  final friends = ref.read(friendsServiceProvider);
-                  for (final f in invitees) {
-                    try {
-                      await svc.invite(code, f.uid);
-                      await friends.sendGameInvite(f.uid, code);
-                    } catch (_) {
-                      // Ignorér en enkelt fejl — vis evt. snackbar nedenfor.
-                    }
-                  }
-                }
-                if (context.mounted) {
-                  Navigator.of(context).push<void>(MaterialPageRoute<void>(
-                      builder: (_) => LobbyScreen(code: code)));
-                }
-              },
+              onPressed: () => _createGame(context, svc),
+            ),
+            const SizedBox(height: 8),
+            // Duo har sin egen knap HER, hvor man leder efter "spil med en
+            // ven": varianten er valgt, før invitationerne sendes — ellers
+            // inviterede man tre venner til et 1 mod 1 og skulle bagefter
+            // finde variant-listen i lobbyen.
+            OutlinedButton.icon(
+              icon: const Icon(Icons.people_outline),
+              label: const Text('Opret Duo (1 mod 1)'),
+              onPressed: () =>
+                  _createGame(context, svc, variant: partnersDuo),
             ),
             const SizedBox(height: 20),
             const Text('Mine spil & invitationer',
@@ -723,8 +741,14 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           // variant, der faktisk startes (en ikke-online variant → klassisk).
           final dynamic variantsRaw = d['cardRulesVariants'];
           final VariantConfig variant = lobbyVariantFromDoc(d);
-          // Spillet får AI-spillere hvis der er en åben plads (fyldes ved start).
-          final bool willHaveAi = uids.any((dynamic u) => u == null);
+          // Pladser MED en hånd (Duo: to) — de eneste, der vises, tælles og
+          // kan tages. Samme tælling som "Mine spil" (lobbyOpenSeats).
+          final List<int> playable = lobbyPlayableSeats(variant);
+          final int openSeats = lobbyOpenSeats(variant, uids, aiSeats);
+          // Spillet får AI-spillere hvis der er en åben plads eller en
+          // computer-plads.
+          final bool willHaveAi = openSeats > 0 ||
+              playable.any((int i) => i < aiSeats.length && aiSeats[i] == true);
           final int seatOfMe = uids.indexOf(svc.uid);
           final int? mySeat = seatOfMe == -1 ? null : seatOfMe;
           final bool iAmReady =
@@ -734,13 +758,8 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           // og listen må aldrig kunne være uenige om, at spillet kan startes.
           // Reglen selv (og dens tests) ligger i online_service.
           final bool canStart = lobbyCanStart(
-              uids, aiSeats, Map<String, dynamic>.from(ready));
-          final int openSeats = <int>[
-            for (int i = 0; i < 4; i++)
-              if (uids[i] == null &&
-                  !(i < aiSeats.length && aiSeats[i] == true))
-                i,
-          ].length;
+              uids, aiSeats, Map<String, dynamic>.from(ready),
+              variant: variant);
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -768,7 +787,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                               // Værtens egen variant-liste (inkl. egne
                               // varianter oprettet EFTER lobbyen blev til).
                               final List<VariantConfig> selectable =
-                                  ref.watch(onlineSelectableVariantsProvider);
+                                  ref.watch(selectableVariantsProvider);
                               final bool inList = selectable
                                   .any((VariantConfig v) => v.id == variant.id);
                               return DropdownButton<String>(
@@ -797,10 +816,12 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                                   final dynamic entry = ref
                                       .read(variantCardRulesProvider)
                                       .toRawJson()[id];
-                                  svc.setVariant(code, id,
-                                      entry: entry is Map<String, dynamic>
-                                          ? entry
-                                          : null);
+                                  runLobbyAction(
+                                      context,
+                                      svc.setVariant(code, id,
+                                          entry: entry is Map<String, dynamic>
+                                              ? entry
+                                              : null));
                                 },
                               );
                             })
@@ -818,9 +839,10 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                         style: Theme.of(context).textTheme.bodySmall),
                   ),
                 const SizedBox(height: 8),
-                for (int i = 0; i < 4; i++)
+                for (final int i in playable)
                   _seatCard(context, svc,
                       seat: i,
+                      variant: variant,
                       names: names,
                       uids: uids,
                       colors: colors,
@@ -871,10 +893,13 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                 const Spacer(),
                 if (isHost)
                   FilledButton(
-                    onPressed: canStart ? () => svc.startGameFromLobby(code) : null,
+                    onPressed: canStart
+                        ? () => runLobbyAction(
+                            context, svc.startGameFromLobby(code))
+                        : null,
                     child: Text(canStart
                         ? 'Start spil'
-                        : (openSeats > 2
+                        : (playable.length - openSeats < 2
                             ? 'Mindst 2 pladser kræves'
                             : 'Venter på at alle er klar…')),
                   ),
@@ -907,33 +932,42 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
     required List aiSeats,
     required bool isHost,
     required int? mySeat,
+    required VariantConfig variant,
   }) {
     final bool isAi = seat < aiSeats.length && aiSeats[seat] == true;
+    // Duo: hver spiller styrer to sæt i sin farve — sig det på pladsen, så
+    // man ved det, før spillet starter (der er ingen Duo-tutorial).
+    final String sets =
+        variant.seatsShareController ? ' · styrer ring + prik' : '';
     final bool occupied = uids[seat] != null;
     final bool isReady =
         occupied ? (ready[uids[seat]] as bool? ?? false) : false;
     final String subtitle;
     if (occupied) {
-      subtitle = seat == 0
-          ? (isReady ? 'Vært · klar' : 'Vært')
-          : (isReady ? 'Tilsluttet · klar' : 'Tilsluttet · ikke klar');
+      subtitle = (seat == 0
+              ? (isReady ? 'Vært · klar' : 'Vært')
+              : (isReady ? 'Tilsluttet · klar' : 'Tilsluttet · ikke klar')) +
+          sets;
     } else if (isAi) {
-      subtitle = 'Computer-spiller';
+      subtitle = 'Computer-spiller$sets';
     } else {
-      subtitle = 'Åben plads';
+      subtitle = variant.seatsShareController
+          ? 'Åben plads — din modstander'
+          : 'Åben plads';
     }
 
     Widget? trailing;
     if (!occupied && !isAi && mySeat == null) {
       trailing = TextButton(
-        onPressed: () =>
-            svc.joinGame(code: code, seat: seat, colorValue: colors[seat]),
+        onPressed: () => runLobbyAction(context,
+            svc.joinGame(code: code, seat: seat, colorValue: colors[seat])),
         child: const Text('Tag plads'),
       );
     } else if (!occupied && isHost) {
       // Vært kan slå AI til/fra på tomme pladser.
       trailing = TextButton(
-        onPressed: () => svc.fillSeatWithAi(code, seat, ai: !isAi),
+        onPressed: () => runLobbyAction(
+            context, svc.fillSeatWithAi(code, seat, ai: !isAi)),
         child: Text(isAi ? 'Gør åben' : 'Fyld med AI'),
       );
     } else if (occupied) {
@@ -1078,5 +1112,22 @@ class _InviteFriendsDialogState extends ConsumerState<_InviteFriendsDialog> {
         ),
       ],
     );
+  }
+}
+
+/// Kør en lobby-handling og VIS en afvisning. Før blev setVariant/joinGame/
+/// fillSeatWithAi kaldt uden await — en afvisning (fx "Duo er 1 mod 1 —
+/// der sidder 3 spillere", en taget plads eller en regel-afvisning) blev en
+/// uhåndteret fejl, som ingen så (QC-fund på planen).
+Future<void> runLobbyAction(BuildContext context, Future<void> action) async {
+  try {
+    await action;
+  } catch (e) {
+    if (!context.mounted) return;
+    final String msg = e is LobbyError
+        ? e.message
+        : (e is String ? e : 'Det lykkedes ikke: $e');
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 }
