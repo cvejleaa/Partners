@@ -215,7 +215,8 @@ ikke findes — og er derfor ulovligt.
   reglen skal læses af `VariantConfig`, aldrig af variantens navn eller id, og
   klassisk/25 år må ikke ændre adfærd, når Duo tilføjes. En test skal låse
   begge grene, ellers kan den ene ændres uden at nogen opdager det.
-- En brik i hjemstrækket kan kun rykke **længere ind** (aldrig ud på banen igen)
+- En brik i hjemstrækket kan kun rykke **længere ind** (aldrig ud på banen igen) —
+  undtagen i Partners Duo, hvor bounce-back (ovenfor) kan vende den og føre den ud
   og kan ikke slås.
 - En egen brik længere inde i hjemstrækket **blokerer** for at en anden egen brik
   rykker forbi/oveni.

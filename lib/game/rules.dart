@@ -390,10 +390,8 @@ class Rules {
     // N>4 (kun muligt i endgame med makker-pulje) ville eksplodere. Admin
     // klamper til 2..4; et skævt doc klampes her.
     if (pieces < 2 || pieces > 4 || steps < 1) return;
-    final Player partner =
-        state.players[state.variant.partnerFor(player.index)];
     final Map<String, Move> results = <String, Move>{};
-    _searchMulti(_shallowClone(state), player, partner, card, steps, pieces,
+    _searchMulti(_shallowClone(state), player, card, steps, pieces,
         <String>{}, <MoveStep>[], results);
     yield* results.values;
   }
@@ -403,7 +401,6 @@ class Rules {
   void _searchMulti(
     GameState sim,
     Player player,
-    Player partner,
     PlayingCard card,
     int stepsEach,
     int remainingPieces,
@@ -471,7 +468,7 @@ class Rules {
         burnsMover: burns,
       ));
       used.add(cand.id);
-      _searchMulti(next, player, partner, card, stepsEach, remainingPieces - 1,
+      _searchMulti(next, player, card, stepsEach, remainingPieces - 1,
           used, path, results);
       used.remove(cand.id);
       path.removeLast();
@@ -519,7 +516,12 @@ class Rules {
     if (left == 0) return HomeStretchPosition(player.index, pos);
     // Vend på målcirkel [pos] og gå baglæns.
     while (left > 0 && pos - 1 >= 0) {
-      if (!free(pos - 1)) return null; // ingen overspringning baglæns heller
+      // Ingen overspringning baglæns heller. Bevidst ANDERLEDES end fremad,
+      // hvor en optaget cirkel er vendepunktet: brikken kan kun skifte
+      // retning ÉN gang, på den dybeste cirkel. Står en af ens egne brikker
+      // i vejen på tilbagevejen, er trækket ulovligt. [TOLKNING — regelbogen
+      // dækker ikke tilfældet; låst af test/duo_bounce_test.dart.]
+      if (!free(pos - 1)) return null;
       pos--;
       left--;
     }
@@ -535,7 +537,9 @@ class Rules {
   }
 
   /// Geometrisk fremad-position. Returnerer null hvis trækket ikke er muligt.
-  /// Brikker i hjemstrækket kan KUN rykke længere ind (aldrig ud på banen igen).
+  /// Brikker i hjemstrækket kan KUN rykke længere ind (aldrig ud på banen igen)
+  /// — UNDTAGEN når varianten har `goalBounce` (Duo): så vender overskuddet
+  /// og kan føre brikken ud på banen. Se [_bounceHome].
   /// [enterHome] false: kør FORBI eget UD-felt i stedet for at dreje ind i
   /// hjemstrækket. Bruges kun af sekvens-kortets fremad-del (25 års +2−5) —
   /// ejerens valg, jf. docs/regler.md §12.
@@ -689,17 +693,14 @@ class Rules {
     // den gamle faste-rækkefølge-generator ikke. Resultater dedup'es på
     // slut-positionerne, så de mange rækkefølger der giver samme træk kun
     // yieldes én gang.
-    final List<Piece> ownMovable = player.pieces
-        .where((Piece p) => p.position is! StartPosition)
-        .toList();
-    final Player partner = state.players[state.variant.partnerFor(player.index)];
-    final List<Piece> partnerMovable = partner.pieces
-        .where((Piece p) => p.position is! StartPosition)
-        .toList();
-    final List<String> ownIds = ownMovable.map((Piece p) => p.id).toList();
+    // Kandidaterne er ALLE pladser spilleren kan råde over — samme liste som
+    // de to andre porte. Om en plads er ÅBEN lige nu, afgør _seatOpen
+    // undervejs i søgningen. (Før byggedes listen som "egen + netop én
+    // makker", hvilket stille ville udelukke en tredje holdkammerat.)
     final List<String> movableIds = <String>[
-      ...ownIds,
-      ...partnerMovable.map((Piece p) => p.id),
+      for (final int seat in _controlledSeats(state, player))
+        for (final Piece p in state.players[seat].pieces)
+          if (p.position is! StartPosition) p.id,
     ];
     if (movableIds.isEmpty) return;
 
@@ -708,8 +709,8 @@ class Rules {
     final List<MoveStep> path = <MoveStep>[];
     final Set<String> used = <String>{};
 
-    _searchSplit(sim, player, partner, card, movableIds, ownIds.toSet(), total,
-        total, path, used, results);
+    _searchSplit(sim, player, card, movableIds, total, total, path, used,
+        results);
 
     yield* results.values;
   }
@@ -719,10 +720,8 @@ class Rules {
   void _searchSplit(
     GameState sim,
     Player player,
-    Player partner,
     PlayingCard card,
     List<String> movableIds,
-    Set<String> ownIds,
     int total,
     int remaining,
     List<MoveStep> path,
@@ -745,8 +744,7 @@ class Rules {
 
     for (final String id in movableIds) {
       if (used.contains(id)) continue;
-      final bool isPartnerPiece = !ownIds.contains(id);
-      final int moverIndex = isPartnerPiece ? partner.index : player.index;
+      final int moverIndex = sim.pieceById(id).ownerIndex;
       // Samme vagt som de to andre porte — evalueret på dette tidspunkt i
       // sim'en, med trækkets første brik som anker (Duo: 4×1 holder sig til
       // ét sæt, til det sæt er færdigt).
@@ -798,7 +796,7 @@ class Rules {
         ));
         used.add(id);
 
-        _searchSplit(sim, player, partner, card, movableIds, ownIds, total,
+        _searchSplit(sim, player, card, movableIds, total,
             remaining - dist, path, used, results);
 
         // --- undo ---

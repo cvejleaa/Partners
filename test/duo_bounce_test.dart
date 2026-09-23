@@ -143,4 +143,56 @@ void main() {
     expect(m.steps.single.to, const TrackPosition(58));
     expect(m.steps.single.capturedPieceId, 'p1.0');
   });
+
+  test('tilbagevejen spærret af egen brik: trækket er ulovligt — ingen ny vending',
+      () {
+    // p0.0 ved indgangen, p0.1 på yderste cirkel (0), cirkel 1-3 frie.
+    // 6 = 4 ind til inderste + 2 tilbage — men på vej tilbage står p0.1 på 0?
+    // Nej: 6 ender på cirkel 1. 7 ville ende på 0, hvor p0.1 står → spærret.
+    final List<PiecePosition> enYderst = <PiecePosition>[
+      const TrackPosition(59),
+      const HomeStretchPosition(0, 0),
+      ...startOf(0, skip: 2),
+    ];
+    // Første cirkel optaget: p0.0 kan slet ikke komme ind.
+    expect(hvorhen(medBounce, enYderst, 2), isNull);
+    // p0.1 selv: fra 0 ind til 3 (3) + 3 tilbage ville passere sin egen
+    // gamle plads og ende ... på 0 — fri, for den har forladt den.
+    final List<PiecePosition> toIMaalet = <PiecePosition>[
+      const HomeStretchPosition(0, 0),
+      const HomeStretchPosition(0, 2),
+      ...startOf(0, skip: 2),
+    ];
+    // p0.0 på 0, p0.1 på 2 (ikke i mål: 3 er fri). p0.0 frem: 1 er fri, 2
+    // er optaget → vender på 1. Et kort på 3: 1 frem, 2 tilbage → forbi
+    // cirkel 0 (sin egen, fri) og ud på banen (59).
+    expect(hvorhen(medBounce, toIMaalet, 3), const TrackPosition(59));
+  });
+
+  test('bounce virker også midt i en deling (4×1-typen)', () {
+    // Et delekort på 5 med én brik ved indgangen: alle 5 på den ene brik =
+    // 4 ind + 1 tilbage. Uden bounce findes trækket ikke.
+    const Map<Rank, CardRuleConfig> del5 = <Rank, CardRuleConfig>{
+      Rank.five: CardRuleConfig(splitTotal: 5),
+    };
+    List<Move> traek(VariantConfig v) {
+      final GameState s = makeState(
+        variant: v,
+        cardRules: effectiveCardRules(v, CardRules.defaults()),
+        piecePositions: <List<PiecePosition>>[
+          <PiecePosition>[const TrackPosition(59), ...startOf(0, skip: 1)],
+          startOf(1), startOf(2), startOf(3),
+        ],
+      );
+      return Rules(s.geometry)
+          .legalMoves(s, s.players[0], const PlayingCard(Rank.five, Suit.spades));
+    }
+    const VariantConfig delMed = VariantConfig(
+        id: 'd1', name: 'd1', goalBounce: true, cardRuleOverrides: del5);
+    const VariantConfig delUden =
+        VariantConfig(id: 'd2', name: 'd2', cardRuleOverrides: del5);
+    expect(traek(delMed).map((Move m) => m.steps.single.to).toSet(),
+        <PiecePosition>{const HomeStretchPosition(0, 2)});
+    expect(traek(delUden), isEmpty);
+  });
 }
