@@ -13,8 +13,12 @@ class Deck {
 
   /// Bunken for [v] efter dens opskrift — se `VariantConfig.deckRanks`.
   static List<PlayingCard> forVariant(VariantConfig v) {
-    assert(v.copiesPerRank >= 1 && v.copiesPerRank <= Suit.values.length,
-        'kulør er kopi-nummer: højst ${Suit.values.length} kopier pr. rang');
+    // Ikke en assert: den forsvinder i den udgivne app, og så ville
+    // `Suit.values.take(n)` lydløst give færre kopier end opskriften siger.
+    if (v.copiesPerRank < 1 || v.copiesPerRank > Suit.values.length) {
+      throw ArgumentError.value(v.copiesPerRank, 'copiesPerRank',
+          'kulør er kopi-nummer: 1..${Suit.values.length} kopier pr. rang');
+    }
     final Set<Rank>? only = v.deckRanks?.toSet();
     final List<PlayingCard> cards = <PlayingCard>[];
     for (final Suit s in Suit.values.take(v.copiesPerRank)) {

@@ -47,10 +47,7 @@ class GameEngine extends ChangeNotifier {
     }
     // Kun pladser med en hånd får kort — i Duo råder én spiller over to
     // pladser, og de håndløse pladser deles der ikke til.
-    final int hands = <int>[
-      for (int p = 0; p < state.players.length; p++)
-        if (state.variant.hasHand(p)) p,
-    ].length;
+    final int hands = state.variant.handCount(state.players.length);
     // Nødfald (bør ikke ske i normalt spil: klassisk 56 kort til 3×16, Duo 30
     // til 3×8). Talt på HÆNDER, ikke pladser — ellers tror Duo, at 14 kort
     // ikke rækker til en tredje uddeling, og lægger en frisk bunke oven i.
@@ -79,10 +76,7 @@ class GameEngine extends ChangeNotifier {
     state.exchangeBuffer[playerIndex] = card;
 
     // Byttet er færdigt, når hver HÅND har afgivet — i Duo to, ikke fire.
-    final int hands = <int>[
-      for (int p = 0; p < state.players.length; p++)
-        if (state.variant.hasHand(p)) p,
-    ].length;
+    final int hands = state.variant.handCount(state.players.length);
     if (state.exchangeBuffer.length == hands) {
       _applyExchange();
       state.phase = GamePhase.play;

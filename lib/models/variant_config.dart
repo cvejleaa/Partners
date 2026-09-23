@@ -218,6 +218,13 @@ class VariantConfig {
   /// Får [seat] kort og tur? Kun de pladser, der råder over sig selv.
   bool hasHand(int seat) => controllerOf(seat) == seat;
 
+  /// Antal pladser med en hånd (klassisk: alle; Duo: én pr. hold). Brugt af
+  /// både uddelingens nødfald og byttets "alle har afgivet" — ét sted.
+  int handCount(int seatCount) => <int>[
+        for (int s = 0; s < seatCount; s++)
+          if (hasHand(s)) s,
+      ].length;
+
   /// Næste plads efter [from] med uret, der har en hånd.
   int nextHandSeat(int from, int seatCount) {
     int n = (from + 1) % seatCount;

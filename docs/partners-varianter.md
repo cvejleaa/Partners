@@ -400,34 +400,27 @@ gameinventors-shop.dk (ekstra kortsæt)
 
 ## Implementeringsnoter til appen
 
-### ADVARSEL: felterne findes, men motoren læser dem ikke
+### Hvad motoren faktisk læser af `VariantConfig` (opdateret under Duo-arbejdet)
 
-`VariantConfig` har allerede alle de felter, Duo har brug for. Det ser derfor
-ud som om varianten "bare" skal konfigureres. **Det er den ikke.** Talt i
-koden (uden for `variant_config.dart` selv):
+Før Duo-arbejdet læste motoren kun 4 af 12 felter; resten var en PÅSTAND om
+parathed. Status nu:
 
 | Felt | Læses af koden? |
 |---|---|
-| `piecesPerPlayer` | ja (7 steder) |
-| `segments` | ja (9 steder) |
-| `exchangeRule` | ja (2 steder) |
-| `teams` | ja (1 sted) |
-| `playerCount` | **nej — 0 steder** |
-| `fieldsPerSegment` | **nej — 0 steder** |
-| `goalCircles` | **nej — 0 steder** |
-| `handSize` | **nej — 0 steder** (motoren har sin egen `const handSize = 4`) |
-| `dealsPerDealer` | **nej — 0 steder** |
-| `forcedPlay` | **nej — 0 steder** |
-| `winCondition` | **nej — 0 steder** |
-| `destinationsPerPlayer` | **nej — 0 steder** |
+| `piecesPerPlayer`, `segments` | ja (bræt og brikker) |
+| `teams` | ja — hold, makker og nu også hvem der råder over hvad |
+| `exchangeRule` | ja — `exchangeReceiver`, brugt af motor OG chippen "kortet du gav" |
+| `onePlayerPerTeam` | ja (Duo trin 2) — `controllerOf`, `hasHand`, `handCount`, starter-rotation |
+| `deckRanks`, `copiesPerRank`, `exitCardCount` | ja (Duo trin 1) — `Deck.forVariant` |
+| `goalBounce` | ja (Duo trin 7) — bounce-back i `_advanceFrom` |
+| `playerCount`, `fieldsPerSegment`, `goalCircles`*, `handSize`, `dealsPerDealer` | **nej** — stadig kun påstande |
 
-Otte af tolv felter er altså en PÅSTAND om parathed, som intet honorerer. At
-sætte `playerCount: 2` gør ingenting. Det er samme slags fælde som en grøn
-test, der ikke måler noget: det ser dækket ud.
+*`goalCircles` indgår i `geometry` (antal målcirkler), men ikke andre steder.
 
-Godt nyt: motoren bruger gennemgående `state.players.length` frem for et
-hardkodet 4, så spillerantallet er mindre fastlåst end feltlisten antyder.
-`ExchangeRule.opponentSwap` kaster dog stadig `UnimplementedError`.
+`forcedPlay`, `destinationsPerPlayer` og `WinCondition.ownAllHome` er
+FJERNET (Duo trin 0): de beskrev en Duo-model, ejeren afviste, og intet læste
+dem. Streng spillepligt findes allerede (`passHand` afviser, når man kan
+spille), og vinderen falder ud af hold-betingelsen.
 
 **RETTET:** Her stod, at `HomeStretchPosition` skulle bære en tredje
 oplysning (hvilken destination), og at det var den dybeste ændring. Det var
