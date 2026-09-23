@@ -100,6 +100,48 @@ service cloud.firestore {
             .hasAll(resource.data.get('uids', [])
                 .removeAll([null, request.auth.uid]));
       }
+      // Plads [i] er urørt — eller skiftet mellem TOM og MIG. Positions-
+      // baseret: othersSeatsKept alene er mængde-baseret og lod en fremmed
+      // bytte andres pladser ([a,b,a,b] → [b,a,b,a]) eller gentage en andens
+      // uid ([a,null,a,null] → [a,a,a,a]: værten "sidder" på begge hænder i
+      // en Duo-lobby og spiller mod sig selv). Efterprøvet i emulatoren
+      // (security-fund på Duo online).
+      function seatKept(o, n, i) {
+        return n[i] == o[i]
+            || ((o[i] == null || o[i] == request.auth.uid)
+                && (n[i] == null || n[i] == request.auth.uid));
+      }
+      // Alle fire pladser holdt pr. position. Lister, der ikke er fire lange
+      // (gamle/skæve docs), falder til mængde-vagten alene; en ændret LÆNGDE
+      // er afvist.
+      function seatsKeptByPosition() {
+        let o = resource.data.get('uids', []);
+        let n = request.resource.data.get('uids', []);
+        return n.size() == o.size()
+            && (o.size() != 4
+                || (seatKept(o, n, 0) && seatKept(o, n, 1)
+                    && seatKept(o, n, 2) && seatKept(o, n, 3)));
+      }
+      // VÆRTEN må omrokere pladser i en ÅBEN lobby: et skift til Duo flytter
+      // en gæst fra plads 2 til plads 1 og spejler, et skift fra Duo rydder
+      // spejlene (LobbySeats.switchVariant). Stadig under othersSeatsKept —
+      // ingen kan fjernes — og kun før spillet starter.
+      function hostArrangingLobby() {
+        return request.auth.uid == resource.data.get('hostUid', '')
+            && resource.data.get('status', '') == 'lobby';
+      }
+      // Samme uid på flere pladser er Duo-spejlet — og KUN det. Uden kravet
+      // kunne værten skrive [a,b,a,b] i et klassisk spil, og bobs statistik
+      // talte så ét parti som to (security-fund). Kun når uids ÆNDRES: gamle
+      // lokale Duo-docs ([a,null,a,null], intet variantId) skal stadig kunne
+      // få 'seen' skrevet.
+      function noSharedSeatsOutsideDuo() {
+        let n = request.resource.data.get('uids', []).removeAll([null]);
+        return request.resource.data.get('uids', []) ==
+                resource.data.get('uids', [])
+            || request.resource.data.get('variantId', '') == 'duo'
+            || n.toSet().size() == n.size();
+      }
       // Sidder JEG med ved bordet? Det er den eneste egenskab, man ikke kan
       // give sig selv: 'uids' er låst af onlySelfInSeats, mens 'members'
       // bevidst er ubegrænset (invite() skal kunne tilføje den inviterede,
@@ -180,6 +222,8 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && onlySelfInSeats()
         && othersSeatsKept()
+        && (seatsKeptByPosition() || hostArrangingLobby())
+        && noSharedSeatsOutsideDuo()
         // Værtskabet er ikke et almindeligt felt: sletning hviler på det
         // ('resource.data.hostUid == request.auth.uid' nedenfor), så kunne man
         // skrive sig selv som vært, kunne man slette andres spil. Efterprøvet

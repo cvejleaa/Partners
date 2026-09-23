@@ -1200,7 +1200,13 @@ class OnlineService {
   /// computer-spillere. Bagudkompatibel med eksisterende kald af [start].
   Future<void> startGameFromLobby(String code) async {
     final ref = _games.doc(code);
-    final snap = await ref.get();
+    // En transaktion: state bygges af de pladser, der står i doc'et i SAMME
+    // øjeblik, som status skifter. Læst uden (som før) kunne en samtidig
+    // pladsændring give et spil, hvor state og uids er uenige om, hvem der
+    // sidder hvor (security-fund på Duo online).
+    await _db.runTransaction((tx) async {
+    final snap = await tx.get(ref);
+    if (!snap.exists) throw 'Spillet findes ikke';
     final d = snap.data()!;
     if (d['status'] == 'playing' || d['status'] == 'over') {
       // Allerede startet — undgå at nulstille et igangværende spil.
@@ -1227,11 +1233,12 @@ class OnlineService {
       stored: storedOverridesFor(d['cardRulesVariants'], variant.id),
     );
     final state = onlineInitialState(names, colors, uids, resolved, variant);
-    await ref.update(<String, dynamic>{
+    tx.update(ref, <String, dynamic>{
       'status': 'playing',
       'state': gameStateToMap(state),
       'startedAt': FieldValue.serverTimestamp(),
       'lastActionAt': Timestamp.now(),
+    });
     });
   }
 

@@ -14,8 +14,10 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   addDoc,
+  arrayUnion,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   setDoc,
@@ -641,6 +643,175 @@ describe('games/{game}', () => {
     }));
     await assertSucceeds(
       updateDoc(doc(as('alice'), 'games/DUO7'), { 'seen.alice': 3 }));
+  });
+
+  // ---- Security-gennemgang af Duo online (angreb efterprøvet i emulatoren) ----
+  it('ANGREB: gæsten må IKKE SLETTE variantId (duo -> "ingen") og bryde spejlet',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO8'), duoLobby()));
+    await assertFails(updateDoc(doc(as('bob'), 'games/DUO8'),
+        { variantId: deleteField() }));
+    await assertFails(updateDoc(doc(as('bob'), 'games/DUO8'), {
+      variantId: deleteField(), uids: ['alice', 'bob', 'bob', 'bob'],
+    }));
+    // En fremmed i den åbne lobby heller ikke.
+    await assertFails(updateDoc(doc(as('mallory'), 'games/DUO8'),
+        { variantId: deleteField() }));
+  });
+
+  it('ANGREB: gæsten må IKKE ændre variantId-TYPEN (tal/map/null)', async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO9'), duoLobby()));
+    for (const v of [7, { id: 'duo' }, null]) {
+      await assertFails(
+          updateDoc(doc(as('bob'), 'games/DUO9'), { variantId: v }));
+    }
+  });
+
+  it('ANGREB: variantId må ikke TILFØJES af en gæst på et doc uden feltet',
+      async () => {
+    // Gamle docs har intet variantId (get-default null). Kun værten må sætte
+    // det — ellers kunne en gæst gøre et klassisk spil til Duo (eller omvendt).
+    await seed((db) => setDoc(doc(db, 'games/DUO10'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    await assertFails(updateDoc(doc(as('bob'), 'games/DUO10'),
+        { variantId: 'classic' }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/DUO10'),
+        { variantId: 'duo', uids: ['alice', 'bob', 'alice', 'bob'] }));
+  });
+
+  it('ANGREB: Duo-uids med 5 pladser (spejlet ellers "intakt") er afvist',
+      async () => {
+    // [a,b,a,b,b] opfylder uids[2]==uids[0] og uids[3]==uids[1] — kun
+    // size()==4 fanger den. Uden den vagt kunne et ekstra "sæde" smugles ind.
+    await seed((db) => setDoc(doc(db, 'games/DUO11'), duoLobby()));
+    await assertFails(updateDoc(doc(as('bob'), 'games/DUO11'),
+        { uids: ['alice', 'bob', 'alice', 'bob', 'bob'] }));
+  });
+
+  it('ANGREB: en fremmed må IKKE tage den ledige hånd i et SPILLENDE Duo-spil',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO12'), duoLobby({
+      status: 'playing', members: ['alice'], uids: ['alice', null, 'alice', null],
+    })));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/DUO12'),
+        { uids: ['alice', 'mallory', 'alice', 'mallory'] }));
+  });
+
+  it('TILLADT: Duo-lobbyens øvrige flows (invitation, klar, forlad, start)',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO13'), duoLobby({
+      members: ['alice'], uids: ['alice', null, 'alice', null],
+    })));
+    // Værten inviterer (arrayUnion af members/invitedUids).
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/DUO13'), {
+      members: arrayUnion('bob'), invitedUids: arrayUnion('bob'),
+    }));
+    // Gæsten sætter sig (med spejl), melder klar og forlader igen.
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/DUO13'),
+        { uids: ['alice', 'bob', 'alice', 'bob'] }));
+    await assertSucceeds(
+        updateDoc(doc(as('bob'), 'games/DUO13'), { 'ready.bob': true }));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/DUO13'),
+        { uids: ['alice', null, 'alice', null] }));
+    // Værten starter.
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/DUO13'),
+        { status: 'playing', state: { vid: 'duo' } }));
+  });
+
+  it('TILLADT: revanche — værten skifter sin nye lobby til Duo (setVariant)',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO14'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice'],
+      variantId: 'classic', uids: ['alice', null, null, null],
+    }));
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/DUO14'), {
+      variantId: 'duo', uids: ['alice', null, 'alice', null],
+      'cardRulesVariants.duo': { rules: {} },
+    }));
+  });
+
+  it('TILLADT: en inviteret uden plads må markere et afsluttet Duo-spil set',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO15'), duoLobby({
+      status: 'over', members: ['alice', 'bob', 'eve'],
+    })));
+    await assertSucceeds(
+        updateDoc(doc(as('eve'), 'games/DUO15'), { 'seen.eve': 2 }));
+  });
+
+  it('TILLADT: værten kan redde et gammelt doc med variantId duo uden spejl',
+      async () => {
+    // Før denne ændring kunne ENHVER i lobbyen skrive variantId: 'duo'. Et
+    // sådant doc med fire forskellige uids afviser nu alle andre skrivninger
+    // (duoSeatsMirrored) — værten skal kunne skifte det tilbage.
+    await seed((db) => setDoc(doc(db, 'games/DUO16'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob', 'c', 'd'],
+      variantId: 'duo', uids: ['alice', 'bob', 'c', 'd'],
+    }));
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/DUO16'),
+        { variantId: 'classic' }));
+  });
+
+  // Security-fund på Duo online, lukket af seatsKeptByPosition: mængde-
+  // vagten (othersSeatsKept) lod en fremmed GENTAGE eller BYTTE andres uid'er.
+  it('ANGREB: en fremmed må IKKE sætte værten på begge hænder [a,a,a,a]',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO17'), duoLobby({
+      members: ['alice'], uids: ['alice', null, 'alice', null],
+    })));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/DUO17'),
+        { uids: ['alice', 'alice', 'alice', 'alice'] }));
+  });
+  it('ANGREB: en fremmed må IKKE bytte andres pladser [b,a,b,a]', async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO18'), duoLobby()));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/DUO18'),
+        { uids: ['bob', 'alice', 'bob', 'alice'] }));
+  });
+  it('ANGREB: en siddende spiller må IKKE bytte pladser midt i et spil',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/POS1'), {
+      hostUid: 'alice', status: 'playing', members: ['alice', 'bob', 'carol'],
+      uids: ['alice', 'bob', 'carol', null],
+    }));
+    await assertFails(updateDoc(doc(as('bob'), 'games/POS1'),
+        { uids: ['alice', 'carol', 'bob', null] }));
+  });
+  it('ANGREB: en fremmed må IKKE bytte pladser i en klassisk lobby',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/POS2'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      uids: ['alice', 'bob', null, null],
+    }));
+    await assertFails(updateDoc(doc(as('mallory'), 'games/POS2'),
+        { uids: ['alice', 'bob', 'bob', null] }));
+  });
+  it('ANGREB: værten må IKKE gentage en gæsts uid uden for Duo ' +
+      '(ét parti talt som to i statistikken)', async () => {
+    await seed((db) => setDoc(doc(db, 'games/POS3'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      variantId: 'classic', uids: ['alice', 'bob', null, null],
+    }));
+    await assertFails(updateDoc(doc(as('alice'), 'games/POS3'),
+        { uids: ['alice', 'bob', 'alice', 'bob'] }));
+  });
+  it('TILLADT: værten skifter til Duo og flytter gæsten fra plads 2 til 1',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/POS4'), {
+      hostUid: 'alice', status: 'lobby', members: ['alice', 'bob'],
+      variantId: 'classic', uids: ['alice', null, 'bob', null],
+    }));
+    await assertSucceeds(updateDoc(doc(as('alice'), 'games/POS4'),
+        { variantId: 'duo', uids: ['alice', 'bob', 'alice', 'bob'] }));
+  });
+  it('ANGREB: værten må IKKE omrokere andres pladser i et spil i gang',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/POS5'), duoLobby({
+      status: 'playing',
+    })));
+    await assertFails(updateDoc(doc(as('alice'), 'games/POS5'),
+        { uids: ['bob', 'alice', 'bob', 'alice'] }));
   });
 });
 
