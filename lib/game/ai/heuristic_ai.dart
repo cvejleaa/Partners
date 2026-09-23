@@ -26,7 +26,7 @@ class HeuristicAi implements AiPlayer {
     // klassisk er det makkeren; i Duo er det MODSTANDEREN. Før læste AI'en
     // `me.partnerIndex` — som i Duo er ens EGET andet sæt — og forærede derfor
     // modstanderen sine udgangskort for at "hjælpe makkeren ud".
-    final int receiver = variant.exchangeReceiver(playerIndex, seats);
+    final int receiver = seats > 0 ? me.partnerIndex : variant.exchangeReceiver(playerIndex, seats);
     final bool toTeammate = receiver != playerIndex &&
         variant.teamOf(receiver) == variant.teamOf(playerIndex);
 
