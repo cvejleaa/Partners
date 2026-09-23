@@ -60,7 +60,6 @@ class GameEngine extends ChangeNotifier {
     }
     for (int i = 0; i < handSize; i++) {
       for (int p = 0; p < state.players.length; p++) {
-        if (!state.variant.hasHand(p)) continue;
         state.players[p].hand.add(state.deck.removeLast());
       }
     }
