@@ -250,6 +250,15 @@ hyggeonkel.dk
 Udgivet 2022 (Årets Familiespil 2022, nomineret til Guldbrikken). Alder 8+,
 spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
 
+**I APPEN (2026-09-23):** Duo kan vælges i opsætningen og spilles MOD
+COMPUTEREN — ikke online endnu (`onlineReady: false`: lobbyens liste udelader
+den, og `lobbyVariantFromDoc` starter et online-doc med `duo` som klassisk).
+Et spillers to sæt har samme farve og skelnes med et mærke: RING på sættet ved
+hånd-pladsen, PRIK på det andet — på brikkerne og i sættets start- og
+målbrønde. Kendte huller, navngivet: computerens trækvurdering vægter dit
+andet sæt som en "makker"; replay-teksten kender ikke tilbageslag (replay
+dækker ikke computer-spil); statistikken har ingen Duo-opdeling.
+
 **KILDE: æskens egen regelbog (side 3-4) og pladen, fotograferet af ejeren
 2026-09-23.** Alt nedenfor uden markering står i den tekst. Det, der stadig er
 et gæt eller en tolkning, er markeret.
@@ -412,8 +421,10 @@ parathed. Status nu:
 | `exchangeRule` | ja — `exchangeReceiver`, brugt af motor OG chippen "kortet du gav" |
 | `onePlayerPerTeam` | ja (Duo trin 2) — `controllerOf`, `hasHand`, `handCount`, starter-rotation |
 | `deckRanks`, `copiesPerRank`, `exitCardCount` | ja (Duo trin 1) — `Deck.forVariant` |
-| `goalBounce` | ja (Duo trin 7) — bounce-back i `_advanceFrom` |
-| `playerCount`, `fieldsPerSegment`, `goalCircles`*, `handSize`, `dealsPerDealer` | **nej** — stadig kun påstande |
+| `goalBounce` | ja (Duo trin 7) — bounce-back i `_advanceFrom`; UI'et beskriver tilbageslaget via `MoveStep.distance` |
+| `onlineReady` | ja — lobbyens variantliste og `lobbyVariantFromDoc` (online-start) |
+| `fieldsPerSegment` | ja — `trackLength` |
+| `playerCount`, `goalCircles`*, `handSize`, `dealsPerDealer` | **nej** — stadig kun påstande |
 
 *`goalCircles` indgår i `geometry` (antal målcirkler), men ikke andre steder.
 
