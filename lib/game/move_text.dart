@@ -82,7 +82,7 @@ String pieceOwnerLabel(GameState state, Piece piece) {
   final VariantConfig v = state.variant;
   final String name = state.players[piece.ownerIndex].name;
   if (!v.seatsShareController) return name;
-  return v.hasHand(piece.ownerIndex) ? '$name (ring)' : '$name (prik)';
+  return v.hasHand(piece.ownerIndex) ? '$name (ring)' : name;
 }
 
 /// "○ x/3 · ● y/3" — brikker i mål for hvert sæt, [p] styrer (ring = sættet
