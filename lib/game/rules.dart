@@ -524,6 +524,7 @@ class Rules {
       left--;
     }
     if (left == 0) return HomeStretchPosition(player.index, pos);
+    if (left > 0) return null;
     // Ud af målet: første skridt lander på feltet lige før eget UD.
     final int trackLen = geometry.trackLength;
     final int ownUd = geometry.startTrackIndexFor(player.index);
