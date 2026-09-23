@@ -27,6 +27,37 @@ class Rules {
 
   final BoardGeometry geometry;
 
+  /// Pladserne [player] kan råde over: sin egen først, derefter holdkammerater
+  /// (klassisk: makkeren; Duo: sit andet sæt). Rækkefølgen er en del af
+  /// kontrakten — den afgør rækkefølgen af de fundne træk, og dermed hvilket
+  /// træk AI'en vælger ved lige score (låst af klassisk-fingeraftrykket).
+  List<int> _controlledSeats(GameState state, Player player) => <int>[
+        player.index,
+        for (final int s in state.variant.teammatesOf(player.index))
+          if (s != player.index) s,
+      ];
+
+  /// Må [player] bruge [seat]s brikker lige nu i [sim]?
+  ///
+  /// ÉN vagt for alle tre porte — `activePool`, multi-brik og split — som før
+  /// hver afgjorde det selv og kunne drive fra hinanden.
+  ///
+  /// [anchor] er pladsen for trækkets FØRSTE brik (null = ingen endnu). En
+  /// anden plads åbner først, når ALLE ankerets brikker er i hjemstrækket.
+  /// - Klassisk: ankeret er altid spilleren selv — makkerens brikker åbner
+  ///   først, når ens egne er hjemme (§12). Præcis som før.
+  /// - Duo: ankeret er det sæt, trækket STARTER i. Et ét-kort-træk kan derfor
+  ///   bruge begge sæt frit, mens 4×1 holder sig til ét sæt, indtil det sæt
+  ///   er færdigt — så må resten bruges på det andet (regelbogen, s. 4).
+  bool _seatOpen(GameState sim, Player player, int seat, int? anchor) {
+    if (!_controlledSeats(sim, player).contains(seat)) return false;
+    final int a =
+        sim.variant.onePlayerPerTeam ? (anchor ?? seat) : player.index;
+    if (seat == a) return true;
+    return sim.players[a].pieces
+        .every((Piece p) => p.position is HomeStretchPosition);
+  }
+
   /// Find alle gyldige [Move] som [player] kan lave med [card] i [state].
   List<Move> legalMoves(GameState state, Player player, PlayingCard card) {
     // "Endgame mode": når alle ens egne brikker er i hjemstrækket (uanset slot)
@@ -34,11 +65,10 @@ class Rules {
     // adgangen til sine egne hjemstræks-brikker. Det betyder fx at man kan
     // dele en 7'er hen over en egen brik der mangler 1 slot for at låse i hus
     // OG en af makkerens brikker på banen.
-    final bool allOwnHome = player.pieces
-        .every((Piece p) => p.position is HomeStretchPosition);
-    final List<Player> activePool = allOwnHome
-        ? <Player>[player, state.players[state.variant.partnerFor(player.index)]]
-        : <Player>[player];
+    final List<Player> activePool = <Player>[
+      for (final int seat in _controlledSeats(state, player))
+        if (_seatOpen(state, player, seat, null)) state.players[seat],
+    ];
 
     // Rene ud-kort kan kun rykke en brik ud — fra enten egen eller makkers
     // start når begge pools er aktive.
@@ -395,14 +425,13 @@ class Rules {
     }
     if (remainingPieces == 0) return;
 
-    final bool allOwnLocked = sim.players[player.index].pieces
-        .every((Piece p) => p.position is HomeStretchPosition);
+    final int? anchor =
+        path.isEmpty ? null : sim.pieceById(path.first.pieceId).ownerIndex;
     final List<Piece> candidates = <Piece>[
-      ...sim.players[player.index].pieces
-          .where((Piece p) => p.position is! StartPosition),
-      if (allOwnLocked)
-        ...sim.players[partner.index].pieces
-            .where((Piece p) => p.position is! StartPosition),
+      for (final int seat in _controlledSeats(sim, player))
+        if (_seatOpen(sim, player, seat, anchor))
+          ...sim.players[seat].pieces
+              .where((Piece p) => p.position is! StartPosition),
     ];
     for (final Piece cand in candidates) {
       if (used.contains(cand.id)) continue;
@@ -652,14 +681,13 @@ class Rules {
     for (final String id in movableIds) {
       if (used.contains(id)) continue;
       final bool isPartnerPiece = !ownIds.contains(id);
-      // Partner-brik må kun bruges når ALLE egne brikker er låst i hjemstræk
-      // (på dette tidspunkt i sim'en).
-      if (isPartnerPiece) {
-        final bool allOwnLocked = sim.players[player.index].pieces
-            .every((Piece p) => p.position is HomeStretchPosition);
-        if (!allOwnLocked) continue;
-      }
       final int moverIndex = isPartnerPiece ? partner.index : player.index;
+      // Samme vagt som de to andre porte — evalueret på dette tidspunkt i
+      // sim'en, med trækkets første brik som anker (Duo: 4×1 holder sig til
+      // ét sæt, til det sæt er færdigt).
+      final int? anchor =
+          path.isEmpty ? null : sim.pieceById(path.first.pieceId).ownerIndex;
+      if (!_seatOpen(sim, player, moverIndex, anchor)) continue;
       final Piece simPiece = sim.pieceById(id);
       final Player simPlayer = sim.players[moverIndex];
 
