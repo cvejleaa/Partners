@@ -263,14 +263,22 @@ spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
   kortere spilletid (15-45 min); og det går lige op, så hvert UD-felt sidder
   symmetrisk. **Tallet er ikke målt** — det kan kun fastslås ved at tælle et
   fysisk sæt, og det skal kunne rettes uden en ny udgivelse.
-- **[UDLEDT]** Målfelter pr. destination: **3**. Ikke et gæt: hver destination
-  skal rumme netop 3 brikker (3 med hul, 3 med knop), og målfelter fyldes
-  indefra uden overspringning. Færre ville gøre det umuligt at afslutte, flere
-  ville stå tomme.
-- **Konsekvens for hjemstrækket:** med kun 3 målfelter pr. destination dør
-  høje kort endnu tidligere end i klassisk. Det er grunden til at ejeren har
-  valgt at Duo beholder æskens **bounce-back**, i modsætning til alle andre
-  varianter — se `regler.md` §11.
+- **Målfelter pr. destination: 1** (ejer-oplyst, fra det fysiske spil). Hvert
+  sæt på 3 brikker har altså ÉT målfelt — ikke et hjemstræk med én plads pr.
+  brik som i klassisk. Der stod her tidligere "udledt: 3", med begrundelsen
+  at 3 brikker skulle have 3 pladser. Det var en forkert udledning: den
+  antog, at Duos mål er bygget som klassisk hjemstræk. Det er de ikke.
+- **[UAFKLARET — spørg ejeren]** Hvordan de 3 brikker deler ét målfelt: står
+  de stablet på feltet (som egne brikker kan på UD-feltet), eller tages en
+  brik af brættet, når den er i mål? Og hvad bounce-back betyder med ét
+  felt: skal brikken ramme feltet PRÆCIST, og rykker overskuddet den ellers
+  baglæns ud på banen igen ("vende")?
+- **Konsekvens for hjemstrækket:** med ét målfelt pr. destination er der
+  ingen "længere ind" at rykke — enten rammer man, eller også gør man ikke.
+  Uden ventilen ville præcis dét kort, der passer, være det eneste brugbare
+  helt til sidst. Det er grunden til at ejeren har valgt at Duo beholder
+  æskens **bounce-back**, i modsætning til alle andre varianter — se
+  `regler.md` §11.
 
 ### Kort (30 kort, 10 forskellige kortværdier)
 
