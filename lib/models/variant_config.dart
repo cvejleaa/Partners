@@ -345,7 +345,7 @@ const VariantConfig partnersDuo = VariantConfig(
   copiesPerRank: 3,
   exitCardCount: 0,
   cardRuleOverrides: <Rank, CardRuleConfig>{
-    Rank.ace: CardRuleConfig(exitStart: true, forwardSteps: <int>[1]), // ♥/1
+    Rank.ace: CardRuleConfig(exitStart: true, forwardSteps: <int>[1, 11]), // ♥/1
     Rank.two: CardRuleConfig(forwardSteps: <int>[2], backwardSteps: 2), // +2−
     Rank.three: CardRuleConfig(forwardSteps: <int>[3]),
     Rank.four: CardRuleConfig(splitTotal: 4), // 4×1
