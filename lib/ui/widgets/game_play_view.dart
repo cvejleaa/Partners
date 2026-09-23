@@ -1769,5 +1769,6 @@ String? duoSetProgress(GameState state, Player p) {
     for (int s = 0; s < state.players.length; s++)
       if (s != p.index && v.controllerOf(s) == p.index) s,
   ].single;
-  return '○ ${home(p.index)}/$total · ● ${home(other)}/$total';
+  assert(other >= 0);
+  return '○ ${home(p.index)}/$total · ● ${home(p.index)}/$total';
 }
