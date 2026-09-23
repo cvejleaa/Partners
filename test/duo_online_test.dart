@@ -15,6 +15,7 @@ import 'package:partners/models/variant_config.dart';
 import 'package:partners/online/lobby_seats.dart';
 import 'package:partners/online/online_service.dart';
 import 'package:partners/online/replay_story.dart';
+import 'package:partners/stats/replay_engine.dart';
 import 'package:partners/stats/user_stats.dart';
 
 const int red = 0xFFE53935;
@@ -199,6 +200,25 @@ void main() {
       expect(s.players[2].hand, isEmpty);
       expect(s.players[3].hand, isEmpty);
       expect(s.players[0].hand, isNotEmpty);
+    });
+
+    // replayGame (stats/replay_engine.dart) bygger sin EGEN friske state for
+    // at genudlede slag — se _freshState. Brik-antallet SKAL komme fra
+    // varianten (Duo: 3, ikke det klassiske 4): online_game_screen bruger
+    // replayMatches til at afgøre om rekonstruktionen må vises, og den
+    // starter med et længde-tjek (replay_board_test.dart) — 16 rekonstruerede
+    // brikker mod 12 ægte ville gøre "mens du var væk" tavst usynligt for
+    // ETHVERT Duo-online-parti, uden at nogen anden test ville opdage det.
+    test('replayGame bygger med Duo\'s EGET brik-antal (3, ikke 4)', () {
+      final ReplayResult r = replayGame(
+        playerNames: const <String>['Anna', 'Bo', 'Anna', 'Bo'],
+        isHuman: const <bool>[true, true, true, true],
+        playerColors: const <int>[red, blue, green, yellow],
+        cardRules: CardRules.defaults(),
+        log: const <Map<String, dynamic>>[],
+        variant: partnersDuo,
+      );
+      expect(r.finalState.allPieces.length, 4 * partnersDuo.piecesPerPlayer);
     });
   });
 
