@@ -261,7 +261,7 @@ GameState _freshState({
         color: i < colors.length ? Color(colors[i]) : Colors.black,
         isHuman: isHuman[i],
         pieces: <Piece>[
-          for (int s = 0; s < variant.piecesPerPlayer; s++)
+          for (int s = 0; s < 4; s++)
             Piece(id: 'p$i.$s', ownerIndex: i, position: StartPosition(i, s)),
         ],
       ),
