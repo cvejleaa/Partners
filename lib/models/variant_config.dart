@@ -784,9 +784,5 @@ VariantConfig lobbyVariantFromDoc(Map<String, dynamic> doc) {
 /// ENE vælger — lokalt og online. Klassisk trækker [rng] præcis som før
 /// (`nextInt(4)` over plads 0-3).
 int pickStarter(VariantConfig v, Random rng) {
-  final List<int> handSeats = <int>[
-    for (int i = 0; i < 4; i++)
-      if (v.hasHand(i)) i,
-  ];
-  return handSeats[rng.nextInt(handSeats.length)];
+  return rng.nextInt(4);
 }
