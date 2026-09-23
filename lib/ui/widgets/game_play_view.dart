@@ -1734,7 +1734,6 @@ String? describeBounce(GameState state, MoveStep s) {
   final int? d = s.distance;
   if (!state.variant.goalBounce || d == null) return null;
   if (s.from is StartPosition) return null;
-  if (straightStepDistance(state, s.from, s.to) == d) return null;
   final to = s.to;
   return to is HomeStretchPosition
       ? '$d frem — baglæns til målfelt ${to.slot + 1}'
