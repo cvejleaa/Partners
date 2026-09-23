@@ -20,6 +20,7 @@ class PlayerPanel extends StatelessWidget {
     this.online,
     this.givenByMe,
     this.givenSpent = false,
+    this.setProgress,
   });
 
   final Player player;
@@ -55,6 +56,10 @@ class PlayerPanel extends StatelessWidget {
   /// den der skruer ned for lysstyrken eller ser dårligt. Ikonet bærer
   /// forskellen positivt.
   final bool givenSpent;
+
+  /// Duo: hvor mange brikker hvert af spillerens to sæt har i mål, fx
+  /// "○ 2/3 · ● 0/3" (ring/prik som på brættet). null = vis ingen linje.
+  final String? setProgress;
 
   /// Online-status i et online-spil: true = til stede, false = væk, null =
   /// vis ingen markør (fx AI-plads eller lokalt spil).
@@ -153,6 +158,14 @@ class PlayerPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           nameRow,
+          if (setProgress != null) ...<Widget>[
+            SizedBox(height: compact ? 2 : 3),
+            Text(setProgress!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: compact ? 11 : 12, color: Colors.white70)),
+          ],
           SizedBox(height: compact ? 4 : 5),
           countRow,
         ],

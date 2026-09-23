@@ -109,14 +109,21 @@ class VariantsAdminState {
   /// Tilstanden for [id] — med korrekt fallback: p25 falder til kode-seedet
   /// (stored=false), et ukendt custom-id til en tom custom-skabelon.
   VariantAdminConfig configFor(String id) =>
-      entries[id] ??
-      (id == partners25.id
-          ? VariantAdminConfig(
-              overrides:
-                  partners25.cardRuleOverrides ?? <Rank, CardRuleConfig>{},
-            )
-          : const VariantAdminConfig(
-              overrides: <Rank, CardRuleConfig>{}, custom: true));
+      entries[id] ?? _builtinSeed(id);
+
+  /// En INDBYGGET variant med egne kortregler (25 år, Duo) falder til sit
+  /// kode-seed. Før gjaldt det kun 25 år — enhver anden indbygget variant
+  /// blev behandlet som en tom, admin-lavet custom-variant. Klassisk (uden
+  /// egne regler) opfører sig som før.
+  static VariantAdminConfig _builtinSeed(String id) {
+    for (final VariantConfig v in kAllVariants) {
+      if (v.id == id && v.cardRuleOverrides != null) {
+        return VariantAdminConfig(overrides: v.cardRuleOverrides!);
+      }
+    }
+    return const VariantAdminConfig(
+        overrides: <Rank, CardRuleConfig>{}, custom: true);
+  }
 
   /// Rå variants-map-form (samme som doc-feltet) — føder variantFromRaw,
   /// picker-listerne og prefs-cachen.
@@ -165,6 +172,11 @@ final selectedVariantAdminProvider = Provider<VariantAdminConfig>((ref) {
 /// admin) læser config-doc'et, så customs vises for alle.
 final selectableVariantsProvider = Provider<List<VariantConfig>>((ref) =>
     selectableVariantsFrom(ref.watch(variantCardRulesProvider).toRawJson()));
+
+/// Lobbyens liste: kun varianter, der kan spilles online (ikke Duo endnu).
+final onlineSelectableVariantsProvider = Provider<List<VariantConfig>>((ref) =>
+    selectableVariantsFrom(ref.watch(variantCardRulesProvider).toRawJson(),
+        online: true));
 
 class VariantCardRulesController extends StateNotifier<VariantsAdminState> {
   VariantCardRulesController({this.errorSink, this.sourceSink})

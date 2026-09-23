@@ -1224,9 +1224,7 @@ class OnlineService {
     // dermed 'vid' → statistik-attributionen) og får navn/tema med. Skævt
     // felt fra en fjendtlig deltager → klassisk; velformet-men-ukendt id →
     // klassisk-formet med id bevaret (spilbart, kun navn/farve mangler).
-    final VariantConfig variant = variantFromRaw(
-        d['variantId'] is String ? d['variantId'] as String : null,
-        d['cardRulesVariants']);
+    final VariantConfig variant = lobbyVariantFromDoc(d);
     // Opløs spillets faktiske kortregler ÉN gang her: klassisk (doc'ets
     // cardRules) + variantens overrides (admin-gemte fra cardRulesVariants
     // vinder over kode-seedet; manglende/skævt felt → seed). _initialState

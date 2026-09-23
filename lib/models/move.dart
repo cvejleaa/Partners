@@ -9,6 +9,7 @@ class MoveStep {
     required this.to,
     this.capturedPieceId,
     this.burnsMover = false,
+    this.distance,
   });
 
   final String pieceId;
@@ -23,6 +24,13 @@ class MoveStep {
   /// lande på, men brikken ender i sin egen startcirkel). Ingen modstander
   /// slås i dette tilfælde.
   final bool burnsMover;
+
+  /// Antal felter kortet brugte på dette step, når motoren kender det (frem-
+  /// træk, 4×1-fordelingen). Kun UI'et læser det — og kun i varianter med
+  /// tilbageslag i målet (Duo), hvor [from]→[to] ikke længere afslører
+  /// afstanden (et 3'er-træk kan ende ÉN cirkel længere inde). Ikke
+  /// serialiseret.
+  final int? distance;
 }
 
 /// Et komplet træk fra ét kort. Indeholder en eller flere steps. For 7'eren

@@ -62,6 +62,7 @@ class VariantConfig {
     this.exitCardCount = 4,
     this.onePlayerPerTeam = false,
     this.goalBounce = false,
+    this.onlineReady = true,
     this.tableColor = const Color(0xFF0E2A1A),
     this.feltColor = const Color(0xFF14331F),
     // Husets grønne (bruges også af "din tur"-chippen): hvid 13px-tekst har
@@ -146,6 +147,13 @@ class VariantConfig {
   /// docs/regler.md §11). Læses her — aldrig af variantens navn.
   final bool goalBounce;
 
+  /// Kan varianten spilles ONLINE? Duo kan ikke endnu: online-oprettelsen,
+  /// lobbyen, statistikken og replay'et antager fire mennesker på fire
+  /// pladser. Varianten skal derfor holdes ude af lobbyens liste OG afvises
+  /// af serveren, hvis en klient alligevel beder om den — ikke blot mangle
+  /// i en implementering.
+  final bool onlineReady;
+
   /// Variantens visuelle identitet i SPILLET (ambient bekræftelse — badgen
   /// bærer informationen, farven bekræfter den). Klassisk = de eksisterende
   /// grønne (defaults, byte-identisk); 25 år = marineblå som det fysiske sæts
@@ -165,7 +173,9 @@ class VariantConfig {
   /// SIGER ved bordet. Falder tilbage til navnet for varianter uden kort form.
   String get shortLabel =>
       customShortLabel ??
-      (id == 'classic' ? 'Klassisk' : (id == 'p25' ? '25 år' : name));
+      (id == 'classic'
+          ? 'Klassisk'
+          : (id == 'p25' ? '25 år' : (id == 'duo' ? 'Duo' : name)));
 
   /// Tekst til badge-info-dialogen. Domænetekst bor HER (ikke i widgets):
   /// beskrivelsen når den findes, ellers klassisk-forklaringen.
@@ -308,11 +318,56 @@ const VariantConfig partners25 = VariantConfig(
   },
 );
 
+/// Partners Duo (2022): 1 mod 1, hver spiller styrer TO sæt — fire pladser
+/// på brættet, to hænder. Regler og kort efter æskens regelbog, fotograferet
+/// af ejeren; se docs/partners-varianter.md og docs/regler.md §11.
+const VariantConfig partnersDuo = VariantConfig(
+  id: 'duo',
+  name: 'Partners Duo',
+  description: '1 mod 1 — du styrer to sæt (ring og prik), hvert med sit eget '
+      'mål. Et for stort kort rykker brikken baglæns i målet. Kun mod '
+      'computeren indtil videre.',
+  // Pladen: ♥ + felt 1-10 pr. kvart = 44 felter (♥ tæller ikke ved passage),
+  // 3 målcirkler og 3 brikker pr. sæt.
+  segments: 4,
+  fieldsPerSegment: 10,
+  goalCircles: 3,
+  piecesPerPlayer: 3,
+  exchangeRule: ExchangeRule.opponentSwap,
+  onePlayerPerTeam: true,
+  goalBounce: true,
+  onlineReady: false,
+  // 30 kort: 10 værdier × 3 (ejer-talt), ingen rene UD-kort.
+  deckRanks: <Rank>[
+    Rank.ace, Rank.two, Rank.three, Rank.four, Rank.five,
+    Rank.six, Rank.seven, Rank.eight, Rank.nine, Rank.ten,
+  ],
+  copiesPerRank: 3,
+  exitCardCount: 0,
+  cardRuleOverrides: <Rank, CardRuleConfig>{
+    Rank.ace: CardRuleConfig(exitStart: true, forwardSteps: <int>[1]), // ♥/1
+    Rank.two: CardRuleConfig(forwardSteps: <int>[2], backwardSteps: 2), // +2−
+    Rank.three: CardRuleConfig(forwardSteps: <int>[3]),
+    Rank.four: CardRuleConfig(splitTotal: 4), // 4×1
+    Rank.five: CardRuleConfig(forwardSteps: <int>[5], jumpsBlockade: true), // 5↻
+    Rank.six: CardRuleConfig(exitStart: true, forwardSteps: <int>[6]), // ♥/6
+    Rank.seven: CardRuleConfig(forwardSteps: <int>[7]),
+    Rank.eight: CardRuleConfig(exitStart: true, forwardSteps: <int>[8]), // ♥/8
+    Rank.nine: CardRuleConfig(forwardSteps: <int>[9], swap: true), // byt/9
+    Rank.ten: CardRuleConfig(forwardSteps: <int>[10]),
+  },
+  tableColor: Color(0xFF1A1F4A),
+  feltColor: Color(0xFF242B5E),
+  // Hvid 13 px-tekst på badgen: #C62828 har ≈5,6:1 (kravet er 4,5:1).
+  badgeColor: Color(0xFFC62828),
+);
+
 /// Alle kendte varianter. Registret bruges til at resolve en gemt variant-id
 /// tilbage til dens config og til at fylde variant-vælgeren.
 const List<VariantConfig> kAllVariants = <VariantConfig>[
   classicVariant,
   partners25,
+  partnersDuo,
 ];
 
 /// Slå en variant op på dens [id]. En manglende eller ukendt id (fx et
@@ -546,7 +601,9 @@ List<String> customVariantIdsFrom(dynamic variantsRaw,
 ///   udseende) — spilbart via state'ns 'cr', kun navn/farve mangler.
 VariantConfig variantFromRaw(String? id, dynamic variantsRaw) {
   final VariantConfig base = variantForState(id);
-  if (base.id == classicVariant.id || base.id == partners25.id) return base;
+  // Indbyggede varianter bruger altid kode-config'en — et fjendtligt
+  // custom-entry på et indbygget id (fx 'duo') må ikke omforme dem.
+  if (kAllVariants.contains(base)) return base;
   if (variantsRaw is! Map) return base;
   final dynamic entry = variantsRaw[base.id];
   if (!isCustomVariantEntry(entry)) return base;
@@ -582,9 +639,13 @@ VariantConfig variantFromRaw(String? id, dynamic variantsRaw) {
 
 /// Picker-listen (setup/lobby): indbyggede + ikke-arkiverede customs,
 /// materialiseret. Ét sted, så de to pickers ikke driver fra hinanden.
-List<VariantConfig> selectableVariantsFrom(dynamic variantsRaw) =>
+///
+/// [online] udelader varianter, der ikke kan spilles online endnu (Duo).
+List<VariantConfig> selectableVariantsFrom(dynamic variantsRaw,
+        {bool online = false}) =>
     <VariantConfig>[
-      ...kAllVariants,
+      for (final VariantConfig v in kAllVariants)
+        if (!online || v.onlineReady) v,
       for (final String id in customVariantIdsFrom(variantsRaw))
         variantFromRaw(id, variantsRaw),
     ];
@@ -696,4 +757,20 @@ String? _metaString(dynamic variantsRaw, String id, String key) {
   // variantFromRaw. Samme grænser: navn 2× UI-grænsen, beskrivelse 300.
   final int max = key == 'name' ? 2 * kMaxCustomNameLength : 300;
   return value.length > max ? value.substring(0, max) : value;
+}
+
+/// Varianten et ONLINE spil startes med (startGameFromLobby), materialiseret
+/// fra lobby-doc'ets egen cardRulesVariants-kopi (se [variantFromRaw]).
+///
+/// Den ENE online-vagt: en indbygget variant, der ikke kan spilles online
+/// ([VariantConfig.onlineReady] = false, fx Duo), startes som klassisk.
+/// Lobbyens liste viser den ikke, men doc'ets variantId kan skrives af
+/// ethvert medlem — derfor ligger vagten HER, hvor spillets state bygges,
+/// og ikke i valget. Genkendes positivt (en indbygget variant med
+/// onlineReady false), ikke på fravær.
+VariantConfig lobbyVariantFromDoc(Map<String, dynamic> doc) {
+  final String? id =
+      doc['variantId'] is String ? doc['variantId'] as String : null;
+  final VariantConfig v = variantFromRaw(id, doc['cardRulesVariants']);
+  return (kAllVariants.contains(v) && !v.onlineReady) ? classicVariant : v;
 }

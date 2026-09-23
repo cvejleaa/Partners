@@ -231,7 +231,8 @@ class Rules {
       return Move(
         card: card,
         steps: <MoveStep>[
-          MoveStep(pieceId: piece.id, from: piece.position, to: to),
+          MoveStep(
+              pieceId: piece.id, from: piece.position, to: to, distance: steps),
         ],
       );
     }
@@ -246,6 +247,7 @@ class Rules {
           to: to,
           capturedPieceId: landing.capturedId,
           burnsMover: landing.burnsMover,
+          distance: steps,
         ),
       ],
     );
@@ -793,6 +795,7 @@ class Rules {
           to: to,
           capturedPieceId: capturedId,
           burnsMover: burns,
+          distance: dist,
         ));
         used.add(id);
 
@@ -830,6 +833,7 @@ class Rules {
             to: s.to,
             capturedPieceId: s.capturedPieceId,
             burnsMover: s.burnsMover,
+            distance: s.distance,
           )).toList(),
     );
   }

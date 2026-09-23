@@ -768,7 +768,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                               // Værtens egen variant-liste (inkl. egne
                               // varianter oprettet EFTER lobbyen blev til).
                               final List<VariantConfig> selectable =
-                                  ref.watch(selectableVariantsProvider);
+                                  ref.watch(onlineSelectableVariantsProvider);
                               final bool inList = selectable
                                   .any((VariantConfig v) => v.id == variant.id);
                               return DropdownButton<String>(

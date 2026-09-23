@@ -82,9 +82,7 @@ GameResult playFullGame({
   List<String>? moveTrace,
 }) {
   final Random rng = Random(seed);
-  // Spillerantal og brikker pr. plads er stadig hardkodet til fire/fire.
-  // Duo-trin 2 ("hvilke pladser får hånd") løfter det; indtil da må en
-  // variant med et andet spillerantal ikke gives hertil.
+  // Fire pladser på brættet i alle varianter (Duo: to af dem er håndløse).
   final VariantConfig v = variant ?? classicVariant;
   final BoardGeometry geom = v.geometry;
   final List<Player> players = <Player>[
@@ -95,7 +93,8 @@ GameResult playFullGame({
         color: Colors.black,
         isHuman: false,
         pieces: <Piece>[
-          for (int s = 0; s < 4; s++)
+          // Variantens brik-antal (Duo: 3) — ikke hardkodet fire.
+          for (int s = 0; s < v.piecesPerPlayer; s++)
             Piece(id: 'p$i.$s', ownerIndex: i, position: StartPosition(i, s)),
         ],
       ),

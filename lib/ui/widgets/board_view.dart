@@ -6,6 +6,7 @@ import '../../models/board.dart';
 import '../../models/game_state.dart';
 import '../../models/piece.dart';
 import '../../models/player.dart';
+import '../../models/variant_config.dart';
 
 /// Beskriver brikker der animeres fra ét felt til et andet.
 /// Den lokale farve-rotation for [BoardView.colorOffset].
@@ -157,10 +158,22 @@ class BoardView extends StatelessWidget {
 }
 
 class _PiecePoint {
-  _PiecePoint(this.pieceId, this.center, this.color);
+  _PiecePoint(this.pieceId, this.center, this.color, this.mark);
   final String pieceId;
   final Offset center;
   final Color color;
+  final PieceMark mark;
+}
+
+/// Mærket, der skelner en spillers to sæt i Duo (samme farve): RING (hul) på
+/// sættet ved spillerens hånd-plads, PRIK (knop) på det andet sæt. Samme
+/// mærke står i sættets start- og målbrønde, så man kan se hvor hvert sæt
+/// hører hjemme. Klassisk og 25 år har intet mærke — én farve = én spiller.
+enum PieceMark { none, ring, dot }
+
+PieceMark pieceMarkFor(VariantConfig v, int seat) {
+  if (!v.onePlayerPerTeam) return PieceMark.none;
+  return v.hasHand(seat) ? PieceMark.ring : PieceMark.dot;
 }
 
 /// Kontur-farve til felt-markører på den cremefarvede bane. Lyse farver (fx
@@ -374,11 +387,23 @@ class _BoardPainter extends CustomPainter {
 
     // Hjemstræk. Felterne tegnes som NEUTRALE brønde med en tynd farvet
     // ejer-ring — så en brik i samme farve som feltet ikke drukner.
+    // Duo: med to mål i samme farve lyser MÅLET for de brikker, der kan
+    // vælges, så man ser hvor den valgte brik skal hen.
+    final Set<int> litGoals = <int>{
+      if (state.variant.onePlayerPerTeam)
+        for (final Piece pc in state.allPieces)
+          if (highlighted.contains(pc.id)) pc.ownerIndex,
+    };
     for (final Player pl in state.players) {
       final Color plColor = _seatColor(pl.index);
+      final PieceMark mark = pieceMarkFor(state.variant, pl.index);
       for (int slot = 0; slot < state.geometry.homeStretchLength; slot++) {
         final Offset p = _homePoint(center, tr, pl.index, slot, geo, rotation);
-        _drawWell(canvas, p, cr, plColor);
+        if (litGoals.contains(pl.index)) {
+          canvas.drawCircle(
+              p, cr * 1.3, Paint()..color = const Color(0x66FF8F00));
+        }
+        _drawWell(canvas, p, cr, plColor, mark: mark);
       }
     }
 
@@ -430,7 +455,8 @@ class _BoardPainter extends CustomPainter {
       for (int slot = 0; slot < piecesPerPlayer; slot++) {
         final Offset p = _startPoint(
             center, tr, pl.index, slot, piecesPerPlayer, geo, rotation);
-        _drawWell(canvas, p, cr, plColor, ringWidth: 0.13);
+        _drawWell(canvas, p, cr, plColor,
+            ringWidth: 0.13, mark: pieceMarkFor(state.variant, pl.index));
       }
     }
 
@@ -468,7 +494,8 @@ class _BoardPainter extends CustomPainter {
             _posPoint(m.to, center, tr, piecesPerPlayer, geo, rotation);
         c = Offset.lerp(from, to, Curves.easeInOut.transform(anim.progress))!;
       }
-      _drawPiece(canvas, c, cr, pp.color, highlighted.contains(pp.pieceId));
+      _drawPiece(canvas, c, cr, pp.color, highlighted.contains(pp.pieceId),
+          mark: pp.mark);
     }
 
     // Antal-badge på dobbelt-felter.
@@ -492,7 +519,7 @@ class _BoardPainter extends CustomPainter {
   /// mørk kant-rim og en ring i ejerens farve. Erstatter de tidligere
   /// farve-fyldte felter, så en brik i SAMME farve som feltet ikke drukner.
   void _drawWell(Canvas canvas, Offset p, double cr, Color ringColor,
-      {double ringWidth = 0.16}) {
+      {double ringWidth = 0.16, PieceMark mark = PieceMark.none}) {
     // Mørk fordybnings-rim under en lys neutral brønd (giver dybde + kontrast).
     canvas.drawCircle(
         p, cr, Paint()..color = Colors.black.withValues(alpha: 0.14));
@@ -507,9 +534,46 @@ class _BoardPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = cr * ringWidth,
     );
+    // Duo: sættets mærke i brønden, i ejerens (mørknede) farve.
+    _drawMark(canvas, p, cr * 0.9, mark, _boardOutline(ringColor));
   }
 
-  void _drawPiece(Canvas canvas, Offset c, double r, Color color, bool hl) {
+  /// Tegner [mark] i en cirkel med radius [r]: ring = hul cirkel, prik =
+  /// fyldt knop. Hvid på brikker (med mørk kant, så den står på gul), ejer-
+  /// farve i brønde.
+  static void _drawMark(
+      Canvas canvas, Offset c, double r, PieceMark mark, Color color,
+      {Color? edge}) {
+    switch (mark) {
+      case PieceMark.none:
+        return;
+      case PieceMark.ring:
+        if (edge != null) {
+          canvas.drawCircle(
+              c,
+              r * 0.42,
+              Paint()
+                ..color = edge
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = r * 0.30);
+        }
+        canvas.drawCircle(
+            c,
+            r * 0.42,
+            Paint()
+              ..color = color
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = r * 0.18);
+      case PieceMark.dot:
+        if (edge != null) {
+          canvas.drawCircle(c, r * 0.36, Paint()..color = edge);
+        }
+        canvas.drawCircle(c, r * 0.28, Paint()..color = color);
+    }
+  }
+
+  void _drawPiece(Canvas canvas, Offset c, double r, Color color, bool hl,
+      {PieceMark mark = PieceMark.none}) {
     final double pr = r * 1.15;
     // Lyse farver (især gul) mørknes så brikken læses som en solid token på
     // den cremefarvede bane — ellers smelter den sammen med felterne.
@@ -554,6 +618,9 @@ class _BoardPainter extends CustomPainter {
     // Lille glans-prik → brikken læses som en blank, rund token.
     canvas.drawCircle(c + Offset(-pr * 0.32, -pr * 0.34), pr * 0.18,
         Paint()..color = Colors.white.withValues(alpha: 0.55));
+    // Duo: hvidt ring/prik-mærke med mørk kant (læses også på gul).
+    _drawMark(canvas, c, pr, mark, Colors.white,
+        edge: Colors.black.withValues(alpha: 0.75));
   }
 
   static void _text(
@@ -596,8 +663,11 @@ class _BoardPainter extends CustomPainter {
         } else {
           continue;
         }
-        bases.add(_PiecePoint(piece.id,
-            _posPoint(pos, center, tr, piecesPerPlayer, geo, rotation), plColor));
+        bases.add(_PiecePoint(
+            piece.id,
+            _posPoint(pos, center, tr, piecesPerPlayer, geo, rotation),
+            plColor,
+            pieceMarkFor(state.variant, pl.index)));
         keys.add(key);
       }
     }
@@ -618,8 +688,8 @@ class _BoardPainter extends CustomPainter {
         final double angle = 2 * pi * idx / n;
         offset = Offset(cos(angle), sin(angle)) * spread;
       }
-      out.add(_PiecePoint(
-          bases[i].pieceId, bases[i].center + offset, bases[i].color));
+      out.add(_PiecePoint(bases[i].pieceId, bases[i].center + offset,
+          bases[i].color, bases[i].mark));
     }
     return out;
   }

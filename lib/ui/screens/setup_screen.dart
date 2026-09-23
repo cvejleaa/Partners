@@ -74,9 +74,16 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     super.dispose();
   }
 
+  /// Rækker i opsætningen: én pr. HÅND. Klassisk 4; Duo 2 (du og
+  /// modstanderen) — hver række styrer to sæt på brættet.
+  int _rowCount(VariantConfig v) => v.handCount(4);
+
   @override
   Widget build(BuildContext context) {
-    final bool unique = _colorIdx.toSet().length == 4;
+    final VariantConfig chosen =
+        _variantFrom(ref.watch(selectableVariantsProvider));
+    final int rows = _rowCount(chosen);
+    final bool unique = _colorIdx.take(rows).toSet().length == rows;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Partners — Opsætning'),
@@ -110,10 +117,14 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Text(
-              'Indtast navn og vælg farve for hver spiller. Marker din egen '
-              'plads med radioknappen — brættet roteres så du sidder nederst. '
-              'Pladsen overfor er din makker.',
+            Text(
+              chosen.onePlayerPerTeam
+                  ? 'Indtast navn og vælg farve for dig og din modstander. '
+                      'I Duo styrer I hver to sæt brikker i samme farve — '
+                      'ring og prik — og hvert sæt har sit eget mål.'
+                  : 'Indtast navn og vælg farve for hver spiller. Marker din '
+                      'egen plads med radioknappen — brættet roteres så du '
+                      'sidder nederst. Pladsen overfor er din makker.',
             ),
             const SizedBox(height: 16),
             // Variant FØRST: "hvad spiller vi" bestemmer bræt og kort. Dropdown
@@ -155,7 +166,15 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                           ],
                           onChanged: (String? id) {
                             if (id != null) {
-                              setState(() => _variantId = id);
+                              setState(() {
+                                _variantId = id;
+                                // Duo har kun to rækker: sad "Dig" på en
+                                // række, der nu er skjult, flyttes du op.
+                                if (_humanSeat >= _rowCount(_variantFrom(
+                                    variants))) {
+                                  _humanSeat = 0;
+                                }
+                              });
                             }
                           },
                         ),
@@ -182,7 +201,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  for (int i = 0; i < 4; i++) ...<Widget>[
+                  for (int i = 0; i < rows; i++) ...<Widget>[
                     _PlayerRow(
                       index: i,
                       nameController: _names[i],
@@ -223,11 +242,13 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               ),
             ),
             if (!unique)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
-                  'Vælg fire forskellige farver.',
-                  style: TextStyle(color: Colors.red),
+                  rows == 2
+                      ? 'Vælg to forskellige farver.'
+                      : 'Vælg fire forskellige farver.',
+                  style: const TextStyle(color: Colors.red),
                 ),
               ),
             SizedBox(
@@ -243,22 +264,21 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             .read(variantCardRulesProvider.notifier)
                             .refresh();
                         if (!context.mounted) return;
-                        final List<PlayerSetup> setups = <PlayerSetup>[
-                          for (int i = 0; i < 4; i++)
-                            PlayerSetup(
-                              name: _names[i].text.trim().isEmpty
-                                  ? 'Spiller ${i + 1}'
-                                  : _names[i].text.trim(),
-                              color: kPalette[_colorIdx[i]].color,
-                              isHuman: i == _humanSeat,
-                            ),
-                        ];
                         // Opløs spillets faktiske kortregler ÉN gang her:
                         // klassisk live + variantens overrides (admin-gemte
                         // vinder over kode-seedet; en custom uden entry =
                         // klassisk). startGame opløser ikke selv.
                         final VariantConfig variant = _variantFrom(
                             ref.read(selectableVariantsProvider));
+                        final List<PlayerSetup> setups =
+                            playerSetupsFor(variant, <RowSetup>[
+                          for (int i = 0; i < _rowCount(variant); i++)
+                            (
+                              name: _names[i].text.trim(),
+                              color: kPalette[_colorIdx[i]].color,
+                              isHuman: i == _humanSeat,
+                            ),
+                        ]);
                         final VariantAdminConfig vc = ref
                             .read(variantCardRulesProvider)
                             .configFor(variant.id);
@@ -290,6 +310,29 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       ),
     );
   }
+}
+
+/// Én udfyldt række i opsætningen.
+typedef RowSetup = ({String name, Color color, bool isHuman});
+
+/// Pladserne på brættet ud fra opsætningens rækker. Klassisk: række i =
+/// plads i. Duo: to rækker (hånd-pladserne 0 og 1); plads 2 og 3 er deres
+/// andet sæt og arver navn, farve og menneske/AI fra den plads, der styrer
+/// dem ([VariantConfig.controllerOf]) — ellers ville et AI-flag eller en
+/// farve på en håndløs plads kunne afvige fra spilleren, der rykker den.
+List<PlayerSetup> playerSetupsFor(VariantConfig v, List<RowSetup> rows) {
+  return <PlayerSetup>[
+    for (int seat = 0; seat < 4; seat++)
+      () {
+        final int row = v.controllerOf(seat);
+        final RowSetup r = rows[row];
+        return PlayerSetup(
+          name: r.name.isEmpty ? 'Spiller ${row + 1}' : r.name,
+          color: r.color,
+          isHuman: r.isHuman,
+        );
+      }(),
+  ];
 }
 
 class _PlayerRow extends StatelessWidget {

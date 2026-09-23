@@ -139,7 +139,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       final winnerNames = <String>[];
       final winnerColors = <Color>[];
       for (int i = 0; i < state.players.length; i++) {
-        if (i % 2 == winner) {
+        // Duo: spilleren står på to pladser (to sæt) — nævn hånd-pladsen én
+        // gang, ikke "Anna og Anna".
+        if (i % 2 == winner && state.variant.hasHand(i)) {
           winnerNames.add(state.players[i].name);
           winnerColors.add(state.players[i].color);
         }
