@@ -137,7 +137,7 @@ class LobbySeats {
     final LobbySeats c = copy();
     c.aiSeats[seat] = ai;
     c.names[seat] = ai ? 'Computer' : kOpenSeatName;
-    return c.mirrored(v);
+    return c;
   }
 
   /// Pladserne efter et skift af variant fra [from] til [to].
