@@ -603,7 +603,7 @@ VariantConfig variantFromRaw(String? id, dynamic variantsRaw) {
   final VariantConfig base = variantForState(id);
   // Indbyggede varianter bruger altid kode-config'en — et fjendtligt
   // custom-entry på et indbygget id (fx 'duo') må ikke omforme dem.
-  if (kAllVariants.contains(base)) return base;
+  if (base.id == classicVariant.id || base.id == partners25.id) return base;
   if (variantsRaw is! Map) return base;
   final dynamic entry = variantsRaw[base.id];
   if (!isCustomVariantEntry(entry)) return base;
