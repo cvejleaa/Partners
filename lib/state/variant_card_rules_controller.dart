@@ -116,10 +116,9 @@ class VariantsAdminState {
   /// blev behandlet som en tom, admin-lavet custom-variant. Klassisk (uden
   /// egne regler) opfører sig som før.
   static VariantAdminConfig _builtinSeed(String id) {
-    for (final VariantConfig v in kAllVariants) {
-      if (v.id == id && v.cardRuleOverrides != null) {
-        return VariantAdminConfig(overrides: v.cardRuleOverrides!);
-      }
+    if (id == partners25.id) {
+      return VariantAdminConfig(
+          overrides: partners25.cardRuleOverrides ?? <Rank, CardRuleConfig>{});
     }
     return const VariantAdminConfig(
         overrides: <Rank, CardRuleConfig>{}, custom: true);
