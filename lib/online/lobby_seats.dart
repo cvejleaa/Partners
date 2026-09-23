@@ -196,12 +196,6 @@ class LobbySeats {
     }
     if (from.seatsShareController) {
       final LobbySeats c = copy();
-      for (int s = 0; s < 4; s++) {
-        if (from.hasHand(s)) continue;
-        c.uids[s] = null;
-        c.names[s] = kOpenSeatName;
-        c.aiSeats[s] = false;
-      }
       final Set<int> used = <int>{
         for (int s = 0; s < 4; s++)
           if (from.hasHand(s)) c.colors[s],
