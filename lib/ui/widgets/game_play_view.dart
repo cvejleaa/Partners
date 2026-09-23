@@ -1752,7 +1752,7 @@ String pieceOwnerLabel(GameState state, Piece piece) {
   final VariantConfig v = state.variant;
   final String name = state.players[piece.ownerIndex].name;
   if (!v.onePlayerPerTeam) return name;
-  return v.hasHand(piece.ownerIndex) ? '$name (ring)' : '$name (prik)';
+  return v.hasHand(piece.ownerIndex) ? '$name (ring)' : name;
 }
 
 /// Duo: "○ x/3 · ● y/3" — brikker i mål for [p]'s to sæt (ring = sættet ved
