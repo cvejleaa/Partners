@@ -48,7 +48,7 @@ class HeuristicAi implements AiPlayer {
     // brikker i start — så ender jeg med at sidde over i mange runder. (På
     // laveste smarthed springer vi dette hensyn over, så begynder-AI'en
     // netop kan lave den fejl.)
-    final bool iNeedStart = seatsOf(playerIndex).any(inStart);
+    final bool iNeedStart = seatsOf(playerIndex).take(1).any(inStart);
     // Udgangskortene udledes af de regler spillet FAKTISK spilles med —
     // ikke af rangen. Har admin flyttet "ud af start" til en anden rang, er
     // det dét kort AI'en skal holde på.
