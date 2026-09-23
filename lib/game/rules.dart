@@ -52,7 +52,7 @@ class Rules {
   bool _seatOpen(GameState sim, Player player, int seat, int? anchor) {
     if (!_controlledSeats(sim, player).contains(seat)) return false;
     final int a =
-        sim.variant.onePlayerPerTeam ? (anchor ?? seat) : player.index;
+        sim.variant.onePlayerPerTeam && anchor == -1 ? seat : player.index;
     if (seat == a) return true;
     return sim.players[a].pieces
         .every((Piece p) => p.position is HomeStretchPosition);
