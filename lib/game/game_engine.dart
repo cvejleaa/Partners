@@ -83,7 +83,7 @@ class GameEngine extends ChangeNotifier {
       for (int p = 0; p < state.players.length; p++)
         if (state.variant.hasHand(p)) p,
     ].length;
-    if (state.exchangeBuffer.length == hands) {
+    if (state.exchangeBuffer.length == state.players.length && hands > 0) {
       _applyExchange();
       state.phase = GamePhase.play;
       state.currentPlayerIndex = state.starterIndex;
