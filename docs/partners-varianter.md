@@ -263,17 +263,16 @@ et gæt eller en tolkning, er markeret.
   startfelt, egne målcirkler. Den eneste forskel: én spiller råder over to
   pladser fra starten og "kan frit vælge mellem brikker fra begge sine
   startcirkler".
-- **Ringen:** hver kvart består af **♥ (startfeltet)**, felterne **1-10**, og
-  et **↻-felt** lige før næste hjørne. Egen eg (spoke) krydser ringen mellem
-  ↻ og ♥: ↻ er dér, en brik drejer ind mod sine målcirkler efter en omgang,
-  og ♥ er dér, den kommer ud fra startcirklen.
-  - **[TOLKNING af fotoet, bekræft]** ↻ er et selvstændigt felt man kan stå
-    på → **12 felter pr. kvart, 48 på ringen**. Indgangen til målet er altså
-    feltet FØR eget ♥ — ikke ♥ selv som i klassisk. Det er en ny
-    geometri-parameter for motoren (indgang = UD − 1).
-  - **[HUL]** Tæller ♥ og ↻ som felter, når en brik passerer dem? Tallene
-    1-10 udelader begge. Klassisk springer UD over uden at tælle (§6);
-    Duo-teksten siger det ikke.
+- **Ringen:** hver kvart består af **♥ (startfeltet)** og felterne **1-10**.
+  ↻-mærket ved siden af felt 10 er kun en pil, der viser hvor man drejer ind
+  — ikke et felt (ejer-bekræftet). Egen eg (spoke) krydser ringen ved ♥: en
+  brik kommer ud fra startcirklen på ♥, og efter en omgang drejer den ind mod
+  sine målcirkler, når den når sit eget ♥ igen.
+  - **♥ tæller ikke som et felt ved passage** (ejer-bekræftet) — præcis
+    klassisk §6. **Geometrien er derfor klassisk-formet:** 4 segmenter × (10
+    tællende + UD) = **44 felter**, indgang til målet ved eget UD. Ingen ny
+    parameter i motoren; `BoardGeometry(trackLength: 44, homeStretchLength:
+    3, segments: 4)`.
 - **3 målcirkler pr. plads**, på egen eg inde i ringen. "Målcirklerne fyldes
   op fra midten af spillepladen": første brik er i mål på den INDERSTE, anden
   på den midterste, tredje på den yderste. **En brik i mål er låst** og kan
@@ -290,8 +289,7 @@ et gæt eller en tolkning, er markeret.
 | 4×1 | Én eller flere brikker i alt 4 felter — **fordelt mellem brikker fra SAMME startcirkel**, alle 4 SKAL bruges, hver brik højst én gang. Undtagelse: kan sidste brik fra ét sæt komme i mål med færre, må resten bruges på det modsatte sæts brikker |
 | 5↻ | 5 frem, må springe over et blokeret startfelt — modstanderens OG eget modsatte sæts |
 
-- **[GÆT, konfigurerbart]** 3 af hver værdi (10 × 3 = 30). Regelbogen
-  navngiver alle 10 værdier, men ikke antallet pr. værdi. Ejeren kan tælle.
+- **3 af hver værdi** (10 × 3 = 30) — **ejer-talt i det fysiske sæt**.
 
 ### Uddeling, bytte og spillet
 
