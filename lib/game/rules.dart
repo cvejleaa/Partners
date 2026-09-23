@@ -54,6 +54,7 @@ class Rules {
     final int a =
         sim.variant.onePlayerPerTeam ? (anchor ?? seat) : player.index;
     if (seat == a) return true;
+    if (sim.variant.onePlayerPerTeam) return false;
     return sim.players[a].pieces
         .every((Piece p) => p.position is HomeStretchPosition);
   }
