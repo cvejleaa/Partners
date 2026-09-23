@@ -99,6 +99,35 @@ void main() {
     expect(s.deck, hasLength(6), reason: 'de sidste 6 bruges ikke i cyklussen');
   });
 
+  test('efter tre hænder roterer starteren til næste HÅND-plads', () {
+    // Den helspils-test nedenfor kan IKKE se denne fejl: en håndløs plads,
+    // der får turen, har ingen lovlige træk, "smider" sin tomme hånd, og
+    // turen går videre. Intet træk registreres. Fejlen er en spøgelses-tur,
+    // et "smidt"-mærke på en plads uden kort — og at den forkerte spiller
+    // starter. Derfor testes rotationen her direkte.
+    int naesteStarter(VariantConfig v, int fra) {
+      final GameState s = makeState(
+        variant: v,
+        cardRules: effectiveCardRules(v, CardRules.defaults()),
+        phase: GamePhase.play,
+      );
+      s.starterIndex = fra;
+      s.starterStreak = 2; // tredje hånd slutter nu
+      s.currentPlayerIndex = fra;
+      for (final p in s.players) {
+        p.hand.clear();
+      }
+      GameEngine(state: s).passHand(fra); // sidste hånd tom → ny hånd
+      return s.starterIndex;
+    }
+
+    expect(naesteStarter(duoForm, 1), 0,
+        reason: 'efter plads 1 er næste HÅND plads 0 — ikke den håndløse 2');
+    expect(naesteStarter(duoForm, 0), 1);
+    expect(naesteStarter(classicVariant, 1), 2,
+        reason: 'klassisk: blot næste plads, som før');
+  });
+
   test('et helt Duo-formet parti: kun pladserne 0 og 1 handler', () {
     for (int seed = 0; seed < 5; seed++) {
       final List<String> trace = <String>[];
