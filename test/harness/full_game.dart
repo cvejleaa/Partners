@@ -23,6 +23,7 @@ import 'package:partners/models/move.dart';
 import 'package:partners/models/piece.dart';
 import 'package:partners/models/player.dart';
 import 'package:partners/models/playing_card.dart';
+import 'package:partners/models/variant_config.dart';
 
 class GameResult {
   GameResult({
@@ -67,20 +68,25 @@ String rankKey(PlayingCard c) => c.isExit ? 'UD' : c.rank!.name;
 
 /// Spil ét parti. [aiFor] gør det muligt at sætte to forskellige AI'er mod
 /// hinanden (sæde → AI); uden den spiller alle fire ens.
+/// [variant] giver geometri OG kortregler (som produktionen gør via
+/// `variant.geometry` og `effectiveCardRules`). [cardRules] alene overstyrer
+/// kun kortene og beholder klassisk bræt. [moveTrace] får én linje pr. anvendt
+/// træk — det er råmaterialet til fingeraftrykket af et parti.
 GameResult playFullGame({
   int seed = 0,
   int maxHands = 500,
+  VariantConfig? variant,
   CardRules? cardRules,
   AiPlayer Function(int seat)? aiFor,
   AiParams params = kAiNormal,
+  List<String>? moveTrace,
 }) {
   final Random rng = Random(seed);
-  // BEGRÆNSNING, navngivet: geometri og spillerantal er hardkodet til
-  // klassisk (60 felter, 4 spillere, 4 brikker). Det er korrekt for både
-  // klassisk og 25 år, som deler geometri — men en variant med et andet
-  // bræt ville blive simuleret som klassisk og rapporteret under sit eget
-  // navn. Skal sådan en måles, skal playFullGame tage en VariantConfig.
-  const BoardGeometry geom = BoardGeometry();
+  // Spillerantal og brikker pr. plads er stadig hardkodet til fire/fire.
+  // Duo-trin 2 ("hvilke pladser får hånd") løfter det; indtil da må en
+  // variant med et andet spillerantal ikke gives hertil.
+  final VariantConfig v = variant ?? classicVariant;
+  final BoardGeometry geom = v.geometry;
   final List<Player> players = <Player>[
     for (int i = 0; i < 4; i++)
       Player(
@@ -94,7 +100,8 @@ GameResult playFullGame({
         ],
       ),
   ];
-  final CardRules rules = cardRules ?? CardRules.defaults();
+  final CardRules rules =
+      cardRules ?? effectiveCardRules(v, CardRules.defaults());
   final GameState state = GameState(
     players: players,
     geometry: geom,
@@ -169,6 +176,8 @@ GameResult playFullGame({
         }
         final String k = rankKey(move.card);
         playedByRank[k] = (playedByRank[k] ?? 0) + 1;
+        moveTrace?.add('$idx:$k:${move.steps.map((MoveStep s) =>
+            '${s.pieceId}>${posKey(s.to)}').join(',')}');
         engine.applyMove(idx, move);
         movesPlayed++;
       } else {
