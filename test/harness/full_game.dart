@@ -94,7 +94,7 @@ GameResult playFullGame({
         isHuman: false,
         pieces: <Piece>[
           // Variantens brik-antal (Duo: 3) — ikke hardkodet fire.
-          for (int s = 0; s < v.piecesPerPlayer; s++)
+          for (int s = 0; s < 4; s++)
             Piece(id: 'p$i.$s', ownerIndex: i, position: StartPosition(i, s)),
         ],
       ),
