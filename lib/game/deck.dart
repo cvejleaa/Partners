@@ -9,8 +9,8 @@ class Deck {
 
   static List<PlayingCard> fresh() {
     final List<PlayingCard> cards = <PlayingCard>[];
-    for (final Suit s in Suit.values) {
-      for (final Rank r in Rank.values) {
+    for (final Rank r in Rank.values) {
+      for (final Suit s in Suit.values) {
         cards.add(PlayingCard(r, s));
       }
     }
