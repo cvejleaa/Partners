@@ -145,10 +145,7 @@ int? stepsAdvanced(
 /// de sæt, jeg styrer ([VariantConfig.controllerOf]) — prik-sættet er også
 /// mit, selvom brikkerne står på plads mySeat+2.
 bool isMySet(VariantConfig variant, int owner, int mySeat) =>
-    mySeat >= 0 &&
-    owner >= 0 &&
-    owner < 4 &&
-    variant.controllerOf(owner) == mySeat;
+    owner == mySeat;
 
 /// Sættets mærke foran et ord ("ring-", "prik-") — kun i varianter, hvor en
 /// spiller har to sæt i samme farve. Ellers tom.
