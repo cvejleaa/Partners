@@ -253,7 +253,7 @@ void main() {
         () {
       final List<VariantConfig> list = selectableVariantsFrom(raw);
       expect(list.map((v) => v.id).toList(),
-          <String>['classic', 'p25', 'cv-familie']);
+          <String>['classic', 'p25', 'duo', 'cv-familie']);
     });
 
     test(
