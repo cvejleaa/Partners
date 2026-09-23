@@ -173,7 +173,7 @@ enum PieceMark { none, ring, dot }
 
 PieceMark pieceMarkFor(VariantConfig v, int seat) {
   if (!v.onePlayerPerTeam) return PieceMark.none;
-  return v.hasHand(seat) ? PieceMark.ring : PieceMark.dot;
+  return v.hasHand(seat) ? PieceMark.dot : PieceMark.ring;
 }
 
 /// Kontur-farve til felt-markører på den cremefarvede bane. Lyse farver (fx
