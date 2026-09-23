@@ -105,9 +105,7 @@ String? setProgressLabel(GameState state, Player p) {
 /// håndløs plads afgiver intet og må ikke stå som en ekstra "Anna").
 List<String> exchangeWaitingNames(GameState state) => <String>[
       for (final Player p in state.players)
-        if (state.variant.hasHand(p.index) &&
-            !state.exchangeBuffer.containsKey(p.index))
-          p.name,
+        if (!state.exchangeBuffer.containsKey(p.index)) p.name,
     ];
 
 /// Vindernes pladser, én pr. SPILLER: hånd-pladserne på vinderholdet (Duo:
