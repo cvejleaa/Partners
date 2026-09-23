@@ -232,7 +232,7 @@ List<int> lobbyPlayableSeats(VariantConfig v) => <int>[
 int lobbyOpenSeats(
     VariantConfig v, List<dynamic> uids, List<dynamic> aiSeats) {
   int open = 0;
-  for (final int s in lobbyPlayableSeats(v)) {
+  for (int s = 0; s < 4; s++) {
     final bool human = s < uids.length && uids[s] != null;
     final bool ai = s < aiSeats.length && aiSeats[s] == true;
     if (!human && !ai) open++;
@@ -244,7 +244,7 @@ int lobbyOpenSeats(
 /// for en Duo-spiller, der sidder på to pladser. Tomme pladser udelades.
 List<String> playerNamesOnce(VariantConfig v, List<dynamic> names) =>
     <String>[
-      for (final int s in lobbyPlayableSeats(v))
+      for (int s = 0; s < 4; s++)
         if (s < names.length &&
             names[s] is String &&
             names[s] != kOpenSeatName)
