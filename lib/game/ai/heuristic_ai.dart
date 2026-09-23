@@ -19,10 +19,27 @@ class HeuristicAi implements AiPlayer {
   PlayingCard chooseExchangeCard(GameState state, int playerIndex,
       {AiParams params = kAiNormal}) {
     final Player me = state.players[playerIndex];
-    final Player partner = state.players[me.partnerIndex];
+    final variant = state.variant;
+    final int seats = state.players.length;
 
+    // Hvem MODTAGER kortet? Samme funktion som motoren afleverer det med. I
+    // klassisk er det makkeren; i Duo er det MODSTANDEREN. Før læste AI'en
+    // `me.partnerIndex` — som i Duo er ens EGET andet sæt — og forærede derfor
+    // modstanderen sine udgangskort for at "hjælpe makkeren ud".
+    final int receiver = variant.exchangeReceiver(playerIndex, seats);
+    final bool toTeammate = receiver != playerIndex &&
+        variant.teamOf(receiver) == variant.teamOf(playerIndex);
+
+    bool inStart(int seat) =>
+        state.players[seat].pieces.any((Piece p) => p.position is StartPosition);
+    // Alle pladser en spiller råder over (klassisk: kun sin egen; Duo: begge
+    // sæt).
+    List<int> seatsOf(int controller) => <int>[
+          for (int s = 0; s < seats; s++)
+            if (variant.controllerOf(s) == controller) s,
+        ];
     final bool partnerNeedsStart =
-        partner.pieces.any((Piece p) => p.position is StartPosition);
+        seatsOf(variant.controllerOf(receiver)).any(inStart);
 
     final List<PlayingCard> hand = List<PlayingCard>.from(me.hand);
 
@@ -31,8 +48,7 @@ class HeuristicAi implements AiPlayer {
     // brikker i start — så ender jeg med at sidde over i mange runder. (På
     // laveste smarthed springer vi dette hensyn over, så begynder-AI'en
     // netop kan lave den fejl.)
-    final bool iNeedStart =
-        me.pieces.any((Piece p) => p.position is StartPosition);
+    final bool iNeedStart = seatsOf(playerIndex).any(inStart);
     // Udgangskortene udledes af de regler spillet FAKTISK spilles med —
     // ikke af rangen. Har admin flyttet "ud af start" til en anden rang, er
     // det dét kort AI'en skal holde på.
@@ -42,7 +58,8 @@ class HeuristicAi implements AiPlayer {
     final int keepExit = iNeedStart ? 1 : 0; // behold mindst så mange selv
     final bool hasSurplusExit = exitCards.length > keepExit;
 
-    if (partnerNeedsStart &&
+    if (toTeammate &&
+        partnerNeedsStart &&
         (!params.protectExitCard ? exitCards.isNotEmpty : hasSurplusExit)) {
       // Hjælp partneren ud — men (når protectExitCard) kun hvis jeg har et
       // exit-kort i overskud, så jeg selv stadig kan komme ud.
@@ -64,7 +81,13 @@ class HeuristicAi implements AiPlayer {
     // selv skal bruge det og ikke har overskud.
     hand.sort((PlayingCard a, PlayingCard b) =>
         _cardScore(rules, a).compareTo(_cardScore(rules, b)));
-    if (params.protectExitCard && iNeedStart && !hasSurplusExit) {
+    // Duo: modtageren er en MODSTANDER. Et udgangskort til en modstander med
+    // brikker i start er en gave til den forkerte side. Under samme
+    // admin-kontakt som resten af udgangskort-hensynet, så begynder-graden
+    // stadig kan lave fejlen.
+    final bool shieldFromOpponent = !toTeammate && partnerNeedsStart;
+    if (params.protectExitCard &&
+        ((iNeedStart && !hasSurplusExit) || shieldFromOpponent)) {
       final Iterable<PlayingCard> nonExit =
           hand.where((PlayingCard c) => !cardExitsStart(rules, c));
       if (nonExit.isNotEmpty) return nonExit.first;
