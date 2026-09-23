@@ -117,7 +117,6 @@ GameResult playFullGame({
     // mens harnessen kun afleverer fra hånd-pladserne. Byttet bliver aldrig
     // færdigt. Det skete — 500 hænder, nul træk — og det slap forbi alle
     // klassiske kørsler, fordi klassisk ER standardværdien.
-    variant: v,
   );
   final GameEngine engine = GameEngine(state: state, rng: rng);
   final HeuristicAi shared = HeuristicAi(rng: rng);
