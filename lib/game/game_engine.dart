@@ -54,7 +54,7 @@ class GameEngine extends ChangeNotifier {
     // Nødfald (bør ikke ske i normalt spil: klassisk 56 kort til 3×16, Duo 30
     // til 3×8). Talt på HÆNDER, ikke pladser — ellers tror Duo, at 14 kort
     // ikke rækker til en tredje uddeling, og lægger en frisk bunke oven i.
-    if (state.deck.length < hands * handSize) {
+    if (state.deck.length < state.players.length * handSize && hands > 0) {
       state.deck.addAll(Deck.forVariant(state.variant));
       _deck.shuffle(state.deck);
     }
