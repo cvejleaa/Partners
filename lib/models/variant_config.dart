@@ -61,6 +61,7 @@ class VariantConfig {
     this.copiesPerRank = 4,
     this.exitCardCount = 4,
     this.onePlayerPerTeam = false,
+    this.goalBounce = false,
     this.tableColor = const Color(0xFF0E2A1A),
     this.feltColor = const Color(0xFF14331F),
     // Husets grønne (bruges også af "din tur"-chippen): hvid 13px-tekst har
@@ -139,6 +140,11 @@ class VariantConfig {
   /// på 0 og 1 — og det er den binding, der gør at `Player.teamIndex`
   /// (`% 2`) og `partnerIndex` (`+2 % 4`) stadig passer.
   final bool onePlayerPerTeam;
+
+  /// Duo: overskydende skridt i målet rykkes BAGLÆNS (æskens regel), i stedet
+  /// for at trækket er ulovligt (husreglen for alle andre varianter, se
+  /// docs/regler.md §11). Læses her — aldrig af variantens navn.
+  final bool goalBounce;
 
   /// Variantens visuelle identitet i SPILLET (ambient bekræftelse — badgen
   /// bærer informationen, farven bekræfter den). Klassisk = de eksisterende

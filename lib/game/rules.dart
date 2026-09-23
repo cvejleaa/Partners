@@ -478,6 +478,62 @@ class Rules {
     }
   }
 
+  /// Er [piece] på målcirkel [slot] i mål — dvs. er alle dybere cirkler
+  /// optaget? Så er den låst.
+  bool _lockedInGoal(GameState state, Player player, Piece piece, int slot) {
+    for (int s = slot + 1; s < geometry.homeStretchLength; s++) {
+      if (state.pieceAt(HomeStretchPosition(player.index, s)) == null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Duo: gå ind i målcirklerne, og vend med overskuddet (regelbogen s. 3):
+  /// "Hvis kortværdien ikke passer, så brikken kan blive låst, skal den
+  /// flyttes det overskydende antal felter baglæns. Det er dog KUN på en
+  /// målcirkel, at brikken kan skifte retning."
+  ///
+  /// [from] er brikkens målcirkel, eller -1 for en brik, der træder ind fra
+  /// feltet lige før eget UD. Brikken går så dybt, som FRIE cirkler rækker
+  /// (ingen overspringning), vender dér og går baglæns. Rækker tilbageløbet
+  /// ud over den yderste cirkel, fortsætter den baglæns ud på banen
+  /// (ejerens valg) — eget UD tæller ikke, som i §6. Slag og brænd på banen
+  /// afgøres af kalderen, som for ethvert andet træk.
+  PiecePosition? _bounceHome(
+      GameState state, Player player, Piece piece, int from, int steps) {
+    final int len = geometry.homeStretchLength;
+    // Brikkens egen cirkel er fri — den forlader den.
+    bool free(int s) {
+      final Piece? o = state.pieceAt(HomeStretchPosition(player.index, s));
+      return o == null || o.id == piece.id;
+    }
+
+    int pos = from;
+    int left = steps;
+    while (left > 0 && pos + 1 < len && free(pos + 1)) {
+      pos++;
+      left--;
+    }
+    if (pos < 0) return null; // første cirkel optaget: kan ikke komme ind
+    if (left == 0) return HomeStretchPosition(player.index, pos);
+    // Vend på målcirkel [pos] og gå baglæns.
+    while (left > 0 && pos - 1 >= 0) {
+      if (!free(pos - 1)) return null; // ingen overspringning baglæns heller
+      pos--;
+      left--;
+    }
+    if (left == 0) return HomeStretchPosition(player.index, pos);
+    // Ud af målet: første skridt lander på feltet lige før eget UD.
+    final int trackLen = geometry.trackLength;
+    final int ownUd = geometry.startTrackIndexFor(player.index);
+    final int outside = (ownUd - 1 + trackLen) % trackLen;
+    left--;
+    if (left == 0) return TrackPosition(outside);
+    final int? idx = _reverseIndexFrom(state, player.index, outside, left);
+    return idx == null ? null : TrackPosition(idx);
+  }
+
   /// Geometrisk fremad-position. Returnerer null hvis trækket ikke er muligt.
   /// Brikker i hjemstrækket kan KUN rykke længere ind (aldrig ud på banen igen).
   /// [enterHome] false: kør FORBI eget UD-felt i stedet for at dreje ind i
@@ -495,6 +551,12 @@ class Rules {
     if (pos is StartPosition) return null;
 
     if (pos is HomeStretchPosition) {
+      if (state.variant.goalBounce) {
+        // "Når en brik er i mål er den låst og kan ikke længere flyttes."
+        // I mål = alle dybere målcirkler er optaget (de fyldes indefra).
+        if (_lockedInGoal(state, player, piece, pos.slot)) return null;
+        return _bounceHome(state, player, piece, pos.slot, steps);
+      }
       final int newSlot = pos.slot + steps;
       if (newSlot >= geometry.homeStretchLength) return null;
       for (int s = pos.slot + 1; s <= newSlot; s++) {
@@ -522,6 +584,9 @@ class Rules {
         // UD-felt.
         if (next == ownUd) {
           if (enterHome && piece.hasLeftStart) {
+            if (state.variant.goalBounce) {
+              return _bounceHome(state, player, piece, -1, remaining);
+            }
             final int slot = remaining - 1;
             if (slot >= geometry.homeStretchLength) return null;
             for (int s = 0; s <= slot; s++) {
