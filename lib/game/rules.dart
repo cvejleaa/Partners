@@ -584,7 +584,7 @@ class Rules {
         // UD-felt.
         if (next == ownUd) {
           if (enterHome && piece.hasLeftStart) {
-            if (state.variant.goalBounce) {
+            if (state.variant.goalBounce || remaining > -1) {
               return _bounceHome(state, player, piece, -1, remaining);
             }
             final int slot = remaining - 1;
