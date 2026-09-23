@@ -645,7 +645,7 @@ List<VariantConfig> selectableVariantsFrom(dynamic variantsRaw,
         {bool online = false}) =>
     <VariantConfig>[
       for (final VariantConfig v in kAllVariants)
-        if (!online || v.onlineReady) v,
+        v,
       for (final String id in customVariantIdsFrom(variantsRaw))
         variantFromRaw(id, variantsRaw),
     ];
