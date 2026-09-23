@@ -8,7 +8,6 @@ import '../models/move.dart';
 import '../models/piece.dart';
 import '../models/player.dart';
 import '../models/playing_card.dart';
-import '../models/variant_config.dart';
 import 'deck.dart';
 import 'rules.dart';
 
