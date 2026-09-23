@@ -1737,11 +1737,9 @@ GameState onlineInitialState(List<String> names, List<int> colors, List uids,
     for (int i = 0; i < 4; i++)
       Player(
         index: i,
-        name: uids[variant.controllerOf(i)] != null
-            ? names[variant.controllerOf(i)]
-            : 'AI ${variant.controllerOf(i) + 1}',
-        color: Color(colors[variant.controllerOf(i)]),
-        isHuman: uids[variant.controllerOf(i)] != null,
+        name: uids[i] != null ? names[i] : 'AI ${i + 1}',
+        color: Color(colors[i]),
+        isHuman: uids[i] != null,
         pieces: <Piece>[
           for (int s = 0; s < variant.piecesPerPlayer; s++)
             Piece(id: 'p$i.$s', ownerIndex: i, position: StartPosition(i, s)),
