@@ -46,13 +46,22 @@ class GameEngine extends ChangeNotifier {
       }
       _deck.shuffle(state.deck);
     }
-    // Nødfald (bør ikke ske i normalt spil med 56 kort til 3 runder).
-    if (state.deck.length < state.players.length * handSize) {
+    // Kun pladser med en hånd får kort — i Duo råder én spiller over to
+    // pladser, og de håndløse pladser deles der ikke til.
+    final int hands = <int>[
+      for (int p = 0; p < state.players.length; p++)
+        if (state.variant.hasHand(p)) p,
+    ].length;
+    // Nødfald (bør ikke ske i normalt spil: klassisk 56 kort til 3×16, Duo 30
+    // til 3×8). Talt på HÆNDER, ikke pladser — ellers tror Duo, at 14 kort
+    // ikke rækker til en tredje uddeling, og lægger en frisk bunke oven i.
+    if (state.deck.length < hands * handSize) {
       state.deck.addAll(Deck.forVariant(state.variant));
       _deck.shuffle(state.deck);
     }
     for (int i = 0; i < handSize; i++) {
       for (int p = 0; p < state.players.length; p++) {
+        if (!state.variant.hasHand(p)) continue;
         state.players[p].hand.add(state.deck.removeLast());
       }
     }
@@ -70,7 +79,12 @@ class GameEngine extends ChangeNotifier {
     if (!state.players[playerIndex].hand.contains(card)) return;
     state.exchangeBuffer[playerIndex] = card;
 
-    if (state.exchangeBuffer.length == state.players.length) {
+    // Byttet er færdigt, når hver HÅND har afgivet — i Duo to, ikke fire.
+    final int hands = <int>[
+      for (int p = 0; p < state.players.length; p++)
+        if (state.variant.hasHand(p)) p,
+    ].length;
+    if (state.exchangeBuffer.length == hands) {
       _applyExchange();
       state.phase = GamePhase.play;
       state.currentPlayerIndex = state.starterIndex;
@@ -90,20 +104,10 @@ class GameEngine extends ChangeNotifier {
       if (card == null) continue;
       final Player giver = state.players[e.key];
       giver.hand.remove(card);
-      // Modtageren afhænger af variantens bytte-regel. Klassisk: makkeren
-      // (diagonalt overfor). Øvrige regler (Duo/Trio/3v3) er sømme til senere.
-      final int receiver;
-      switch (state.variant.exchangeRule) {
-        case ExchangeRule.partnerSwap:
-          receiver = state.variant.partnerFor(giver.index);
-          break;
-        case ExchangeRule.opponentSwap:
-        case ExchangeRule.clockwiseTeammate:
-        case ExchangeRule.circularPass:
-        case ExchangeRule.none:
-          throw UnimplementedError(
-              'exchangeRule ${state.variant.exchangeRule} er ikke implementeret endnu');
-      }
+      // Modtageren afgøres ét sted (VariantConfig.exchangeReceiver), som
+      // også chippen "kortet du gav" spørger.
+      final int receiver =
+          state.variant.exchangeReceiver(giver.index, state.players.length);
       incoming[receiver] = card;
       // Husk hvad giveren gav. Bufferen ryddes lige nedenfor; uden dette
       // felt er kortet væk i samme øjeblik byttet er afviklet.
@@ -247,7 +251,11 @@ class GameEngine extends ChangeNotifier {
     if (state.players.every((Player p) => p.hand.isEmpty)) {
       state.starterStreak += 1;
       if (state.starterStreak >= 3) {
-        state.starterIndex = (state.starterIndex + 1) % state.players.length;
+        // Næste plads MED hånd — i klassisk blot næste plads. En håndløs
+        // starter ville sætte turen på en tom hånd, og turskiftet nedenfor
+        // kører aldrig: spillet hænger.
+        state.starterIndex = state.variant
+            .nextHandSeat(state.starterIndex, state.players.length);
         state.starterStreak = 0;
       }
       startNewHand();

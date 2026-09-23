@@ -526,7 +526,11 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   PlayingCard? _givenTo(GameState state, Player p) {
     if (_mySeat < 0) return null; // tilskuer
     if (state.phase != GamePhase.play) return null;
-    if (p.index != state.variant.partnerFor(_mySeat)) return null;
+    // Samme funktion som motoren bruger til at aflevere kortet — i Duo er
+    // modtageren modstanderen, ikke "makkeren" (dit eget andet sæt).
+    if (p.index != state.variant.exchangeReceiver(_mySeat, state.players.length)) {
+      return null;
+    }
     return state.givenAway[_mySeat];
   }
 
@@ -635,7 +639,9 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   String _waitingText(GameState state, Player me) {
     final missing = <String>[
       for (final Player p in state.players)
-        if (!state.exchangeBuffer.containsKey(p.index)) p.name,
+        if (state.variant.hasHand(p.index) &&
+            !state.exchangeBuffer.containsKey(p.index))
+          p.name,
     ];
     if (missing.isEmpty) return 'Bytter kort…';
     return 'Venter på: ${missing.join(', ')}';

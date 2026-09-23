@@ -67,7 +67,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _lastPlayedCard.clear();
       final game = ref.read(gameProvider.notifier);
       for (final Player p in state.players) {
-        if (!p.isHuman && !state.exchangeBuffer.containsKey(p.index)) {
+        // Håndløse pladser (Duo) afgiver intet — de har ingen kort.
+        if (!p.isHuman &&
+            state.variant.hasHand(p.index) &&
+            !state.exchangeBuffer.containsKey(p.index)) {
           game.submitExchange(p.index,
               _ai.chooseExchangeCard(state, p.index, params: params));
         }

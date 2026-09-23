@@ -891,7 +891,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       if (sig == _lastProcessed) return;
       final missingAi = <int>[
         for (int i = 0; i < state.players.length; i++)
-          if (!state.players[i].isHuman && !state.exchangeBuffer.containsKey(i))
+          if (!state.players[i].isHuman &&
+              state.variant.hasHand(i) &&
+              !state.exchangeBuffer.containsKey(i))
             i,
       ];
       if (missingAi.isEmpty) return;

@@ -60,6 +60,7 @@ class VariantConfig {
     this.deckRanks,
     this.copiesPerRank = 4,
     this.exitCardCount = 4,
+    this.onePlayerPerTeam = false,
     this.tableColor = const Color(0xFF0E2A1A),
     this.feltColor = const Color(0xFF14331F),
     // Husets grønne (bruges også af "din tur"-chippen): hvid 13px-tekst har
@@ -128,6 +129,17 @@ class VariantConfig {
   final int copiesPerRank;
   final int exitCardCount;
 
+  /// Duo: ét menneske pr. hold, der råder over ALLE holdets pladser fra start.
+  ///
+  /// Et SÆRSKILT felt, ikke udledt af [teams]: Duo og klassisk har samme
+  /// holdliste ([[0,2],[1,3]]). Udledte man "hvem råder over pladsen" af
+  /// holdene, ville klassisk også få én hånd pr. hold.
+  ///
+  /// Holdets FØRSTE plads er hånd-pladsen. Med [[0,2],[1,3]] ligger hænderne
+  /// på 0 og 1 — og det er den binding, der gør at `Player.teamIndex`
+  /// (`% 2`) og `partnerIndex` (`+2 % 4`) stadig passer.
+  final bool onePlayerPerTeam;
+
   /// Variantens visuelle identitet i SPILLET (ambient bekræftelse — badgen
   /// bærer informationen, farven bekræfter den). Klassisk = de eksisterende
   /// grønne (defaults, byte-identisk); 25 år = marineblå som det fysiske sæts
@@ -183,6 +195,51 @@ class VariantConfig {
       if (group.contains(seat)) return group;
     }
     return <int>[seat];
+  }
+
+  /// Hvem RÅDER over [seat]: identiteten i klassisk, holdets hånd-plads i Duo.
+  ///
+  /// Den ENE kilde til det. Hvilke pladser der får kort, hvem der afgiver i
+  /// byttet, hvem der starter og hvem der har tur — alt afledes herfra, så de
+  /// ikke kan komme til at svare forskelligt.
+  int controllerOf(int seat) {
+    if (!onePlayerPerTeam) return seat;
+    final int t = teamOf(seat);
+    if (t < 0 || t >= teams.length || teams[t].isEmpty) return seat;
+    return teams[t].first;
+  }
+
+  /// Får [seat] kort og tur? Kun de pladser, der råder over sig selv.
+  bool hasHand(int seat) => controllerOf(seat) == seat;
+
+  /// Næste plads efter [from] med uret, der har en hånd.
+  int nextHandSeat(int from, int seatCount) {
+    int n = (from + 1) % seatCount;
+    for (int i = 0; i < seatCount && !hasHand(n); i++) {
+      n = (n + 1) % seatCount;
+    }
+    return n;
+  }
+
+  /// Hvem modtager [giver]s kort i byttet. Brugt af BÅDE motoren og chippen
+  /// "kortet du gav" — én funktion, så de ikke kan pege hver sit sted hen.
+  int exchangeReceiver(int giver, int seatCount) {
+    switch (exchangeRule) {
+      case ExchangeRule.partnerSwap:
+        return partnerFor(giver);
+      case ExchangeRule.opponentSwap:
+        // Første hånd-plads med uret efter giveren på et ANDET hold.
+        for (int i = 1; i < seatCount; i++) {
+          final int s = (giver + i) % seatCount;
+          if (hasHand(s) && teamOf(s) != teamOf(giver)) return s;
+        }
+        return giver;
+      case ExchangeRule.clockwiseTeammate:
+      case ExchangeRule.circularPass:
+      case ExchangeRule.none:
+        throw UnimplementedError(
+            'exchangeRule $exchangeRule er ikke implementeret endnu');
+    }
   }
 
   /// Den ENE makker for [seat] i en 2-mands-holdopsætning (klassisk makkerbyt).

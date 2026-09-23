@@ -131,6 +131,7 @@ GameResult playFullGame({
     handsPlayed++;
     if (state.phase != GamePhase.exchange) break;
     for (int i = 0; i < 4; i++) {
+      if (!v.hasHand(i)) continue; // Duo: håndløse pladser afgiver intet
       final PlayingCard card = ai(i).chooseExchangeCard(state, i, params: params);
       givenByRank[rankKey(card)] = (givenByRank[rankKey(card)] ?? 0) + 1;
       engine.submitExchangeCard(i, card);
@@ -139,6 +140,7 @@ GameResult playFullGame({
     // Efter byttet: hvem sidder med brikker i start og intet udgangskort?
     if (state.phase == GamePhase.play) {
       for (final Player p in state.players) {
+        if (!v.hasHand(p.index)) continue;
         final bool inStart = p.pieces.any((Piece x) => x.position is StartPosition);
         if (!inStart) continue;
         final bool hasExit =
