@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../game/card_rules.dart';
+import '../../game/deck.dart';
+import '../../models/variant_config.dart';
 import '../../models/playing_card.dart';
 import 'card_view.dart';
 
@@ -13,7 +15,11 @@ import 'card_view.dart';
 /// være opslagsvejen midt i et variant-spil. Kort + forklaring side om side
 /// er dét sted, token-sproget LÆRES; long-press-tooltippen er kun backup
 /// (den er uopdagelig for nye spillere).
-void showCardLegendSheet(BuildContext context, CardRules rules) {
+///
+/// [variant] afgør HVILKE kort der vises: kun dem, bunken faktisk har (Duo har
+/// hverken UD, J, D eller K).
+void showCardLegendSheet(BuildContext context, CardRules rules,
+    {VariantConfig variant = classicVariant}) {
   showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -35,10 +41,8 @@ void showCardLegendSheet(BuildContext context, CardRules rules) {
             style: TextStyle(fontSize: 12, color: Colors.black54),
           ),
           const SizedBox(height: 12),
-          // UD-kortet + alle 13 rangs — kulør er ligegyldig for funktionen.
-          _row(const PlayingCard.exit(0), rules),
-          for (final Rank r in Rank.values)
-            _row(PlayingCard(r, Suit.hearts), rules),
+          // Én række pr. slags i bunken — kulør er ligegyldig for funktionen.
+          for (final PlayingCard c in Deck.kindsFor(variant)) _row(c, rules),
         ],
       ),
     ),

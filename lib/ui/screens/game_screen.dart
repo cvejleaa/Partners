@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app.dart';
 import '../../game/ai/ai_player.dart';
 import '../../game/ai/heuristic_ai.dart';
+import '../../game/move_text.dart';
 import '../../game/progress.dart';
 import '../../models/game_state.dart';
 import '../../models/move.dart';
@@ -138,13 +139,10 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       final bool viewerWon = human.index % 2 == winner;
       final winnerNames = <String>[];
       final winnerColors = <Color>[];
-      for (int i = 0; i < state.players.length; i++) {
-        // Duo: spilleren står på to pladser (to sæt) — nævn hånd-pladsen én
-        // gang, ikke "Anna og Anna".
-        if (i % 2 == winner && state.variant.hasHand(i)) {
-          winnerNames.add(state.players[i].name);
-          winnerColors.add(state.players[i].color);
-        }
+      // Én pr. spiller: i Duo står en spiller på to pladser.
+      for (final int i in winnerSeats(state, winner)) {
+        winnerNames.add(state.players[i].name);
+        winnerColors.add(state.players[i].color);
       }
       // Fang notifier'en NU, mens skærmen er i live. WinScreen pushes via
       // pushReplacement, så GameScreen (og dens ref) disposes — en senere
@@ -210,7 +208,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           IconButton(
             tooltip: 'Kortene i dette spil',
             icon: const Icon(Icons.style),
-            onPressed: () => showCardLegendSheet(context, state.cardRules),
+            onPressed: () => showCardLegendSheet(context, state.cardRules,
+                variant: state.variant),
           ),
           IconButton(
             tooltip: _showCardCounter

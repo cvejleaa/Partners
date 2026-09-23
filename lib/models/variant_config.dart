@@ -149,9 +149,14 @@ class VariantConfig {
 
   /// Kan varianten spilles ONLINE? Duo kan ikke endnu: online-oprettelsen,
   /// lobbyen, statistikken og replay'et antager fire mennesker på fire
-  /// pladser. Varianten skal derfor holdes ude af lobbyens liste OG afvises
-  /// af serveren, hvis en klient alligevel beder om den — ikke blot mangle
-  /// i en implementering.
+  /// pladser. Lobbyens liste udelader den, og værtens start
+  /// ([lobbyVariantFromDoc]) starter den som klassisk.
+  ///
+  /// NAVNGIVET HUL: det er en KLIENT-vagt (værtens start), ikke en server-
+  /// vagt. Et fjendtligt medlem kan skrive `state.vid = 'duo'` direkte i et
+  /// igangværende spil; en rigtig vagt ville være en Firestore-regel på
+  /// `state.vid` med et angreb i firestore-tests/rules.test.mjs. Skaden er
+  /// begrænset til det ene spil, som angriberen selv deltager i.
   final bool onlineReady;
 
   /// Variantens visuelle identitet i SPILLET (ambient bekræftelse — badgen
@@ -224,6 +229,26 @@ class VariantConfig {
     if (t < 0 || t >= teams.length || teams[t].isEmpty) return seat;
     return teams[t].first;
   }
+
+  /// Styrer nogen spiller mere end én plads (Duo: to sæt hver)? Den ENE
+  /// afledte getter, UI'et læser for "vis ring/prik, to mål, ét panel pr.
+  /// spiller" — i stedet for at spørge på variant-navn eller -flag.
+  bool get seatsShareController {
+    for (final List<int> t in teams) {
+      for (final int s in t) {
+        if (controllerOf(s) != s) return true;
+      }
+    }
+    return false;
+  }
+
+  /// De pladser [controller] rykker for, i plads-orden (klassisk: kun sig
+  /// selv; Duo: hånd-pladsen og det andet sæt).
+  List<int> seatsControlledBy(int controller) => <int>[
+        for (final List<int> t in teams)
+          for (final int s in t)
+            if (controllerOf(s) == controller) s,
+      ]..sort();
 
   /// Får [seat] kort og tur? Kun de pladser, der råder over sig selv.
   bool hasHand(int seat) => controllerOf(seat) == seat;

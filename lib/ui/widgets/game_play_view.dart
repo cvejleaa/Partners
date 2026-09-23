@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../game/move_text.dart';
 import '../../game/rules.dart';
 import '../../game/move_options.dart';
 import '../../models/board.dart';
@@ -11,7 +12,6 @@ import '../../models/move.dart';
 import '../../models/piece.dart';
 import '../../models/player.dart';
 import '../../models/playing_card.dart';
-import '../../models/variant_config.dart';
 import '../../state/display_config.dart';
 import '../../state/settings_controller.dart';
 import 'board_view.dart';
@@ -266,7 +266,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     final Player me = state.players[_mySeat];
     // Duo: kun to hænder. "Makker"-pladsen (dit andet sæt) har intet panel;
     // modstanderen — den du bytter med — står øverst.
-    final Player partner = state.variant.onePlayerPerTeam
+    final Player partner = state.variant.seatsShareController
         ? state.players[
             state.variant.exchangeReceiver(me.index, state.players.length)]
         : state.players[me.partnerIndex];
@@ -296,7 +296,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     // krymper i stedet for at overflowe på meget smalle skærme (< ~316 px).
     // Duo: to paneler (modstanderen øverst, dig nederst) — de håndløse
     // pladser er dine og modstanderens andet sæt, ikke spillere.
-    final bool duo = state.variant.onePlayerPerTeam;
+    final bool duo = state.variant.seatsShareController;
     Widget panelCell(Player p) => Flexible(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 152),
@@ -565,7 +565,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       compact: compact,
       colorOverride: _displayColor(state, p.index),
       givenByMe: given,
-      setProgress: duoSetProgress(state, p),
+      setProgress: setProgressLabel(state, p),
       // "Ude af hånden" afgøres på modtagerens hånd, ikke på en bogføring af
       // spillede kort: ligger kortet der ikke længere, er det ude af spillet
       // — uanset om det blev spillet eller hånden blev smidt. Kort er
@@ -651,12 +651,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
   /// Hvem mangler at afgive et kort i byttet? Vis navnene tydeligt.
   String _waitingText(GameState state, Player me) {
-    final missing = <String>[
-      for (final Player p in state.players)
-        if (state.variant.hasHand(p.index) &&
-            !state.exchangeBuffer.containsKey(p.index))
-          p.name,
-    ];
+    final List<String> missing = exchangeWaitingNames(state);
     if (missing.isEmpty) return 'Bytter kort…';
     return 'Venter på: ${missing.join(', ')}';
   }
@@ -1283,11 +1278,22 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       if (m.steps.length < _splitPath.length) return false;
       for (final MoveStep p in _splitPath) {
         final bool found = m.steps.any((MoveStep s) =>
-            s.pieceId == p.pieceId && _posKey(s.to) == _posKey(p.to));
+            s.pieceId == p.pieceId && _stepKey(s) == _stepKey(p));
         if (!found) return false;
       }
       return true;
     }).toList();
+  }
+
+  /// Nøglen for ét delskridt i 4×1-/7-fordelingen: destinationen — og i
+  /// varianter med tilbageslag OGSÅ afstanden, for dér når to afstande samme
+  /// målfelt (fra målfelt 1 af 3 ender både 1 og 3 frem på målfelt 2). Uden
+  /// afstanden i nøglen viste arket kun den ene, og "tilbage"-tælleren regnede
+  /// med et andet tal end det træk, der landede.
+  String _stepKey(MoveStep s) {
+    final String k = _posKey(s.to);
+    final int? d = s.distance;
+    return widget.state.variant.goalBounce && d != null ? '$k#$d' : k;
   }
 
   String _posKey(PiecePosition p) {
@@ -1324,12 +1330,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   /// Antal TÆLLENDE felter et delskridt udgør. UD-felter tæller ikke (§6), så
   /// vi går ringen igennem og springer dem over — ellers ville et skridt der
   /// krydser et fremmed UD blive vist med ét felt for meget.
-  int _stepDistance(GameState state, MoveStep s) {
-    // Duo: med tilbageslag i målet afslører fra→til ikke afstanden (en brik
-    // kan ende længere UDE end den startede) — brug motorens tal.
-    if (state.variant.goalBounce && s.distance != null) return s.distance!;
-    return straightStepDistance(state, s.from, s.to);
-  }
+  int _stepDistance(GameState state, MoveStep s) => stepDistance(state, s);
 
   void _handlePieceTap(GameState state, String pieceId) {
     if (state.currentPlayerIndex != _mySeat) return;
@@ -1388,8 +1389,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
       for (final MoveStep s in m.steps) {
         if (s.pieceId != pieceId) continue;
         if (alreadyChosen.contains(s.pieceId)) continue;
-        final String key = _posKey(s.to);
-        byKey.putIfAbsent(key, () => s);
+        byKey.putIfAbsent(_stepKey(s), () => s);
       }
     }
     if (byKey.isEmpty) return;
@@ -1424,7 +1424,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
   bool _moveMatchesPath(Move m) {
     for (final MoveStep p in _splitPath) {
       final bool found = m.steps.any((MoveStep s) =>
-          s.pieceId == p.pieceId && _posKey(s.to) == _posKey(p.to));
+          s.pieceId == p.pieceId && _stepKey(s) == _stepKey(p));
       if (!found) return false;
     }
     return true;
@@ -1481,9 +1481,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
                   itemBuilder: (_, int i) {
                     final s = options[i];
                     final int d = _stepDistance(state, s);
-                    final String label = (s.to is HomeStretchPosition
-                            ? '$d ind i hjemstrækket (slot ${(s.to as HomeStretchPosition).slot + 1})'
-                            : '$d frem') +
+                    final String label = (describeBounce(state, s) ??
+                            (s.to is HomeStretchPosition
+                                ? '$d ind i hjemstrækket (slot ${(s.to as HomeStretchPosition).slot + 1})'
+                                : '$d frem')) +
                         _captureNote(state, s);
                     return ListTile(
                       title: Text(label,
@@ -1685,89 +1686,3 @@ class _SpectatorView extends StatelessWidget {
 /// De tre flows et brik-tryk kan havne i. Se [_GamePlayViewState._activeFlow]
 /// — rækkefølgen mellem dem er reglen, og den hører ét sted hjemme.
 enum _Flow { swap, multi, single }
-
-/// Den lige vej [from]→[to] i tællende felter (UD tæller ikke). Uden
-/// tilbageslag er det kortets afstand.
-int straightStepDistance(
-    GameState state, PiecePosition from, PiecePosition to) {
-  final int len = state.geometry.trackLength;
-  final int q = len ~/ 4;
-  if (from is TrackPosition && to is TrackPosition) {
-    int idx = from.index;
-    int count = 0;
-    while (idx != to.index && count <= len) {
-      idx = (idx + 1) % len;
-      if (idx % q == 0) continue; // UD-felt: tæller ikke
-      count++;
-      if (idx == to.index) break;
-    }
-    return count;
-  }
-  if (from is TrackPosition && to is HomeStretchPosition) {
-    final int entry = state.geometry.startTrackIndexFor(to.ownerIndex);
-    int idx = from.index;
-    int count = 0;
-    // Gå frem til feltet lige før ejerens eget UD (entry); UD-felter
-    // undervejs tæller ikke. Drej så ind i hjemstrækket: +1 for at nå slot 0
-    // og + slot for resten.
-    while (count <= len) {
-      final int next = (idx + 1) % len;
-      if (next == entry) return count + to.slot + 1;
-      idx = next;
-      if (idx % q == 0) continue; // fremmed UD
-      count++;
-    }
-    return count + to.slot + 1;
-  }
-  if (from is HomeStretchPosition && to is HomeStretchPosition) {
-    return to.slot - from.slot;
-  }
-  return 0;
-}
-
-/// Duo: et træk, der slår tilbage i målet, beskrives med kortets afstand
-/// og ordet "baglæns" — ellers ville "hjem (felt 2)" eller "1 tilbage"
-/// skjule, at hele kortet blev brugt. Genkendes positivt: motoren oplyser
-/// afstanden, og den passer ikke med den lige vej fra→til. null = ikke et
-/// tilbageslag.
-String? describeBounce(GameState state, MoveStep s) {
-  final int? d = s.distance;
-  if (!state.variant.goalBounce || d == null) return null;
-  if (s.from is StartPosition) return null;
-  if (straightStepDistance(state, s.from, s.to) == d) return null;
-  final to = s.to;
-  return to is HomeStretchPosition
-      ? '$d frem — baglæns til målfelt ${to.slot + 1}'
-      : '$d frem — baglæns ud af målet igen';
-}
-
-/// Hvem byttekortet går til, som det står i byttefasen.
-String exchangeTargetLabel(VariantConfig v) =>
-    v.exchangeRule == ExchangeRule.opponentSwap ? 'din modstander' : 'din makker';
-
-/// Navnet på brikkens ejer i trækteksterne. Duo: spilleren ejer to sæt i
-/// samme farve og med samme navn — uden sættets mærke ville et byt stå som
-/// "Byt Anna-brikken med Anna-brikken". Klassisk: bare navnet.
-String pieceOwnerLabel(GameState state, Piece piece) {
-  final VariantConfig v = state.variant;
-  final String name = state.players[piece.ownerIndex].name;
-  if (!v.onePlayerPerTeam) return name;
-  return v.hasHand(piece.ownerIndex) ? '$name (ring)' : '$name (prik)';
-}
-
-/// Duo: "○ x/3 · ● y/3" — brikker i mål for [p]'s to sæt (ring = sættet ved
-/// hånd-pladsen, prik = det andet). null for klassisk og for håndløse
-/// pladser (de har intet panel).
-String? duoSetProgress(GameState state, Player p) {
-  final VariantConfig v = state.variant;
-  if (!v.onePlayerPerTeam || !v.hasHand(p.index)) return null;
-  final int total = v.piecesPerPlayer;
-  int home(int seat) => state.players[seat].pieces
-      .where((Piece pc) => pc.position is HomeStretchPosition)
-      .length;
-  final int other = <int>[
-    for (int s = 0; s < state.players.length; s++)
-      if (s != p.index && v.controllerOf(s) == p.index) s,
-  ].single;
-  return '○ ${home(p.index)}/$total · ● ${home(other)}/$total';
-}

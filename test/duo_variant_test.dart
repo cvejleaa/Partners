@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/app.dart';
 import 'package:partners/game/card_rules.dart';
 import 'package:partners/game/deck.dart';
+import 'package:partners/game/move_text.dart';
 import 'package:partners/game/rules.dart';
 import 'package:partners/models/board.dart';
 import 'package:partners/models/game_state.dart';
@@ -18,13 +19,12 @@ import 'package:partners/models/variant_config.dart';
 import 'package:partners/state/variant_card_rules_controller.dart';
 import 'package:partners/ui/screens/setup_screen.dart';
 import 'package:partners/ui/widgets/board_view.dart';
-import 'package:partners/ui/widgets/game_play_view.dart';
 
 import 'harness/full_game.dart';
 
 /// En Duo-stilling på Duos EGET bræt (44 felter, 3 målcirkler, 3 brikker).
-GameState duoState(List<List<PiecePosition>> pos) {
-  const VariantConfig v = partnersDuo;
+GameState duoState(List<List<PiecePosition>> pos,
+    {VariantConfig v = partnersDuo}) {
   return GameState(
     players: <Player>[
       for (int i = 0; i < 4; i++)
@@ -160,6 +160,17 @@ void main() {
           <bool>[true, false, true, false]);
     });
 
+    test('Duo: menneske på række 2 — plads 3 arver det, plads 2 gør ikke', () {
+      const List<RowSetup> byttet = <RowSetup>[
+        (name: 'Bo', color: Colors.yellow, isHuman: false),
+        (name: 'Anna', color: Colors.red, isHuman: true),
+      ];
+      expect(playerSetupsFor(partnersDuo, byttet)
+              .map((PlayerSetup p) => p.isHuman)
+              .toList(),
+          <bool>[false, true, false, true]);
+    });
+
     test('klassisk: række i = plads i (uændret)', () {
       final List<RowSetup> fire = <RowSetup>[
         (name: 'A', color: Colors.red, isHuman: false),
@@ -214,9 +225,9 @@ void main() {
         ],
         hjemme(3),
       ]);
-      expect(duoSetProgress(s, s.players[0]), '○ 2/3 · ● 1/3');
-      expect(duoSetProgress(s, s.players[1]), '○ 0/3 · ● 0/3');
-      expect(duoSetProgress(s, s.players[2]), isNull,
+      expect(setProgressLabel(s, s.players[0]), '○ 2/3 · ● 1/3');
+      expect(setProgressLabel(s, s.players[1]), '○ 0/3 · ● 0/3');
+      expect(setProgressLabel(s, s.players[2]), isNull,
           reason: 'håndløs plads har intet panel');
     });
 
@@ -248,6 +259,113 @@ void main() {
           .single;
       expect(lige.to, const HomeStretchPosition(0, 2));
       expect(describeBounce(s, lige), isNull);
+    });
+  });
+
+  group('bunkens slags (legende og kort-tæller)', () {
+    test('Duo: 10 slags × 3 = 30 — ingen UD, J, D eller K', () {
+      final Map<String, int> m = Deck.countsByKind(partnersDuo);
+      expect(m.values.fold<int>(0, (int a, int b) => a + b), 30);
+      expect(m.values.toSet(), <int>{3});
+      expect(m.keys, hasLength(10));
+      expect(m.containsKey('UD'), isFalse);
+      final List<PlayingCard> kinds = Deck.kindsFor(partnersDuo);
+      expect(kinds, hasLength(10));
+      expect(kinds.any((PlayingCard c) => c.isExit), isFalse);
+      expect(
+          kinds.map((PlayingCard c) => c.rank),
+          isNot(anyElement(
+              isIn(<Rank>[Rank.jack, Rank.queen, Rank.king]))));
+    });
+
+    test('klassisk: uændret — 13 rangs × 4 + 4 UD = 56, UD først i legenden',
+        () {
+      final Map<String, int> m = Deck.countsByKind(classicVariant);
+      expect(m.values.fold<int>(0, (int a, int b) => a + b), 56);
+      expect(m.values.toSet(), <int>{4});
+      expect(m.keys, hasLength(14));
+      final List<PlayingCard> kinds = Deck.kindsFor(classicVariant);
+      expect(kinds, hasLength(14));
+      expect(kinds.first.isExit, isTrue);
+    });
+  });
+
+  group('én pr. spiller, ikke pr. plads', () {
+    final GameState s = duoState(<List<PiecePosition>>[
+      hjemme(0), hjemme(1), hjemme(2), hjemme(3)]);
+
+    test('"Venter på" nævner kun hænderne', () {
+      s.exchangeBuffer.clear();
+      expect(exchangeWaitingNames(s), <String>['Anna', 'Bo']);
+    });
+
+    test('vinderne er ét navn i Duo, to i klassisk', () {
+      expect(winnerSeats(s, 0), <int>[0]);
+      expect(winnerSeats(s, 1), <int>[1]);
+      final GameState k = duoState(<List<PiecePosition>>[
+        hjemme(0), hjemme(1), hjemme(2), hjemme(3)], v: classicVariant);
+      expect(winnerSeats(k, 0), <int>[0, 2]);
+    });
+  });
+
+  group('lysende mål', () {
+    final GameState s = duoState(<List<PiecePosition>>[
+      hjemme(0), hjemme(1), hjemme(2), hjemme(3)]);
+
+    test('ét af mine sæt markeret → dets mål lyser', () {
+      expect(litGoalSeat(s, <String>{'p0.0', 'p0.1'}, 0), 0);
+      expect(litGoalSeat(s, <String>{'p2.1'}, 0), 2);
+    });
+
+    test('begge mine sæt → intet lys (det ville ikke skelne)', () {
+      expect(litGoalSeat(s, <String>{'p0.0', 'p2.0'}, 0), isNull);
+    });
+
+    test('modstanderens brikker (fx under byt) tænder ikke hans mål', () {
+      expect(litGoalSeat(s, <String>{'p1.0', 'p3.0'}, 0), isNull);
+      expect(litGoalSeat(s, <String>{'p0.0', 'p1.0'}, 0), 0);
+    });
+  });
+
+  group('tilbageslag fra banen', () {
+    // p0.0 på feltet lige før eget ♥ (43). 3 felter fører til den inderste
+    // af tre målcirkler; mere end det slår tilbage.
+    GameState vedIndgang() => duoState(<List<PiecePosition>>[
+          <PiecePosition>[
+            const TrackPosition(43),
+            const StartPosition(0, 1),
+            const StartPosition(0, 2),
+          ],
+          hjemme(1), hjemme(2), hjemme(3),
+        ]);
+    MoveStep trin(GameState s, Rank r) => Rules(s.geometry)
+        .legalMoves(s, s.players[0], PlayingCard(r, Suit.spades))
+        .firstWhere((Move m) => m.steps.first.pieceId == 'p0.0')
+        .steps
+        .single;
+
+    test('3 passer præcis — intet tilbageslag', () {
+      final GameState s = vedIndgang();
+      final MoveStep st = trin(s, Rank.three);
+      expect(st.to, const HomeStretchPosition(0, 2));
+      expect(describeBounce(s, st), isNull);
+    });
+
+    test('5: tre ind, to baglæns → målfelt 1', () {
+      final GameState s = vedIndgang();
+      final MoveStep st = trin(s, Rank.five);
+      expect(st.to, const HomeStretchPosition(0, 0));
+      expect(describeBounce(s, st), '5 frem — baglæns til målfelt 1');
+      expect(stepDistance(s, st), 5,
+          reason: 'fra→til alene siger 1 — kortet brugte 5');
+    });
+
+    test('7: ud af målet igen', () {
+      final GameState s = vedIndgang();
+      final MoveStep st = trin(s, Rank.seven);
+      expect(st.to, isA<TrackPosition>());
+      expect(describeBounce(s, st), '7 frem — baglæns ud af målet igen');
+      expect(stepDistance(s, st), 7);
     });
   });
 

@@ -1,36 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../../game/deck.dart';
 import '../../models/game_state.dart';
 import '../../models/playing_card.dart';
 
 /// Lille udviklings-panel der viser hvor mange af hvert kort der er givet i den
 /// aktuelle kortgiver-cyklus (3 runder før kortene blandes om).
 ///
-/// Beregning: hver "kort-type" (rank eller UD-kort) har 4 stk. i et frisk dæk.
-/// Antal givet = 4 − antal tilbage i [state.deck]. Reset sker automatisk når
+/// Beregning: antal af hver "kort-type" (rang eller UD-kort) i en frisk bunke
+/// for spillets variant ([Deck.countsByKind]: klassisk 4 af hver = 56, Duo 3
+/// af 10 rangs = 30). Antal givet = det antal − antal tilbage i [state.deck]. Reset sker automatisk når
 /// dækket genfyldes ved en ny kortgiver-cyklus.
 class CardCounterPanel extends StatelessWidget {
   const CardCounterPanel({super.key, required this.state});
 
   final GameState state;
-
-  static const List<Rank> _order = <Rank>[
-    Rank.ace,
-    Rank.two,
-    Rank.three,
-    Rank.four,
-    Rank.five,
-    Rank.six,
-    Rank.seven,
-    Rank.eight,
-    Rank.nine,
-    Rank.ten,
-    Rank.jack,
-    Rank.queen,
-    Rank.king,
-  ];
-
-  String _label(Rank r) => PlayingCard(r, Suit.spades).rankLabel;
 
   Map<String, int> _remainingByKind(GameState s) {
     final m = <String, int>{};
@@ -44,22 +28,20 @@ class CardCounterPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final remaining = _remainingByKind(state);
+    final Map<String, int> full = Deck.countsByKind(state.variant);
     final cards = <Map<String, dynamic>>[
-      for (final r in _order)
+      for (final MapEntry<String, int> e in full.entries)
         <String, dynamic>{
-          'label': _label(r),
-          'dealt': 4 - (remaining[_label(r)] ?? 0),
-          'isExit': false,
+          'label': e.key == 'UD' ? 'UD ♥' : e.key,
+          'dealt': e.value - (remaining[e.key] ?? 0),
+          'of': e.value,
+          'isExit': e.key == 'UD',
         },
-      <String, dynamic>{
-        'label': 'UD ♥',
-        'dealt': 4 - (remaining['UD'] ?? 0),
-        'isExit': true,
-      },
     ];
+    final int deckSize = full.values.fold<int>(0, (int a, int b) => a + b);
     final totalDealt = cards.fold<int>(
         0, (acc, c) => acc + (c['dealt'] as int));
-    final totalRemaining = 56 - totalDealt;
+    final totalRemaining = deckSize - totalDealt;
 
     return Container(
       padding: const EdgeInsets.all(8),
@@ -78,7 +60,7 @@ class CardCounterPanel extends StatelessWidget {
               const Text('Givet i cyklus',
                   style: TextStyle(
                       fontSize: 12, fontWeight: FontWeight.bold)),
-              Text('$totalDealt / 56',
+              Text('$totalDealt / $deckSize',
                   style: const TextStyle(fontSize: 11, color: Colors.black54)),
             ],
           ),
@@ -105,7 +87,7 @@ class CardCounterPanel extends StatelessWidget {
     final bool exit = c['isExit'] as bool;
     final Color bg = dealt == 0
         ? Colors.grey.shade100
-        : dealt >= 4
+        : dealt >= (c['of'] as int)
             ? Colors.red.shade100
             : Colors.amber.shade50;
     final Color borderColor = exit ? Colors.red : Colors.black26;
@@ -131,7 +113,7 @@ class CardCounterPanel extends StatelessWidget {
             '$dealt',
             style: TextStyle(
                 fontSize: 11,
-                color: dealt >= 4 ? Colors.red : Colors.black54),
+                color: dealt >= (c['of'] as int) ? Colors.red : Colors.black54),
           ),
         ],
       ),

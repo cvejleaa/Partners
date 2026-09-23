@@ -367,7 +367,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               icon: const Icon(Icons.style),
               onPressed: () {
                 showCardLegendSheet(
-                    context, cardRulesOfGameDoc(rawDoc, variant));
+                    context, cardRulesOfGameDoc(rawDoc, variant),
+                    variant: variant);
               },
             ),
         ],

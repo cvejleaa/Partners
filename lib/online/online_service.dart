@@ -1654,11 +1654,12 @@ GameSummary gameSummaryFromDoc(
     // medlem midt i spillet uden at røre brættet) — foretræk den.
     // Materialiseret fra doc'ets kopi, så "Mine spil"-badgen viser custom-
     // varianters navn/farve. Under spillet er state.vid autoriteten.
-    final VariantConfig variant = variantFromRaw(
+    // En lobby viser den variant, der faktisk startes (lobbyVariantFromDoc,
+    // samme funktion som startGameFromLobby).
+    final VariantConfig variant =
         (status == 'playing' && state is Map && state['vid'] is String)
-            ? state['vid'] as String
-            : (d['variantId'] is String ? d['variantId'] as String : null),
-        d['cardRulesVariants']);
+            ? variantFromRaw(state['vid'] as String, d['cardRulesVariants'])
+            : lobbyVariantFromDoc(d);
     // Arkiv-felter. Vinderen læses fra STATE ('wt') som autoritet: topniveau-
     // feltet skrives kun ved selve overgangen, så ældre docs kan mangle det.
     final List<dynamic> uidsAll = (d['uids'] as List?) ?? const <dynamic>[];

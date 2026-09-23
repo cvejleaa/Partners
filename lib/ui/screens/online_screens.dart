@@ -719,10 +719,10 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           // kopi (variantFromRaw): en gæst der ALDRIG har set en custom
           // variant får navn/farve/mærke fra kopien — ingen registry, ingen
           // race. Ukendt/skævt → klassisk udseende med id som etiket.
+          // Samme funktion som startGameFromLobby: lobbyen viser den
+          // variant, der faktisk startes (en ikke-online variant → klassisk).
           final dynamic variantsRaw = d['cardRulesVariants'];
-          final VariantConfig variant = variantFromRaw(
-              d['variantId'] is String ? d['variantId'] as String : null,
-              variantsRaw);
+          final VariantConfig variant = lobbyVariantFromDoc(d);
           // Spillet får AI-spillere hvis der er en åben plads (fyldes ved start).
           final bool willHaveAi = uids.any((dynamic u) => u == null);
           final int seatOfMe = uids.indexOf(svc.uid);

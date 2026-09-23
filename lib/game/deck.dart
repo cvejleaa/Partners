@@ -34,6 +34,29 @@ class Deck {
     return cards;
   }
 
+  /// Hvor mange kort af hver SLAGS [v]'s bunke rummer — nøglen er 'UD' for
+  /// rene ud-kort, ellers rangens etiket. I bunkens rækkefølge (rangene i
+  /// `Rank.values`-orden, UD sidst). Afledt af [forVariant], så legenden og
+  /// kort-tælleren aldrig kan love kort, bunken ikke har (fx J/D/K i Duo).
+  static Map<String, int> countsByKind(VariantConfig v) {
+    final Map<String, int> m = <String, int>{};
+    for (final Rank r in Rank.values) {
+      for (final PlayingCard c in forVariant(v)) {
+        if (!c.isExit && c.rank == r) m[c.rankLabel] = (m[c.rankLabel] ?? 0) + 1;
+      }
+    }
+    if (v.exitCardCount > 0) m['UD'] = v.exitCardCount;
+    return m;
+  }
+
+  /// Ét repræsentativt kort pr. slags i [v]'s bunke (til legenden).
+  static List<PlayingCard> kindsFor(VariantConfig v) => <PlayingCard>[
+        if (v.exitCardCount > 0) const PlayingCard.exit(0),
+        for (final Rank r in Rank.values)
+          if (v.deckRanks == null || v.deckRanks!.contains(r))
+            PlayingCard(r, Suit.hearts),
+      ];
+
   void shuffle(List<PlayingCard> cards) {
     cards.shuffle(_rng);
   }

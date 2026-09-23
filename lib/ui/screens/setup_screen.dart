@@ -83,6 +83,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     final VariantConfig chosen =
         _variantFrom(ref.watch(selectableVariantsProvider));
     final int rows = _rowCount(chosen);
+    // Sikkerhedsnet ud over nulstillingen i variant-vælgeren: "Dig" kan
+    // aldrig sidde på en skjult række.
+    final int humanSeat = _humanSeat < rows ? _humanSeat : 0;
     final bool unique = _colorIdx.take(rows).toSet().length == rows;
     return Scaffold(
       appBar: AppBar(
@@ -118,7 +121,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              chosen.onePlayerPerTeam
+              chosen.seatsShareController
                   ? 'Indtast navn og vælg farve for dig og din modstander. '
                       'I Duo styrer I hver to sæt brikker i samme farve — '
                       'ring og prik — og hvert sæt har sit eget mål.'
@@ -194,7 +197,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             }),
             const SizedBox(height: 12),
             RadioGroup<int>(
-              groupValue: _humanSeat,
+              groupValue: humanSeat,
               onChanged: (int? v) {
                 if (v != null) setState(() => _humanSeat = v);
               },
@@ -206,7 +209,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                       index: i,
                       nameController: _names[i],
                       colorIdx: _colorIdx[i],
-                      isHuman: i == _humanSeat,
+                      isHuman: i == humanSeat,
                       onColorChanged: (int c) =>
                           setState(() => _colorIdx[i] = c),
                     ),
@@ -276,7 +279,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                             (
                               name: _names[i].text.trim(),
                               color: kPalette[_colorIdx[i]].color,
-                              isHuman: i == _humanSeat,
+                              isHuman: i == humanSeat,
                             ),
                         ]);
                         final VariantAdminConfig vc = ref

@@ -95,6 +95,7 @@ class BoardView extends StatelessWidget {
               animation: animation,
               colorOffset: colorOffset,
               scale: _scale,
+              viewer: viewerIndex,
             ),
           ),
         );
@@ -171,8 +172,25 @@ class _PiecePoint {
 /// hører hjemme. Klassisk og 25 år har intet mærke — én farve = én spiller.
 enum PieceMark { none, ring, dot }
 
+/// Duo: det mål, der skal lyse — sættets, når de markerede brikker, [viewer]
+/// selv styrer, alle hører til ÉT sæt (så peger lyset entydigt på, hvor
+/// brikken skal hen). Lyser begge mål, skelner det ingenting; modstanderens
+/// brikker (fx markeret under byt) tænder intet. null = intet lys; altid
+/// null i varianter, hvor hver spiller har én plads.
+int? litGoalSeat(GameState state, Set<String> highlighted, int viewer) {
+  final VariantConfig v = state.variant;
+  if (!v.seatsShareController) return null;
+  final Set<int> seats = <int>{
+    for (final Piece pc in state.allPieces)
+      if (highlighted.contains(pc.id) &&
+          v.controllerOf(pc.ownerIndex) == viewer)
+        pc.ownerIndex,
+  };
+  return seats.length == 1 ? seats.single : null;
+}
+
 PieceMark pieceMarkFor(VariantConfig v, int seat) {
-  if (!v.onePlayerPerTeam) return PieceMark.none;
+  if (!v.seatsShareController) return PieceMark.none;
   return v.hasHand(seat) ? PieceMark.ring : PieceMark.dot;
 }
 
@@ -258,7 +276,11 @@ class _BoardPainter extends CustomPainter {
     this.animation,
     this.colorOffset = 0,
     this.scale = 1.0,
+    this.viewer = 0,
   });
+
+  /// Pladsen, der ser brættet (til Duos lysende mål: kun MINE sæt).
+  final int viewer;
 
   final GameState state;
   final double rotation;
@@ -387,19 +409,13 @@ class _BoardPainter extends CustomPainter {
 
     // Hjemstræk. Felterne tegnes som NEUTRALE brønde med en tynd farvet
     // ejer-ring — så en brik i samme farve som feltet ikke drukner.
-    // Duo: med to mål i samme farve lyser MÅLET for de brikker, der kan
-    // vælges, så man ser hvor den valgte brik skal hen.
-    final Set<int> litGoals = <int>{
-      if (state.variant.onePlayerPerTeam)
-        for (final Piece pc in state.allPieces)
-          if (highlighted.contains(pc.id)) pc.ownerIndex,
-    };
+    final int? litGoal = litGoalSeat(state, highlighted, viewer);
     for (final Player pl in state.players) {
       final Color plColor = _seatColor(pl.index);
       final PieceMark mark = pieceMarkFor(state.variant, pl.index);
       for (int slot = 0; slot < state.geometry.homeStretchLength; slot++) {
         final Offset p = _homePoint(center, tr, pl.index, slot, geo, rotation);
-        if (litGoals.contains(pl.index)) {
+        if (litGoal == pl.index) {
           canvas.drawCircle(
               p, cr * 1.3, Paint()..color = const Color(0x66FF8F00));
         }
@@ -708,5 +724,6 @@ class _BoardPainter extends CustomPainter {
       old.animation != animation ||
       old.rotation != rotation ||
       old.colorOffset != colorOffset ||
-      old.scale != scale;
+      old.scale != scale ||
+      old.viewer != viewer;
 }
