@@ -1298,10 +1298,12 @@ class OnlineService {
       };
       final VariantConfig to = lobbyVariantFromDoc(after);
       final LobbySeats seats = LobbySeats.fromDoc(d).switchVariant(from, to);
-      tx.update(ref, <Object, Object?>{
+      tx.update(ref, <String, dynamic>{
         'variantId': newId,
-        if (valid && entry != null)
-          FieldPath(<String>['cardRulesVariants', newId]): entry,
+        // Transaction.update tager kun streng-stier. Et prik-sti er sikkert
+        // her: newId har bestået isWellFormedVariantId ([a-z0-9-], ingen
+        // punktum) — ellers er det 'classic', og entry skrives ikke.
+        if (valid && entry != null) 'cardRulesVariants.$newId': entry,
         ...seats.toUpdate(),
       });
     });
