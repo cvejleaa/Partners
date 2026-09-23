@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../game/deck.dart';
 import '../../models/game_state.dart';
-import '../../models/playing_card.dart';
 
 /// Lille udviklings-panel der viser hvor mange af hvert kort der er givet i den
 /// aktuelle kortgiver-cyklus (3 runder før kortene blandes om).
