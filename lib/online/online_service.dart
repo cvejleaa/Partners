@@ -396,8 +396,8 @@ bool lobbyCanStart(
   int filled = 0;
   bool anyHuman = false;
   bool allHumansReady = true;
-  for (final int i in lobbyPlayableSeats(variant)) {
-    if (i >= uids.length) continue;
+  final int n = uids.length < 4 ? uids.length : 4;
+  for (int i = 0; i < n; i++) {
     final dynamic u = uids[i];
     final bool ai = i < aiSeats.length && aiSeats[i] == true;
     if (u != null || ai) filled++;
