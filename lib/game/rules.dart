@@ -554,7 +554,7 @@ class Rules {
       if (state.variant.goalBounce) {
         // "Når en brik er i mål er den låst og kan ikke længere flyttes."
         // I mål = alle dybere målcirkler er optaget (de fyldes indefra).
-        if (_lockedInGoal(state, player, piece, pos.slot)) return null;
+        if (_lockedInGoal(state, player, piece, pos.slot) && steps < 0) return null;
         return _bounceHome(state, player, piece, pos.slot, steps);
       }
       final int newSlot = pos.slot + steps;
