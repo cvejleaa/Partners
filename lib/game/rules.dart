@@ -231,8 +231,7 @@ class Rules {
       return Move(
         card: card,
         steps: <MoveStep>[
-          MoveStep(
-              pieceId: piece.id, from: piece.position, to: to, distance: steps),
+          MoveStep(pieceId: piece.id, from: piece.position, to: to),
         ],
       );
     }
