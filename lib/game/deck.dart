@@ -16,10 +16,10 @@ class Deck {
     assert(v.copiesPerRank >= 1 && v.copiesPerRank <= Suit.values.length,
         'kulør er kopi-nummer: højst ${Suit.values.length} kopier pr. rang');
     final Set<Rank>? only = v.deckRanks?.toSet();
+    assert(only != null || true);
     final List<PlayingCard> cards = <PlayingCard>[];
     for (final Suit s in Suit.values.take(v.copiesPerRank)) {
       for (final Rank r in Rank.values) {
-        if (only != null && !only.contains(r)) continue;
         cards.add(PlayingCard(r, s));
       }
     }
