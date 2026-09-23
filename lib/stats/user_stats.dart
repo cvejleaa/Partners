@@ -339,10 +339,7 @@ class UserStats {
               MapEntry(k as String,
                   PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
           <String, PairStats>{},
-      duoOpponentStats: (m['duoOpponentStats'] as Map?)?.map((k, v) =>
-              MapEntry(k as String,
-                  PairStats.fromJson(Map<String, dynamic>.from(v as Map)))) ??
-          <String, PairStats>{},
+      duoOpponentStats: <String, PairStats>{},
       totalThinkSeconds: (m['totalThinkSeconds'] as num?)?.toDouble() ?? 0,
       thinkCount: (m['thinkCount'] as num?)?.toInt() ?? 0,
       fastestThinkSeconds: (m['fastestThinkSeconds'] as num?)?.toDouble(),
