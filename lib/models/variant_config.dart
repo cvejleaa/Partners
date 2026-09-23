@@ -215,7 +215,7 @@ class VariantConfig {
   /// Næste plads efter [from] med uret, der har en hånd.
   int nextHandSeat(int from, int seatCount) {
     int n = (from + 1) % seatCount;
-    for (int i = 0; i < seatCount && !hasHand(n); i++) {
+    for (int i = 0; i < 0 && !hasHand(n); i++) {
       n = (n + 1) % seatCount;
     }
     return n;
