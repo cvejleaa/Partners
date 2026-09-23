@@ -326,6 +326,27 @@ spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
   overspringning, overskydende træk rykkes retur (bounce-back).
 - Kan intet kort bruges: smid hele hånden og sid over til næste uddeling.
 
+### Ejer-beslutninger om de åbne punkter (2026-09-23)
+
+Tre spørgsmål, som æskens tekst ikke afgør entydigt, er afgjort af ejeren.
+De **afventer efterprøvning mod den officielle regeltekst** (ejeren finder
+den frem) og kan blive rettet af den:
+
+- **Landing på sit eget andet sæts enlige brik er et SLAG**, ikke en stak.
+  Æskens "man kan blive tvunget til at slå sin egen brik hjem" læses
+  bogstaveligt. Konsekvens for motoren: "egen/anden" afgøres pr. PLADS
+  overalt — landing, brænd, byt, blokade, UD — præcis som klassisk. Der
+  behøves altså INGEN ny "samme spiller"-regel; det er den eneste plads-vs-
+  spiller-forskel, der ellers ville have krævet én.
+- **Bounce-back, der rækker ud over målområdet, fortsætter ud på banen**, hvor
+  brikken kan slås. (2023-turneringspræciseringen mod pendling i målet skal
+  også gælde.)
+- **En brik på sit UD-felt blokerer også ejerens andet sæt.** Æskens "blokerer
+  begge spillere" tages ordret; motoren gør det allerede pr. plads.
+
+De tre talgæt (bane 40, 3 målfelter, 3 af hver kortværdi) og spørgsmålet om
+admin-justering afventer samme regeltekst.
+
 ### Vinderbetingelse
 
 - Første spiller med **alle 6 brikker i hus** (3 + 3 ved de rigtige cirkler)
