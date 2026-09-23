@@ -134,6 +134,7 @@ void main() {
       final GameResult r = playFullGame(
           seed: seed, variant: duoForm, moveTrace: trace);
       expect(r.illegalMoves, 0, reason: 'seed $seed');
+      expect(r.winningTeam, isNotNull, reason: 'PROBE seed $seed: hænder ${r.handsPlayed}, træk ${r.movesPlayed}');
       // IKKE et krav om at partiet afsluttes. Test-varianten har endnu ikke
       // Duos kort (kun 3 esser kan sætte ud) og ikke trin 3 (dit andet sæt
       // kan først flyttes, når det første er hjemme). Et parti på de vilkår
