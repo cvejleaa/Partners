@@ -769,6 +769,41 @@ describe('games/{game}', () => {
     await assertFails(updateDoc(doc(as('mallory'), 'games/DUO18'),
         { uids: ['bob', 'alice', 'bob', 'alice'] }));
   });
+  // duoSeatsMirrored: DUO11 (5 pladser fra en GÆST) fanges allerede af
+  // seatsKeptByPosition()'s n.size()==o.size() — men hostArrangingLobby()
+  // gør netop DEN vagt uvirksom for værten selv. Uden duoSeatsMirrored()'s
+  // EGEN size()==4 kunne værten smugle et 5. sæde ind (spejlet ellers
+  // "intakt": uids[2]==uids[0] og uids[3]==uids[1] holder stadig).
+  it('ANGREB: værten må IKKE tilføje et 5. sæde i sin egen Duo-lobby',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO20'), duoLobby()));
+    await assertFails(updateDoc(doc(as('alice'), 'games/DUO20'),
+        { uids: ['alice', 'bob', 'alice', 'bob', 'bob'] }));
+  });
+  // duoSeatsMirrored har TO lige-tegn (pos2==pos0 og pos3==pos1) — hver
+  // fanger sin egen halvdel af spejlet. En test, der kun bryder FØRSTE par
+  // (DUO19), beviser ikke at det ANDET par også er dækket: fjernes kun
+  // uids[3]==uids[1], er DUO19 stadig rød på sin egen (uids[2]==uids[0]),
+  // og suiten forbliver grøn med den anden vagt væk.
+  it('ANGREB: værten må IKKE bryde spejlet for den ANDEN hånd (pos3)',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO21'), duoLobby()));
+    await assertFails(updateDoc(doc(as('alice'), 'games/DUO21'),
+        { uids: ['alice', 'bob', 'alice', 'alice'] }));
+  });
+  // duoSeatsMirrored: seatsKeptByPosition() alene stopper IKKE dette —
+  // hostArrangingLobby() gør positions-vagten helt uvirksom for VÆRTEN i en
+  // åben lobby, og de resterende (værdi-baserede) vagter tillader enhver
+  // omrokering af allerede-kendte uid'er. Uden duoSeatsMirrored kunne værten
+  // selv (eller en fremtidig lobby-handling på hendes vegne) parre pladserne
+  // forkert (uids[2]!=uids[0]) og dermed lade bob "styre" et sæt uden at
+  // stå på den hånd-plads, det spejler.
+  it('ANGREB: værten må IKKE bryde SIT EGET Duo-spejl (uparrede sæder)',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/DUO19'), duoLobby()));
+    await assertFails(updateDoc(doc(as('alice'), 'games/DUO19'),
+        { uids: ['alice', 'bob', 'bob', 'alice'] }));
+  });
   it('ANGREB: en siddende spiller må IKKE bytte pladser midt i et spil',
       async () => {
     await seed((db) => setDoc(doc(db, 'games/POS1'), {
