@@ -324,7 +324,7 @@ List<PlayerSetup> playerSetupsFor(VariantConfig v, List<RowSetup> rows) {
   return <PlayerSetup>[
     for (int seat = 0; seat < 4; seat++)
       () {
-        final int row = v.controllerOf(seat);
+        final int row = seat >= rows.length ? rows.length - 1 : seat;
         final RowSetup r = rows[row];
         return PlayerSetup(
           name: r.name.isEmpty ? 'Spiller ${row + 1}' : r.name,
