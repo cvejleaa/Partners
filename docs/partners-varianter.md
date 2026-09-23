@@ -67,7 +67,9 @@ Gælder alle udgaver, medmindre variantafsnittet siger andet.
   En brik, der er "låst fast", er inaktiv resten af spillet.
 - I målcirklerne kan brikker **ikke** springe over hinanden.
 - −4-kortet og byttekortet kan **aldrig** bruges på brikker i målcirklerne.
-- Det følgende om at rykke baglæns i hjemmefeltet er fra de oprindelige regler, men skal ikke bruges i nogle af mine variantere
+- Det følgende om at rykke baglæns i hjemmefeltet er fra de oprindelige regler.
+  Det bruges IKKE i klassisk, 25 år eller de øvrige varianter — men **Partners
+  Duo følger æsken og HAR det** (ejer-valgt, se `regler.md` §11 og Duo-afsnittet).
 - Passer kortets værdi ikke, **skal** de overskydende træk rykkes **baglæns**
   ("vende" på en fri målcirkel) — fx 5'er hvor 2 rækker: 2 frem + 3 tilbage.
 - Turneringspræcisering (2023): flyttes en brik, der allerede står i
