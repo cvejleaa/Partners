@@ -24,10 +24,22 @@ import 'harness/full_game.dart';
 import 'test_helpers.dart';
 
 /// seed → FNV-1a (32 bit) af trækrækken. Tomt = ikke bagt ind endnu.
-const Map<int, int> kClassicFingerprints = <int, int>{};
+const Map<int, int> kClassicFingerprints = <int, int>{
+  0: 3569389156,
+  1: 1057824920,
+  2: 3876549451,
+  3: 1540379416,
+  4: 1969853750,
+  5: 2609200625,
+  6: 1011453357,
+  7: 1033145667,
+  8: 963939884,
+  9: 2520193119,
+};
 
 /// gameStateToMap af makeState() — JSON, sorterede nøgler. Tom = ikke bagt.
-const String kClassicStartGolden = '';
+const String kClassicStartGolden =
+    r'''{"cp":0,"cr":{"ace":{"exitStart":true,"forwardSteps":[1,11],"swap":false},"eight":{"exitStart":false,"forwardSteps":[8],"swap":false},"five":{"exitStart":false,"forwardSteps":[5],"swap":false},"four":{"backwardSteps":4,"exitStart":false,"forwardSteps":[4],"swap":false},"jack":{"exitStart":false,"forwardSteps":[11],"swap":false},"king":{"exitStart":true,"forwardSteps":[13],"swap":false},"nine":{"exitStart":false,"forwardSteps":[9],"swap":false},"queen":{"exitStart":false,"forwardSteps":[12],"swap":false},"seven":{"exitStart":false,"forwardSteps":[],"splitTotal":7,"swap":false},"six":{"exitStart":false,"forwardSteps":[6],"swap":false},"ten":{"exitStart":false,"forwardSteps":[10],"swap":false},"three":{"exitStart":false,"forwardSteps":[3],"swap":false},"two":{"exitStart":false,"forwardSteps":[2],"swap":false}},"di":0,"dk":[],"ds":[],"eb":{},"ga":{},"hl":4,"hn":1,"ph":"play","pl":[{"c":4278190080,"h":true,"hd":[],"i":0,"n":"P0","pc":[{"id":"p0.0","l":false,"o":0,"p":{"o":0,"s":0,"t":"start"}},{"id":"p0.1","l":false,"o":0,"p":{"o":0,"s":1,"t":"start"}},{"id":"p0.2","l":false,"o":0,"p":{"o":0,"s":2,"t":"start"}},{"id":"p0.3","l":false,"o":0,"p":{"o":0,"s":3,"t":"start"}}]},{"c":4278190080,"h":false,"hd":[],"i":1,"n":"P1","pc":[{"id":"p1.0","l":false,"o":1,"p":{"o":1,"s":0,"t":"start"}},{"id":"p1.1","l":false,"o":1,"p":{"o":1,"s":1,"t":"start"}},{"id":"p1.2","l":false,"o":1,"p":{"o":1,"s":2,"t":"start"}},{"id":"p1.3","l":false,"o":1,"p":{"o":1,"s":3,"t":"start"}}]},{"c":4278190080,"h":false,"hd":[],"i":2,"n":"P2","pc":[{"id":"p2.0","l":false,"o":2,"p":{"o":2,"s":0,"t":"start"}},{"id":"p2.1","l":false,"o":2,"p":{"o":2,"s":1,"t":"start"}},{"id":"p2.2","l":false,"o":2,"p":{"o":2,"s":2,"t":"start"}},{"id":"p2.3","l":false,"o":2,"p":{"o":2,"s":3,"t":"start"}}]},{"c":4278190080,"h":false,"hd":[],"i":3,"n":"P3","pc":[{"id":"p3.0","l":false,"o":3,"p":{"o":3,"s":0,"t":"start"}},{"id":"p3.1","l":false,"o":3,"p":{"o":3,"s":1,"t":"start"}},{"id":"p3.2","l":false,"o":3,"p":{"o":3,"s":2,"t":"start"}},{"id":"p3.3","l":false,"o":3,"p":{"o":3,"s":3,"t":"start"}}]}],"scnt":[0,0,0,0],"si":0,"so":[],"ss":0,"tl":60,"vid":"classic","wt":null}''';
 
 /// Hash af en tilfældig streng. Ikke kryptografisk — bare stabil.
 int fnv1a(String s) {

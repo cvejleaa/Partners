@@ -29,7 +29,6 @@ enum ExchangeRule {
 enum WinCondition {
   /// Klassisk/Partners+: alle et holds brikker i mål.
   teamAllHome,
-
 }
 
 /// Deklarativ beskrivelse af én Partners-udgave oven på den fælles motor.
