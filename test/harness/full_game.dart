@@ -112,6 +112,12 @@ GameResult playFullGame({
     phase: GamePhase.setup,
     handNumber: 0,
     cardRules: rules,
+    // UDEN denne linje får motoren classicVariant som standard: den bygger
+    // en klassisk bunke, deler til fire pladser og venter på fire bytte-kort,
+    // mens harnessen kun afleverer fra hånd-pladserne. Byttet bliver aldrig
+    // færdigt. Det skete — 500 hænder, nul træk — og det slap forbi alle
+    // klassiske kørsler, fordi klassisk ER standardværdien.
+    variant: v,
   );
   final GameEngine engine = GameEngine(state: state, rng: rng);
   final HeuristicAi shared = HeuristicAi(rng: rng);
