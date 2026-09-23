@@ -105,7 +105,7 @@ GameResult playFullGame({
   final GameState state = GameState(
     players: players,
     geometry: geom,
-    deck: Deck.fresh(),
+    deck: Deck.forVariant(v),
     discard: <PlayingCard>[],
     dealerIndex: 0,
     currentPlayerIndex: 0,

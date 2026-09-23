@@ -57,6 +57,9 @@ class VariantConfig {
     this.exchangeRule = ExchangeRule.partnerSwap,
     this.winCondition = WinCondition.teamAllHome,
     this.cardRuleOverrides,
+    this.deckRanks,
+    this.copiesPerRank = 4,
+    this.exitCardCount = 4,
     this.tableColor = const Color(0xFF0E2A1A),
     this.feltColor = const Color(0xFF14331F),
     // Husets grønne (bruges også af "din tur"-chippen): hvid 13px-tekst har
@@ -107,6 +110,23 @@ class VariantConfig {
   /// spillets state er runtime-autoritet (kort serialiseres uafhængigt i 'cr',
   /// så en senere ændring rører ikke et igangværende spil).
   final Map<Rank, CardRuleConfig>? cardRuleOverrides;
+
+  /// Bunkens OPSKRIFT. null = alle 13 rang (klassisk). Duo bruger 10.
+  ///
+  /// Bunken bygges af `Deck.forVariant`: for hver af de første
+  /// [copiesPerRank] kulører, hver rang i [deckRanks] (i `Rank.values`-orden),
+  /// derefter [exitCardCount] rene UD-kort. Kuløren er i Duo kun et
+  /// KOPI-NUMMER — Duo-kort har ingen kulør — men den gør hvert kort unikt,
+  /// og det bygger både kortbyttet og dublet-vagten på. Derfor højst 4
+  /// kopier pr. rang.
+  ///
+  /// Rækkefølgen er ikke ligegyldig: bunken blandes med en seedet RNG, så to
+  /// bunker med samme kort i forskellig orden giver forskellige partier.
+  /// Klassisk skal derfor bygges ELEMENT FOR ELEMENT som før (låst af
+  /// test/classic_fingerprint_test.dart).
+  final List<Rank>? deckRanks;
+  final int copiesPerRank;
+  final int exitCardCount;
 
   /// Variantens visuelle identitet i SPILLET (ambient bekræftelse — badgen
   /// bærer informationen, farven bekræfter den). Klassisk = de eksisterende

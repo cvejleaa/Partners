@@ -39,7 +39,7 @@ class GameEngine extends ChangeNotifier {
     if (state.starterStreak == 0) {
       state.deck
         ..clear()
-        ..addAll(Deck.fresh());
+        ..addAll(Deck.forVariant(state.variant));
       state.discard.clear();
       for (final Player p in state.players) {
         p.hand.clear();
@@ -48,7 +48,7 @@ class GameEngine extends ChangeNotifier {
     }
     // Nødfald (bør ikke ske i normalt spil med 56 kort til 3 runder).
     if (state.deck.length < state.players.length * handSize) {
-      state.deck.addAll(Deck.fresh());
+      state.deck.addAll(Deck.forVariant(state.variant));
       _deck.shuffle(state.deck);
     }
     for (int i = 0; i < handSize; i++) {

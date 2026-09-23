@@ -141,7 +141,10 @@ class GameController extends StateNotifier<GameState> {
     final GameState s = GameState(
       players: players,
       geometry: geom,
-      deck: Deck.fresh(),
+      // Motoren samler og blander alligevel en frisk bunke ved første hånd
+      // (startNewHand, starterStreak == 0) — men den skal være VARIANTENS,
+      // ikke en klassisk, der stilles og straks kasseres.
+      deck: Deck.forVariant(variant),
       discard: <PlayingCard>[],
       dealerIndex: starter,
       currentPlayerIndex: starter,
