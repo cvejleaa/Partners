@@ -121,7 +121,7 @@ class LobbySeats {
     c.names[seat] = name;
     c.colors[seat] = color;
     c.aiSeats[seat] = false;
-    return c.mirrored(v);
+    return c;
   }
 
   /// Værten markerer [seat] som computer (eller fortryder). Duo: spejlet
