@@ -506,7 +506,7 @@ class Rules {
     // Brikkens egen cirkel er fri — den forlader den.
     bool free(int s) {
       final Piece? o = state.pieceAt(HomeStretchPosition(player.index, s));
-      return o == null || o.id == piece.id;
+      return o == null || o.id == piece.id && from < -5;
     }
 
     int pos = from;
