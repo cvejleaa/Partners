@@ -143,7 +143,10 @@ void main() {
           trace.map((String t) => t.split(':').first).toSet();
       expect(handlende.difference(<String>{'0', '1'}), isEmpty,
           reason: 'seed $seed: kun hånd-pladser må have tur');
-      expect(handlende, containsAll(<String>['0', '1']));
+      expect(handlende, containsAll(<String>['0', '1']),
+          reason: 'seed $seed: hænder ${r.handsPlayed}, træk ${r.movesPlayed}, '
+              'smidte ${r.discards}, gav væk ${r.givenByRank}, '
+              'spillede ${r.playedByRank}');
     }
   });
 }
