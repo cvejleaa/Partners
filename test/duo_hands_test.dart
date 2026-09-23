@@ -134,11 +134,12 @@ void main() {
       final GameResult r = playFullGame(
           seed: seed, variant: duoForm, moveTrace: trace);
       expect(r.illegalMoves, 0, reason: 'seed $seed');
-      // IKKE et krav om at partiet afsluttes. Test-varianten har endnu ikke
-      // Duos kort (kun 3 esser kan sætte ud) og ikke trin 3 (dit andet sæt
-      // kan først flyttes, når det første er hjemme). Et parti på de vilkår
-      // kan være længere end 500 hænder — seed 0 er det. At Duo kan spilles
-      // til ende, er et krav til den FÆRDIGE variant (trin 10).
+      // Partiet SKAL kunne afsluttes. Et Duo-parti, der ikke gjorde det,
+      // var i første omgang ikke "et langt parti", som jeg troede, men en
+      // stilstand: harnessen gav ikke varianten videre til motoren, og byttet
+      // blev aldrig færdigt (500 hænder, nul træk).
+      expect(r.winningTeam, isNotNull,
+          reason: 'seed $seed: hænder ${r.handsPlayed}, træk ${r.movesPlayed}');
       final Set<String> handlende =
           trace.map((String t) => t.split(':').first).toSet();
       expect(handlende.difference(<String>{'0', '1'}), isEmpty,
