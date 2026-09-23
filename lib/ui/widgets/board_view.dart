@@ -182,9 +182,7 @@ int? litGoalSeat(GameState state, Set<String> highlighted, int viewer) {
   if (!v.seatsShareController) return null;
   final Set<int> seats = <int>{
     for (final Piece pc in state.allPieces)
-      if (highlighted.contains(pc.id) &&
-          v.controllerOf(pc.ownerIndex) == viewer)
-        pc.ownerIndex,
+      if (highlighted.contains(pc.id)) pc.ownerIndex,
   };
   return seats.length == 1 ? seats.single : null;
 }
