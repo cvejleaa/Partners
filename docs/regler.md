@@ -206,10 +206,11 @@ ikke findes — og er derfor ulovligt.
   gjorde spil-rådgiveren, da +2−5-sagen blev undersøgt.
 - **UNDTAGELSE: Partners Duo har bounce-back (ejer-valgt).** Duos egne regler
   beskriver ventilen som en del af spillet, og ejeren har valgt at Duo følger
-  æsken frem for husreglen ovenfor. Duo har to små målområder pr. spiller
-  (ét pr. briktype, antal felter er et konfigurerbart gæt — se
-  `partners-varianter.md`) — med kortere vej at ramme præcist på ville høje
-  kort dø endnu tidligere end i klassisk uden ventilen.
+  æsken frem for husreglen ovenfor. Æskens regelbog (fotograferet af ejeren)
+  siger ordret: "Hvis kortværdien ikke passer, så brikken kan blive låst, skal
+  den flyttes det overskydende antal felter baglæns. Det er dog KUN på en
+  målcirkel, at brikken kan skifte retning." Hver plads har 3 målcirkler,
+  fyldt fra midten; en brik i mål er låst. Se `partners-varianter.md`.
   Appen har derfor TO hjemstræks-regler. Det er et bevidst valg, ikke en drift:
   reglen skal læses af `VariantConfig`, aldrig af variantens navn eller id, og
   klassisk/25 år må ikke ændre adfærd, når Duo tilføjes. En test skal låse

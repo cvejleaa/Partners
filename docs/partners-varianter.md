@@ -250,107 +250,81 @@ hyggeonkel.dk
 Udgivet 2022 (Årets Familiespil 2022, nomineret til Guldbrikken). Alder 8+,
 spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
 
-### Brikker og bræt
+**KILDE: æskens egen regelbog (side 3-4) og pladen, fotograferet af ejeren
+2026-09-23.** Alt nedenfor uden markering står i den tekst. Det, der stadig er
+et gæt eller en tolkning, er markeret.
 
-- **6 brikker pr. spiller** (12 i alt, rød og gul), delt i **2 typer**: 3 med
-  hul i toppen og 3 med knop ("dut").
-- Pladen har **4 startcirkler** (2 pr. spiller — én pr. briktype, markeret med
-  hhv. hul og knop). **Brikkerne skal starte og slutte ved samme cirkel** —
-  hver spiller har altså 2 separate mål-destinationer, én pr. briktype.
-- Banen er kortere end klassisk Partners.
-- **[GÆT, konfigurerbart]** Banelængde: **4 segmenter × 10 = 40 felter** (9
-  tællende + UD pr. kvarter). Begrundelsen, ikke et tal ud af luften: de fire
-  startcirkler giver fire segmenter, hvilket motoren allerede understøtter
-  (`segments`); 40 er mærkbart kortere end klassisk 60, hvilket passer med den
-  kortere spilletid (15-45 min); og det går lige op, så hvert UD-felt sidder
-  symmetrisk. **Tallet er ikke målt** — det kan kun fastslås ved at tælle et
-  fysisk sæt, og det skal kunne rettes uden en ny udgivelse.
-- **Hvert SÆT er en plads, præcis som en spiller i klassisk** (ejer-oplyst):
-  eget startfelt, eget målområde, egen farve/mærkning. Den eneste forskel fra
-  klassisk er, at **én spiller styrer to sæt** fra starten — som når man i
-  klassisk spiller videre på makkerens brikker, bare hele tiden. Der stod her
-  før "to målområder pr. spiller" og senere "ét målfelt pr. sæt"; begge var
-  misforståelser af ejerens rettelser. Det rigtige billede er: fire pladser
-  på brættet, to mennesker ved bordet.
-- **[GÆT, konfigurerbart]** Felter inde i hvert målområde: **3** (ét pr.
-  brik i sættet), fyldt indefra som klassisk. Et gæt om pladen — ikke en
-  udledning — som skal kunne rettes uden en udgivelse.
-- **Konsekvens for hjemstrækket:** med små målområder dør høje kort endnu
-  tidligere end i klassisk, fordi der er kortere vej at ramme præcist på.
-  Det er grunden til at ejeren har valgt at Duo beholder æskens
-  **bounce-back**, i modsætning til alle andre varianter — se
-  `regler.md` §11.
+### Brikker og plade
 
-### Kort (30 kort, 10 forskellige kortværdier)
+- **6 brikker pr. spiller** (rød / gul), delt i **2 sæt á 3**: "tre med dut
+  og tre med en fordybning". Hvert sæt har sin egen startcirkel (3 pladser),
+  og "brikkerne starter og slutter ved den samme start/målcirkel".
+- **Hvert sæt er en plads, præcis som en spiller i klassisk** — eget
+  startfelt, egne målcirkler. Den eneste forskel: én spiller råder over to
+  pladser fra starten og "kan frit vælge mellem brikker fra begge sine
+  startcirkler".
+- **Ringen:** hver kvart består af **♥ (startfeltet)**, felterne **1-10**, og
+  et **↻-felt** lige før næste hjørne. Egen eg (spoke) krydser ringen mellem
+  ↻ og ♥: ↻ er dér, en brik drejer ind mod sine målcirkler efter en omgang,
+  og ♥ er dér, den kommer ud fra startcirklen.
+  - **[TOLKNING af fotoet, bekræft]** ↻ er et selvstændigt felt man kan stå
+    på → **12 felter pr. kvart, 48 på ringen**. Indgangen til målet er altså
+    feltet FØR eget ♥ — ikke ♥ selv som i klassisk. Det er en ny
+    geometri-parameter for motoren (indgang = UD − 1).
+  - **[HUL]** Tæller ♥ og ↻ som felter, når en brik passerer dem? Tallene
+    1-10 udelader begge. Klassisk springer UD over uden at tælle (§6);
+    Duo-teksten siger det ikke.
+- **3 målcirkler pr. plads**, på egen eg inde i ringen. "Målcirklerne fyldes
+  op fra midten af spillepladen": første brik er i mål på den INDERSTE, anden
+  på den midterste, tredje på den yderste. **En brik i mål er låst** og kan
+  ikke flyttes.
 
-| Kort | Funktion(er) |
+### Kort (30 kort, 10 værdier — alle navngivet i regelbogen)
+
+| Kort | Funktion |
 |---|---|
-| Hjerterkort | Startkort: flyt en brik fra hjem ud på start |
-| ♥/1 | Valg: startkort ELLER 1 felt frem |
-| ♥/6 | Valg: startkort ELLER 6 felter frem |
-| ♥/8 | Valg: startkort ELLER 8 felter frem |
-| Nummerkort | Flyt én brik kortets værdi frem |
-| 4×1 | 4 enkelttræk, der kan deles mellem flere brikker (fx 2+2). Alle 4 SKAL bruges |
-| +2− | Valg: flyt en brik 2 frem ELLER 2 tilbage |
-| 5 spring over | Flyt 5 — må passere brikker, der spærrer i deres startfelt (omgår blokade) |
-| Byttekort | Byt to vilkårlige brikker i spil — også to af ens egne (taktisk vigtigt pga. de to destinationer: byt en hul-brik med en knop-brik) |
+| 3, 7, 10 | Flyt én brik det antal felter frem |
+| ♥/1, ♥/6, ♥/8 | Ud af startcirklen på ♥ — ELLER 1/6/8 frem |
+| +2− | 2 frem ELLER 2 baglæns ("kan komme tæt på mål" fra startfeltet eller de to første felter) |
+| byt/9 | 9 frem — ELLER byt to VILKÅRLIGE brikker (egne som modstanderens; kan bruges uden selv at have brikker i spil). Må IKKE bytte fredede brikker: på målcirkel, i startcirkel, eller hvor brikker fra SAMME startcirkel står på samme felt |
+| 4×1 | Én eller flere brikker i alt 4 felter — **fordelt mellem brikker fra SAMME startcirkel**, alle 4 SKAL bruges, hver brik højst én gang. Undtagelse: kan sidste brik fra ét sæt komme i mål med færre, må resten bruges på det modsatte sæts brikker |
+| 5↻ | 5 frem, må springe over et blokeret startfelt — modstanderens OG eget modsatte sæts |
 
-- **[GÆT, konfigurerbart]** Fordeling: **3 af hver af de 10 værdier** (10 × 3
-  = 30). Regnestykket går præcist op, og det er den enkleste fordeling der
-  gør det — men det er stadig et gæt: kilderne siger "30 kort, 10 værdier",
-  ikke at de er ligeligt fordelt. Tabellen ovenfor navngiver kun 8 af de 10
-  konkret ("Nummerkort" er en kategori), så **hvilke** to øvrige værdier der
-  findes, er fortsat ukendt. Kortfordelingen er i forvejen konfigurerbar i
-  appen (admin-skærmen), så dette gæt kan rettes uden en udgivelse.
+- **[GÆT, konfigurerbart]** 3 af hver værdi (10 × 3 = 30). Regelbogen
+  navngiver alle 10 værdier, men ikke antallet pr. værdi. Ejeren kan tælle.
 
-### Uddeling, bytte og afvigende regler
+### Uddeling, bytte og spillet
 
-- 4 kort pr. spiller pr. runde; samme kortgiver deler 3 gange, derefter
-  skiftes der. 3×8 = 24 af 30 kort — **de sidste 6 bruges ikke i den cyklus**
-  og går tilbage i blandingen, når den næste kortgiver tager over.
-  **Dette var markeret som et hul, men er reelt afklaret:** appen gør allerede
-  præcis dette i klassisk, hvor 56 kort giver 4×4×3 = 48 uddelte og 8
-  tilovers — hele bunken samles og blandes ved hver ny kortgiver-cyklus
-  (`GameEngine.startNewHand`, ved `starterStreak == 0`). Duos 6 overskydende
-  kort kræver altså ingen ny regel. Det stemmer også med den ene kilde, der
-  siger at kortgiveren fortsætter "til denne ikke har flere kort i sin bunke".
-- **Kortbytte med modstanderen**: efter hver uddeling SKAL de to spillere
-  bytte ét kort med hinanden (skjult, ingen snak). Ikke med sig selv.
-- Spilleren, der ikke gav kort, starter runden.
-- **Streng spillepligt**: kan man spille et kort, SKAL man — man kan blive
-  tvunget til at slå sin egen brik hjem.
-- Slag/fredning/blokade/mål fungerer som klassisk: enkelt modstanderbrik slås
-  hjem; landing på felt med 2 ens brikker slår ens egen brik hjem; 2 ens
-  brikker er fredede; brik i startfelt blokerer begge spillere (kun
-  5-spring-over-kortet kan passere); målfelter fyldes indefra, ingen
-  overspringning, overskydende træk rykkes retur (bounce-back).
-- Kan intet kort bruges: smid hele hånden og sid over til næste uddeling.
-
-### Ejer-beslutninger om de åbne punkter (2026-09-23)
-
-Tre spørgsmål, som æskens tekst ikke afgør entydigt, er afgjort af ejeren.
-De **afventer efterprøvning mod den officielle regeltekst** (ejeren finder
-den frem) og kan blive rettet af den:
-
-- **Landing på sit eget andet sæts enlige brik er et SLAG**, ikke en stak.
-  Æskens "man kan blive tvunget til at slå sin egen brik hjem" læses
-  bogstaveligt. Konsekvens for motoren: "egen/anden" afgøres pr. PLADS
-  overalt — landing, brænd, byt, blokade, UD — præcis som klassisk. Der
-  behøves altså INGEN ny "samme spiller"-regel; det er den eneste plads-vs-
-  spiller-forskel, der ellers ville have krævet én.
-- **Bounce-back, der rækker ud over målområdet, fortsætter ud på banen**, hvor
-  brikken kan slås. (2023-turneringspræciseringen mod pendling i målet skal
-  også gælde.)
-- **En brik på sit UD-felt blokerer også ejerens andet sæt.** Æskens "blokerer
-  begge spillere" tages ordret; motoren gør det allerede pr. plads.
-
-De tre talgæt (bane 40, 3 målfelter, 3 af hver kortværdi) og spørgsmålet om
-admin-justering afventer samme regeltekst.
+- Kortgiveren deler 4 til sig selv og modstanderen; resten i en bunke. Efter
+  hånden deles 4 nye fra bunken. **Efter tre uddelinger skifter kortgiveren og
+  samler og blander ALLE kortene.** 3×8 = 24 af 30 — de sidste 6 bruges ikke
+  i den cyklus. Præcis den mekanisme appen allerede har (`startNewHand` ved
+  `starterStreak == 0`).
+- **Byttet:** de to spillere bytter ét kort "samtidigt og med bagsiden opad".
+  Efter HVER uddeling.
+- **Den spiller, der ikke delte, starter.**
+- **Slag:** lander en brik på et felt med ÉN af modstanderens brikker **eller
+  én brik fra spillerens egen modsatte startcirkel**, slås dén hjem. Står der
+  MERE END ÉN (af modstanderens eller fra eget modsatte sæt), er det den
+  flyttende brik, der slås hjem. → "egen/anden" afgøres PR. PLADS overalt,
+  præcis som klassisk. (Ejerens beslutning "slag" står ordret i teksten.)
+- **Blokade:** brik(ker) på eget ♥ kan ikke passeres af modstanderen — "heller
+  ikke spillerens egne brikker fra den anden startcirkel" — kun 5↻ kan.
+- **Kan intet kort bruges** ("for eksempel fordi man mangler et startkort"):
+  læg alle kort ned uden træk; med igen ved næste uddeling. = `passHand`.
+- **Bounce-back:** "Hvis kortværdien ikke passer, så brikken kan blive låst,
+  skal den flyttes det overskydende antal felter baglæns. Det er dog KUN på en
+  målcirkel, at brikken kan skifte retning. Når en brik står på en målcirkel,
+  er brikken fredet."
+  - **[TOLKNING]** Brikken går ind til den dybeste frie målcirkel og vender
+    dér med overskuddet. Rækker overskuddet ud over yderste målcirkel,
+    fortsætter den ud på ringen (ejer-valgt, og teksten sætter ingen grænse).
+  - En brik på en målcirkel, der endnu ikke er i sin rette plads (fx efter
+    bounce), er fredet men IKKE låst.
 
 ### Vinderbetingelse
 
-- Første spiller med **alle 6 brikker i hus** (3 + 3 ved de rigtige cirkler)
-  vinder.
+Den spiller, der først får alle sine seks brikker i mål på målcirklerne.
 
 Kilder: dansk7kabale.dk/partners-duo-regler/ ·
 legebyen.dk (Duo-spilanmeldelse 1+2) · gameinventors.dk/PARTNERS-DUO ·
