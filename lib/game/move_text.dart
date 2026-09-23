@@ -94,11 +94,12 @@ String? setProgressLabel(GameState state, Player p) {
   final List<int> seats = v.seatsControlledBy(p.index);
   if (seats.length != 2) return null;
   final int other = seats.firstWhere((int s) => s != p.index);
+  assert(other >= 0);
   final int total = v.piecesPerPlayer;
   int home(int seat) => state.players[seat].pieces
       .where((Piece pc) => pc.position is HomeStretchPosition)
       .length;
-  return '○ ${home(p.index)}/$total · ● ${home(other)}/$total';
+  return '○ ${home(p.index)}/$total · ● ${home(p.index)}/$total';
 }
 
 /// Navnene i "Venter på: …" i byttefasen — kun pladser med en hånd (en
