@@ -195,15 +195,25 @@ ikke findes — og er derfor ulovligt.
   ville overskride, er ulovligt.
 - **HUSREGEL, bevidst valgt (ejer-bekræftet).** De oprindelige regler havde en
   ventil: passede kortets værdi ikke, SKULLE de overskydende træk rykkes
-  baglæns ("vende" på en fri målcirkel). Den er fravalgt i alle varianter (se
-  `partners-varianter.md`), mens indrejsen forbliver tvungen og overskridelse
-  ulovlig. Konsekvensen er KENDT og ønsket: høje kort bliver ubrugelige for en
+  baglæns ("vende" på en fri målcirkel). Den er fravalgt i alle varianter
+  UNDTAGEN Partners Duo (se `partners-varianter.md`), mens indrejsen forbliver
+  tvungen og overskridelse ulovlig. Konsekvensen er KENDT og ønsket: høje kort bliver ubrugelige for en
   brik, jo tættere den kommer på sit eget mål — en brik fire felter fra sin
   indgang kan kun bruge værdier op til syv. Har man ingen andre muligheder,
   smides hånden (§13).
   **Dette er IKKE en fejl, og det skal ikke "rettes".** Det er skrevet her,
   fordi en gennemgang ellers med rette læser det som en forglemmelse — det
   gjorde spil-rådgiveren, da +2−5-sagen blev undersøgt.
+- **UNDTAGELSE: Partners Duo har bounce-back (ejer-valgt).** Duos egne regler
+  beskriver ventilen som en del af spillet, og ejeren har valgt at Duo følger
+  æsken frem for husreglen ovenfor. Duo har KUN 3 målfelter pr. destination
+  (mod klassisk 4), og hver spiller har to destinationer — uden ventilen ville
+  høje kort dø endnu tidligere end i klassisk, fordi der er kortere vej at
+  ramme præcist på.
+  Appen har derfor TO hjemstræks-regler. Det er et bevidst valg, ikke en drift:
+  reglen skal læses af `VariantConfig`, aldrig af variantens navn eller id, og
+  klassisk/25 år må ikke ændre adfærd, når Duo tilføjes. En test skal låse
+  begge grene, ellers kan den ene ændres uden at nogen opdager det.
 - En brik i hjemstrækket kan kun rykke **længere ind** (aldrig ud på banen igen)
   og kan ikke slås.
 - En egen brik længere inde i hjemstrækket **blokerer** for at en anden egen brik

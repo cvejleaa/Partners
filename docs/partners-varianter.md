@@ -256,8 +256,21 @@ spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
   hhv. hul og knop). **Brikkerne skal starte og slutte ved samme cirkel** —
   hver spiller har altså 2 separate mål-destinationer, én pr. briktype.
 - Banen er kortere end klassisk Partners.
-- **[HUL]** Præcist antal banefelter og målcirkler pr. destination er ikke
-  offentligt dokumenteret.
+- **[GÆT, konfigurerbart]** Banelængde: **4 segmenter × 10 = 40 felter** (9
+  tællende + UD pr. kvarter). Begrundelsen, ikke et tal ud af luften: de fire
+  startcirkler giver fire segmenter, hvilket motoren allerede understøtter
+  (`segments`); 40 er mærkbart kortere end klassisk 60, hvilket passer med den
+  kortere spilletid (15-45 min); og det går lige op, så hvert UD-felt sidder
+  symmetrisk. **Tallet er ikke målt** — det kan kun fastslås ved at tælle et
+  fysisk sæt, og det skal kunne rettes uden en ny udgivelse.
+- **[UDLEDT]** Målfelter pr. destination: **3**. Ikke et gæt: hver destination
+  skal rumme netop 3 brikker (3 med hul, 3 med knop), og målfelter fyldes
+  indefra uden overspringning. Færre ville gøre det umuligt at afslutte, flere
+  ville stå tomme.
+- **Konsekvens for hjemstrækket:** med kun 3 målfelter pr. destination dør
+  høje kort endnu tidligere end i klassisk. Det er grunden til at ejeren har
+  valgt at Duo beholder æskens **bounce-back**, i modsætning til alle andre
+  varianter — se `regler.md` §11.
 
 ### Kort (30 kort, 10 forskellige kortværdier)
 
@@ -273,15 +286,25 @@ spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
 | 5 spring over | Flyt 5 — må passere brikker, der spærrer i deres startfelt (omgår blokade) |
 | Byttekort | Byt to vilkårlige brikker i spil — også to af ens egne (taktisk vigtigt pga. de to destinationer: byt en hul-brik med en knop-brik) |
 
-- **[HUL]** Fordelingen af de 30 kort på de 10 værdier er ikke offentligt
-  dokumenteret, og heller ikke hvilke rene talværdier der findes.
+- **[GÆT, konfigurerbart]** Fordeling: **3 af hver af de 10 værdier** (10 × 3
+  = 30). Regnestykket går præcist op, og det er den enkleste fordeling der
+  gør det — men det er stadig et gæt: kilderne siger "30 kort, 10 værdier",
+  ikke at de er ligeligt fordelt. Tabellen ovenfor navngiver kun 8 af de 10
+  konkret ("Nummerkort" er en kategori), så **hvilke** to øvrige værdier der
+  findes, er fortsat ukendt. Kortfordelingen er i forvejen konfigurerbar i
+  appen (admin-skærmen), så dette gæt kan rettes uden en udgivelse.
 
 ### Uddeling, bytte og afvigende regler
 
 - 4 kort pr. spiller pr. runde; samme kortgiver deler 3 gange, derefter
-  skiftes der. **[HUL]** 3×8 = 24 af 30 kort — håndteringen af de sidste 6
-  kort er ikke dokumenteret (én kilde: kortgiver fortsætter "til denne ikke
-  har flere kort i sin bunke").
+  skiftes der. 3×8 = 24 af 30 kort — **de sidste 6 bruges ikke i den cyklus**
+  og går tilbage i blandingen, når den næste kortgiver tager over.
+  **Dette var markeret som et hul, men er reelt afklaret:** appen gør allerede
+  præcis dette i klassisk, hvor 56 kort giver 4×4×3 = 48 uddelte og 8
+  tilovers — hele bunken samles og blandes ved hver ny kortgiver-cyklus
+  (`GameEngine.startNewHand`, ved `starterStreak == 0`). Duos 6 overskydende
+  kort kræver altså ingen ny regel. Det stemmer også med den ene kilde, der
+  siger at kortgiveren fortsætter "til denne ikke har flere kort i sin bunke".
 - **Kortbytte med modstanderen**: efter hver uddeling SKAL de to spillere
   bytte ét kort med hinanden (skjult, ingen snak). Ikke med sig selv.
 - Spilleren, der ikke gav kort, starter runden.
@@ -374,6 +397,41 @@ gameinventors-shop.dk (ekstra kortsæt)
 ---
 
 ## Implementeringsnoter til appen
+
+### ADVARSEL: felterne findes, men motoren læser dem ikke
+
+`VariantConfig` har allerede alle de felter, Duo har brug for. Det ser derfor
+ud som om varianten "bare" skal konfigureres. **Det er den ikke.** Talt i
+koden (uden for `variant_config.dart` selv):
+
+| Felt | Læses af koden? |
+|---|---|
+| `piecesPerPlayer` | ja (7 steder) |
+| `segments` | ja (9 steder) |
+| `exchangeRule` | ja (2 steder) |
+| `teams` | ja (1 sted) |
+| `playerCount` | **nej — 0 steder** |
+| `fieldsPerSegment` | **nej — 0 steder** |
+| `goalCircles` | **nej — 0 steder** |
+| `handSize` | **nej — 0 steder** (motoren har sin egen `const handSize = 4`) |
+| `dealsPerDealer` | **nej — 0 steder** |
+| `forcedPlay` | **nej — 0 steder** |
+| `winCondition` | **nej — 0 steder** |
+| `destinationsPerPlayer` | **nej — 0 steder** |
+
+Otte af tolv felter er altså en PÅSTAND om parathed, som intet honorerer. At
+sætte `playerCount: 2` gør ingenting. Det er samme slags fælde som en grøn
+test, der ikke måler noget: det ser dækket ud.
+
+Godt nyt: motoren bruger gennemgående `state.players.length` frem for et
+hardkodet 4, så spillerantallet er mindre fastlåst end feltlisten antyder.
+`ExchangeRule.opponentSwap` kaster dog stadig `UnimplementedError`.
+
+**Den dybeste ændring er ikke i listen.** `HomeStretchPosition(ownerIndex,
+slot)` har ingen forestilling om HVILKEN destination. Duo har to mål pr.
+spiller, så positionen skal bære en tredje oplysning — og det rører modellen,
+serialiseringen, regelmotoren og brættets tegning på én gang. Det er dér
+arbejdet ligger, ikke i konfigurationen.
 
 Forslag: modellér hver udgave som en deklarativ variant-konfiguration oven på
 den fælles motor, fx:
