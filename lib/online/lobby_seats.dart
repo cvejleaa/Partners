@@ -168,9 +168,7 @@ class LobbySeats {
         for (final int s in handSeats)
           if (c.uids[s] == null && !c.aiSeats[s]) s,
       ];
-      // To pas: MENNESKER først, så computere. I plads-rækkefølge kunne en
-      // computer på plads 2 tage den sidste ledige hånd-plads fra en gæst på
-      // plads 3 — og gæsten forsvandt tavst fra bordet (QC-fund).
+      // Én pas i plads-rækkefølge.
       for (int s = 0; s < 4; s++) {
         if (to.hasHand(s)) continue;
         final dynamic u = c.uids[s];
@@ -182,11 +180,7 @@ class LobbySeats {
           c.names[t] = c.names[s];
           c.colors[t] = c.colors[s];
           c.aiSeats[t] = false;
-        }
-      }
-      for (int s = 0; s < 4; s++) {
-        if (to.hasHand(s)) continue;
-        if (c.uids[s] == null && c.aiSeats[s] && free.isNotEmpty) {
+        } else if (u == null && c.aiSeats[s] && free.isNotEmpty) {
           final int t = free.removeAt(0);
           c.aiSeats[t] = true;
           c.names[t] = c.names[s];
