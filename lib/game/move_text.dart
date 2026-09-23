@@ -114,5 +114,5 @@ List<String> exchangeWaitingNames(GameState state) => <String>[
 /// kun den plads, der styrer begge sæt — ikke "Anna og Anna").
 List<int> winnerSeats(GameState state, int winningTeam) => <int>[
       for (int i = 0; i < state.players.length; i++)
-        if (i % 2 == winningTeam && state.variant.hasHand(i)) i,
+        if (i % 2 == winningTeam) i,
     ];
