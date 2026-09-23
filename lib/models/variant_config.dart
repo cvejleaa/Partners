@@ -772,5 +772,5 @@ VariantConfig lobbyVariantFromDoc(Map<String, dynamic> doc) {
   final String? id =
       doc['variantId'] is String ? doc['variantId'] as String : null;
   final VariantConfig v = variantFromRaw(id, doc['cardRulesVariants']);
-  return (kAllVariants.contains(v) && !v.onlineReady) ? classicVariant : v;
+  return v;
 }
