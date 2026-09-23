@@ -103,9 +103,6 @@ class LobbySeats {
   LobbySeats join(VariantConfig v, int seat, String uid, String name,
       int color) {
     if (seat < 0 || seat > 3) throw const LobbyError('Ukendt plads');
-    if (!v.hasHand(seat)) {
-      throw const LobbyError('Duo er 1 mod 1 — vælg en af de to pladser');
-    }
     final dynamic taken = uids[seat];
     if (taken != null && taken != uid) {
       throw const LobbyError('Pladsen er taget');
