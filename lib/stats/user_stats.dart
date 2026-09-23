@@ -890,7 +890,6 @@ void _applyGame(_GameFacts f, Map<String, UserStats> bucket) {
   // uid på to pladser; talt pr. plads fik man to spil, to sejre og dobbelt
   // sejrsstime ud af ét parti.
   for (int seat = 0; seat < uids.length; seat++) {
-    if (!variant.hasHand(seat)) continue;
     final uid = uids[seat] as String?;
     if (uid == null) continue;
     final name = seat < names.length ? names[seat] as String : 'Spiller';
