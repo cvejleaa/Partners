@@ -505,9 +505,14 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
       colorValue: kPalette.first.color.toARGB32(),
       rules: ref.read(cardRulesProvider),
     );
+    // Fejler skiftet til Duo, stopper flowet HER — med beskeden synlig på
+    // den skærm, man står på — i stedet for at invitere venner til og åbne
+    // en lobby, der tavst er klassisk. Lobbyen findes stadig under "Mine
+    // spil", hvor varianten kan vælges igen.
     if (variant != null && context.mounted) {
-      await runLobbyAction(
-          context, svc.setVariant(code, variant.id));
+      final bool ok =
+          await runLobbyAction(context, svc.setVariant(code, variant.id));
+      if (!ok) return;
     }
     // Send invitationer til markerede venner. Fejl pr. ven må ikke
     // forhindre at lobbyen åbnes.
@@ -1119,15 +1124,20 @@ class _InviteFriendsDialogState extends ConsumerState<_InviteFriendsDialog> {
 /// fillSeatWithAi kaldt uden await — en afvisning (fx "Duo er 1 mod 1 —
 /// der sidder 3 spillere", en taget plads eller en regel-afvisning) blev en
 /// uhåndteret fejl, som ingen så (QC-fund på planen).
-Future<void> runLobbyAction(BuildContext context, Future<void> action) async {
+///
+/// Returnerer true, hvis handlingen lykkedes — så et flow kan stoppe i
+/// stedet for at fortsætte på et forkert grundlag.
+Future<bool> runLobbyAction(BuildContext context, Future<void> action) async {
   try {
     await action;
+    return true;
   } catch (e) {
-    if (!context.mounted) return;
+    if (!context.mounted) return false;
     final String msg = e is LobbyError
         ? e.message
         : (e is String ? e : 'Det lykkedes ikke: $e');
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
+    return false;
   }
 }

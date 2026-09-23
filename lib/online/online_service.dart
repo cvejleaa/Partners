@@ -1295,7 +1295,7 @@ class OnlineService {
       final Map<String, dynamic> after = <String, dynamic>{
         ...d,
         'variantId': newId,
-        if (entry != null)
+        if (valid && entry != null)
           'cardRulesVariants': <String, dynamic>{
             ...(d['cardRulesVariants'] is Map
                 ? Map<String, dynamic>.from(d['cardRulesVariants'] as Map)

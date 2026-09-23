@@ -143,8 +143,9 @@ class LobbySeats {
   /// Pladserne efter et skift af variant fra [from] til [to].
   ///
   /// - TIL en variant, hvor spillere deler pladser (Duo): højst to mennesker.
-  ///   Værten bliver på plads 0; en anden spiller flyttes til plads 1 (med
-  ///   klar-status og farve), og pladserne spejles. Ellers [LobbyError].
+  ///   Den, der allerede sidder på en hånd-plads (0/1), bliver; de øvrige
+  ///   MENNESKER flyttes til de ledige hånd-pladser (med farve) FØR en
+  ///   computer-plads får en, og pladserne spejles. Ellers [LobbyError].
   /// - FRA sådan en variant: spejlene ryddes, så de kan tages af nye
   ///   spillere, og får de to farver, de to spillere ikke har.
   /// - Mellem varianter uden delte pladser: uændret.
@@ -167,6 +168,9 @@ class LobbySeats {
         for (final int s in handSeats)
           if (c.uids[s] == null && !c.aiSeats[s]) s,
       ];
+      // To pas: MENNESKER først, så computere. I plads-rækkefølge kunne en
+      // computer på plads 2 tage den sidste ledige hånd-plads fra en gæst på
+      // plads 3 — og gæsten forsvandt tavst fra bordet (QC-fund).
       for (int s = 0; s < 4; s++) {
         if (to.hasHand(s)) continue;
         final dynamic u = c.uids[s];
@@ -178,7 +182,11 @@ class LobbySeats {
           c.names[t] = c.names[s];
           c.colors[t] = c.colors[s];
           c.aiSeats[t] = false;
-        } else if (u == null && c.aiSeats[s] && free.isNotEmpty) {
+        }
+      }
+      for (int s = 0; s < 4; s++) {
+        if (to.hasHand(s)) continue;
+        if (c.uids[s] == null && c.aiSeats[s] && free.isNotEmpty) {
           final int t = free.removeAt(0);
           c.aiSeats[t] = true;
           c.names[t] = c.names[s];

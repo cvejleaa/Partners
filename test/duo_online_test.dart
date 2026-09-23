@@ -72,6 +72,17 @@ void main() {
       expect(s.colors[3], green);
     });
 
+    test('skift til Duo: gæsten får pladsen FØR en computer på en lavere plads',
+        () {
+      // Computer på plads 2, gæst på plads 3, kun plads 1 ledig. I plads-
+      // rækkefølge tog computeren den, og gæsten forsvandt tavst (QC-fund).
+      final LobbySeats s = seats(<dynamic>['a', null, null, 'c'],
+              ai: <bool>[false, false, true, false])
+          .switchVariant(classicVariant, partnersDuo);
+      expect(s.uids, <dynamic>['a', 'c', 'a', 'c']);
+      expect(s.aiSeats, <bool>[false, false, false, false]);
+    });
+
     test('skift til Duo med 3 spillere afvises med en forklaring', () {
       expect(
           () => seats(<dynamic>['a', 'b', 'c', null])
