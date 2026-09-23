@@ -232,7 +232,7 @@ class GameEngine extends ChangeNotifier {
 
   void _afterMove(int playerIndex) {
     // Tjek vinder — ét tjek pr. hold (klassisk: 2). BEMÆRK til fremtidige
-    // varianter: ved 'alle mod alle' (teams tom, winCondition.ownAllHome) kører
+    // varianter: ved 'alle mod alle' (teams tom) kører
     // denne loop aldrig — så skal vinderen afgøres pr. spiller, ikke pr. hold.
     for (int t = 0; t < state.variant.teams.length; t++) {
       if (state.teamHasWon(t)) {

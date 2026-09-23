@@ -28,7 +28,6 @@ void main() {
       expect(classicVariant.playerCount, 4);
       expect(classicVariant.piecesPerPlayer, 4);
       expect(classicVariant.goalCircles, 4);
-      expect(classicVariant.destinationsPerPlayer, 1);
     });
 
     test('teamOf svarer til Player.teamIndex (index % 2)', () {
@@ -56,7 +55,6 @@ void main() {
       expect(classicVariant.teams.length, 2);
       expect(classicVariant.exchangeRule, ExchangeRule.partnerSwap);
       expect(classicVariant.winCondition, WinCondition.teamAllHome);
-      expect(classicVariant.forcedPlay, isFalse);
       expect(classicVariant.handSize, 4);
       expect(classicVariant.dealsPerDealer, 3);
     });

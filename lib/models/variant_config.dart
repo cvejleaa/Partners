@@ -30,8 +30,6 @@ enum WinCondition {
   /// Klassisk/Partners+: alle et holds brikker i mål.
   teamAllHome,
 
-  /// Duo/Trio: en enkelt spillers egne brikker i mål.
-  ownAllHome,
 }
 
 /// Deklarativ beskrivelse af én Partners-udgave oven på den fælles motor.
@@ -58,9 +56,7 @@ class VariantConfig {
     this.handSize = 4,
     this.dealsPerDealer = 3,
     this.exchangeRule = ExchangeRule.partnerSwap,
-    this.forcedPlay = false,
     this.winCondition = WinCondition.teamAllHome,
-    this.destinationsPerPlayer = 1,
     this.cardRuleOverrides,
     this.tableColor = const Color(0xFF0E2A1A),
     this.feltColor = const Color(0xFF14331F),
@@ -99,13 +95,9 @@ class VariantConfig {
   final int dealsPerDealer;
   final ExchangeRule exchangeRule;
 
-  /// Duo: streng spillepligt (kan tvinges til at slå egen brik hjem).
-  final bool forcedPlay;
 
   final WinCondition winCondition;
 
-  /// Duo: 2 briktyper med hver sin start/destination. 1 for alle andre.
-  final int destinationsPerPlayer;
 
   /// Variantens KODE-DEFINEREDE kort-ændringer som overrides oven på de LIVE/
   /// admin-konfigurerede regler. `null` = ingen ændringer (klassisk bruger
