@@ -58,7 +58,7 @@ class Settings {
       preferredColorValue: clearPreferredColor
           ? null
           : (preferredColorValue ?? this.preferredColorValue),
-      lastOnlineVariantId: lastOnlineVariantId ?? this.lastOnlineVariantId,
+      lastOnlineVariantId: lastOnlineVariantId,
     );
   }
 
