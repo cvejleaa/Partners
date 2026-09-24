@@ -255,8 +255,15 @@ List<String> playerNamesOnce(VariantConfig v, List<dynamic> names) =>
 /// tælling, "kan startes" (lobbyCanStart), startknappen og hjælpeteksten
 /// bruger — ellers kunne de tre blive uenige.
 int lobbyFilledSeats(
-        VariantConfig v, List<dynamic> uids, List<dynamic> aiSeats) =>
-    lobbyPlayableSeats(v).length - lobbyOpenSeats(v, uids, aiSeats);
+    VariantConfig v, List<dynamic> uids, List<dynamic> aiSeats) {
+  int filled = 0;
+  for (int s = 0; s < 4; s++) {
+    final bool human = s < uids.length && uids[s] != null;
+    final bool ai = s < aiSeats.length && aiSeats[s] == true;
+    if (human || ai) filled++;
+  }
+  return filled;
+}
 
 /// Hjælpelinjen under startknappen — det, der er SANDT lige nu, med skærmens
 /// egne ord ("Fyld med AI", "Invitér spiller"). null = ingen linje.
