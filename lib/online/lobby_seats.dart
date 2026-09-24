@@ -291,4 +291,4 @@ Map<String, dynamic>? lobbyVariantEntry(dynamic variantsRaw, String id) {
 /// til? Kun varianter, hvor spillere deler pladser (Duo: 1 modstander), har
 /// et loft; klassisk inviterer som før.
 bool tooManyInvitees(VariantConfig v, int selected) =>
-    v.seatsShareController && selected > v.handCount(4) - 1;
+    selected > v.handCount(4) - 1;
