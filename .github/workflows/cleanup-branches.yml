@@ -9,8 +9,14 @@
 # - Første kørsel SLETTER INGENTING: "slet" er slået fra som standard, og
 #   kørslen skriver kun listen over det, den ville slette (se kørslens
 #   Summary). Først når listen er set, køres den igen med "slet" slået til.
-# - Beholdes ALTID: repoets standardbranch (main), grenene i "behold",
-#   beskyttede branches og enhver branch med en ÅBEN pull request.
+# - Beholdes ALTID: repoets standardbranch (main), Claudes arbejdsbranch
+#   (ALTID nedenfor), grenene i "behold", beskyttede branches, og enhver
+#   branch der er head ELLER base for en ÅBEN pull request.
+# - Kun "pæne" navne ([A-Za-z0-9._/-]) slettes. Git tillader fx '#' og '%'
+#   i branch-navne, og i slette-URL'en ville 'x#y' ramme branch 'x' (resten
+#   bliver URL-fragment) — en ANDEN branch end den på listen, fx en
+#   behold-branch (security-fund). Andre navne springes over med en
+#   advarsel og står under "Beholdes", både i prøvekørslen og den rigtige.
 # - Kun manuel start (workflow_dispatch) og kun den, der kan starte
 #   workflows i repoet.
 name: Ryd op i test-branches
@@ -23,9 +29,9 @@ on:
         type: boolean
         default: false
       behold:
-        description: "Branches der ALTID beholdes (adskilt af mellemrum)"
+        description: "EKSTRA branches der beholdes (adskilt af mellemrum) — main og Claudes arbejdsbranch beholdes altid"
         type: string
-        default: "main claude/partners-game-app-Z6NJW"
+        default: ""
 
 permissions:
   contents: write
@@ -48,22 +54,39 @@ jobs:
           SLET: ${{ inputs.slet }}
           BEHOLD: ${{ inputs.behold }}
           STANDARD: ${{ github.event.repository.default_branch }}
+          ALTID: "main claude/partners-game-app-Z6NJW"
         run: |
           set -euo pipefail
+          # Uden standardbranch og ALTID ville behold-listen være tom — og
+          # ALT ville blive slettet. Stop i stedet (fejl i en $(…) inde i en
+          # tildeling stopper ikke nødvendigvis scriptet af sig selv).
+          : "${STANDARD:?mangler}" "${ALTID:?mangler}" "${SLET:?mangler}"
 
-          # Branches med en åben pull request røres aldrig.
+          # Branches med en åben pull request — som head ELLER base (en
+          # stakket PR ville lukkes, hvis dens base blev slettet) — røres
+          # aldrig. Fejler opslaget, stopper kørslen (set -e).
           prs="$(gh pr list -R "$REPO" --state open --limit 500 \
-                   --json headRefName -q '.[].headRefName' | tr '\n' ' ')"
-          keep=" $STANDARD $BEHOLD $prs "
+                   --json headRefName,baseRefName \
+                   -q '.[] | .headRefName, .baseRefName' | tr '\n' ' ')"
+          # Alt blanktegn (tab, linjeskift) i input → mellemrum, så en
+          # indsat liste ikke tavst matcher forkert.
+          keep=" $(printf '%s ' "$STANDARD" "$ALTID" "$BEHOLD" "$prs" \
+                   | tr -s '[:space:]' ' ') "
 
-          # Alle IKKE-beskyttede branches.
-          mapfile -t alle < <(gh api --paginate \
-            "repos/$REPO/branches?per_page=100" \
-            -q '.[] | select(.protected | not) | .name')
+          # Alle IKKE-beskyttede branches. Til en fil først, så en fejl i
+          # opslaget stopper kørslen i stedet for tavst at give en kort liste.
+          gh api --paginate "repos/$REPO/branches?per_page=100" \
+            -q '.[] | select(.protected | not) | .name' > branches.txt
+          mapfile -t alle < branches.txt
 
           slettes=()
           beholdes=()
           for b in "${alle[@]}"; do
+            if [[ ! "$b" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "::warning::Springer over (usikkert navn): $b"
+              beholdes+=("$b")
+              continue
+            fi
             case "$keep" in
               *" $b "*) beholdes+=("$b") ;;
               *) slettes+=("$b") ;;
