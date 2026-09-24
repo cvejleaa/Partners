@@ -69,8 +69,6 @@ class Settings {
         'pushEnabled': pushEnabled,
         if (preferredColorValue != null)
           'preferredColorValue': preferredColorValue,
-        if (lastOnlineVariantId != null)
-          'lastOnlineVariantId': lastOnlineVariantId,
       };
 
   factory Settings.fromJson(Map<String, dynamic> json) {
