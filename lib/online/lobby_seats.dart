@@ -275,3 +275,20 @@ String? lobbyStartHint(VariantConfig v, int filled, int open) {
   if (open > 0) return 'Tomme pladser bliver til computer-spillere ved start.';
   return null;
 }
+
+/// Den entry (config-doc'ets variants.{id}-værdi), der skal følge med, når en
+/// lobby får varianten [id]: en CUSTOM variant har brug for den (navn, tema,
+/// regler), ellers ser gæsterne klassisk udseende, og starten finder ingen
+/// regler. Indbyggede varianter uden entry → null. Ét sted, brugt af
+/// setLobbyVariant (både "Nyt spil" og lobbyens vælger).
+Map<String, dynamic>? lobbyVariantEntry(dynamic variantsRaw, String id) {
+  if (variantsRaw is! Map) return null;
+  final dynamic entry = variantsRaw[id];
+  return entry is Map ? Map<String, dynamic>.from(entry) : null;
+}
+
+/// Har man markeret flere at invitere, end varianten har modstander-pladser
+/// til? Kun varianter, hvor spillere deler pladser (Duo: 1 modstander), har
+/// et loft; klassisk inviterer som før.
+bool tooManyInvitees(VariantConfig v, int selected) =>
+    v.seatsShareController && selected > v.handCount(4) - 1;

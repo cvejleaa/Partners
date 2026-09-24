@@ -108,6 +108,30 @@ void main() {
     });
   });
 
+  group('"Nyt spil" og lobbyens variantvalg', () {
+    test('en custom-variant sender sin entry med; indbyggede ingen', () {
+      final Map<String, dynamic> raw = <String, dynamic>{
+        'cv-familie': <String, dynamic>{
+          'custom': true,
+          'name': 'Familie',
+          'rules': <String, dynamic>{},
+        },
+      };
+      expect(lobbyVariantEntry(raw, 'cv-familie')?['name'], 'Familie');
+      expect(lobbyVariantEntry(raw, 'duo'), isNull);
+      expect(lobbyVariantEntry(null, 'cv-familie'), isNull);
+      expect(lobbyVariantEntry(<String, dynamic>{'cv-x': 'skævt'}, 'cv-x'),
+          isNull);
+    });
+
+    test('Duo: højst én modstander; klassisk uden loft', () {
+      expect(tooManyInvitees(partnersDuo, 1), isFalse);
+      expect(tooManyInvitees(partnersDuo, 2), isTrue);
+      expect(tooManyInvitees(classicVariant, 3), isFalse);
+      expect(tooManyInvitees(classicVariant, 5), isFalse);
+    });
+  });
+
   group('kan startes / åbne pladser', () {
     test('Duo: værten alene kan IKKE starte (to pladser, én spiller)', () {
       final Map<String, dynamic> ready = <String, dynamic>{'a': true};

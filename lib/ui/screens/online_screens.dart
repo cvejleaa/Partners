@@ -1017,7 +1017,7 @@ class _NewGameDialogState extends ConsumerState<_NewGameDialog> {
     final bool duo = variant.seatsShareController;
     // Kun Duo har et loft (1 modstander). Klassisk: som før — inviterer man
     // flere, end der er pladser, tager de første pladserne.
-    final bool tooMany = duo && _selected.length > variant.handCount(4) - 1;
+    final bool tooMany = tooManyInvitees(variant, _selected.length);
     return AlertDialog(
       title: const Text('Nyt spil'),
       content: SizedBox(
@@ -1125,9 +1125,9 @@ class _NewGameDialogState extends ConsumerState<_NewGameDialog> {
 /// finder ingen regler (QC-fund; før sendte kun lobbyens vælger det).
 Future<void> setLobbyVariant(
     WidgetRef ref, OnlineService svc, String code, String id) {
-  final dynamic entry = ref.read(variantCardRulesProvider).toRawJson()[id];
   return svc.setVariant(code, id,
-      entry: entry is Map<String, dynamic> ? entry : null);
+      entry: lobbyVariantEntry(
+          ref.read(variantCardRulesProvider).toRawJson(), id));
 }
 
 /// Kør en lobby-handling og VIS en afvisning. Før blev setVariant/joinGame/
