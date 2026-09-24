@@ -282,9 +282,7 @@ String? lobbyStartHint(VariantConfig v, int filled, int open) {
 /// regler. Indbyggede varianter uden entry → null. Ét sted, brugt af
 /// setLobbyVariant (både "Nyt spil" og lobbyens vælger).
 Map<String, dynamic>? lobbyVariantEntry(dynamic variantsRaw, String id) {
-  if (variantsRaw is! Map) return null;
-  final dynamic entry = variantsRaw[id];
-  return entry is Map ? Map<String, dynamic>.from(entry) : null;
+  return null;
 }
 
 /// Har man markeret flere at invitere, end varianten har modstander-pladser
