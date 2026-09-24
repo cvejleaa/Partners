@@ -80,9 +80,6 @@ class Settings {
       themeMode: _themeModeFromName(json['themeMode'] as String?),
       pushEnabled: json['pushEnabled'] as bool? ?? false,
       preferredColorValue: (json['preferredColorValue'] as num?)?.toInt(),
-      lastOnlineVariantId: json['lastOnlineVariantId'] is String
-          ? json['lastOnlineVariantId'] as String
-          : null,
     );
   }
 
