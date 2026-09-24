@@ -265,8 +265,11 @@ eget head-to-head-regnskab (`duoOpponentStats`, profilens "Duo mod …").
 
 Kendte huller, navngivet:
 - Computerens trækvurdering vægter dit andet sæt som en "makker".
-- Byttefasen sender ingen push: den, der ikke lavede sidste træk, får ingen
-  besked om at vælge byttekort (gælder også klassisk; mærkes mest i 1 mod 1).
+- Push-mængde: en siddende spiller kan skrive state i en løkke og dermed
+  udløse en tur- eller bytte-push pr. skrivning til de andre siddende (ingen
+  server-side nedkøling). Det enkelte offers eksponering er som før byttefase-
+  push'en; en rigtig grænse kræver et server-holdt nedkølingsdokument pr.
+  (spil, modtager) — ikke lavet (security-fund, navngivet).
 - Byttekortene og hænderne ligger i det fælles spil-dokument og kan aflæses af
   en modstander med egen klient (gælder alle varianter; i Duo er modtageren
   din eneste modstander).

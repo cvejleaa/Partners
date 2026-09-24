@@ -12,7 +12,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {initializeApp} = require("firebase-admin/app");
 const {FieldValue} = require("firebase-admin/firestore");
-const {handleGameTurnUpdate} = require("./game_turn");
+const {handleGameTurnUpdate, GAME_CODE_FORM} = require("./game_turn");
 const {logger} = require("firebase-functions");
 const {pushLogFields, skippedLogFields, severityFor, STALE_CODES} =
   require("./push_log");
@@ -92,7 +92,7 @@ exports.onInboxCreate = onDocumentCreated(
     const fromName = sanitize(invite.fromName, 60) || "En ven";
     const rawCode = sanitize(invite.gameCode, 12);
     // Kun et gyldigt spil-kode-format (A-Z0-9) må ind i deep-link'et.
-    const gameCode = /^[A-Za-z0-9]{1,12}$/.test(rawCode) ? rawCode : "";
+    const gameCode = GAME_CODE_FORM.test(rawCode) ? rawCode : "";
 
     // DATA-only: notifikationen vises af service-workeren (onBackgroundMessage)
     // — IKKE også automatisk af browseren. Ellers fik man to notifikationer.

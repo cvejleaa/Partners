@@ -448,3 +448,155 @@ test("handleGameTurnUpdate — byttefase-push sendes, selvom presence-opslaget F
   assert.deepEqual(calls.map((c) => c.uid), [A, B]);
   assert.equal(calls[0].extra.present, null);
 });
+
+// ---- SECURITY-ANGREB på byttefase-push (security-manager, 44f66c3) ----
+// Ukommitterede angrebs-tests. Hver test beskriver ét konkret skridt en
+// fjendtlig SIDDENDE spiller kan tage (state skrives frit af klienten).
+
+test("ANGREB exchange — kun after.uids er kilde: fremmed i before.uids/state får intet", () => {
+  // Mallory (M) sidder på plads 0 og fabrikerer state. En fremmed X står
+  // kun i BEFORE.uids og i state-felter, som klienten skriver frit — ingen af
+  // dem må kunne gøre X til modtager. (uids selv er låst af reglerne:
+  // onlySelfInSeats/seatsKeptByPosition, efterprøvet i rules.test.mjs.)
+  const M = "MalloryMalloryMalloryMallory";
+  const X = "StrangerStrangerStranger0001";
+  const before = {status: "playing", uids: [X, X, X, X],
+    state: {ph: "play", hn: 1}};
+  const after = {status: "playing", uids: [M, null, null, null],
+    state: {ph: "exchange", hn: 2, eb: {},
+      uids: [X, X, X, X], cp: 1, tu: X,
+      pl: [{hd: [card], uid: X}, {hd: [card], uid: X},
+        {hd: [card], uid: X}, {hd: [card], uid: X}, {hd: [card], uid: X}]}};
+  assert.deepEqual(exchangePushTargets(before, after), [M]);
+});
+
+test("ANGREB exchange — prototype/skæve typer: pl/uids som array-lignende objekter giver intet", () => {
+  const arrayLike = {length: 4, 0: {hd: [card]}, 1: {hd: [card]}};
+  const uidsLike = {length: 4, 0: A, 1: B};
+  assert.deepEqual(exchangePushTargets({status: "playing"},
+      {status: "playing", uids: [A, B], state: {ph: "exchange", hn: 1,
+        pl: arrayLike}}), []);
+  assert.deepEqual(exchangePushTargets({status: "playing"},
+      {status: "playing", uids: uidsLike, state: {ph: "exchange", hn: 1,
+        pl: [{hd: [card]}, {hd: [card]}]}}), []);
+  // hd som array-lignende objekt / streng tæller ikke som en hånd.
+  assert.deepEqual(exchangePushTargets({status: "playing"},
+      {status: "playing", uids: [A, B], state: {ph: "exchange", hn: 1,
+        pl: [{hd: {length: 5}}, {hd: "kort"}]}}), []);
+});
+
+test("ANGREB exchange — eb med __proto__/arvet nøgle springer INGEN over (kun egne nøgler)", () => {
+  // JSON.parse giver en EGEN '__proto__'-nøgle (som en map fra et dekodet
+  // dokument ville); en prototype med '0' må ikke tælle som 'afgivet'.
+  const eb = JSON.parse('{"__proto__": {"0": 1, "1": 1}}');
+  const inherited = Object.create({"0": 1, "1": 1});
+  for (const e of [eb, inherited]) {
+    assert.deepEqual(exchangePushTargets({status: "playing"},
+        {status: "playing", uids: [A, B],
+          state: {ph: "exchange", hn: 1, eb: e,
+            pl: [{hd: [card]}, {hd: [card]}]}}), [A, B]);
+  }
+  assert.equal(({}).hasOwnProperty("0"), false); // ingen global forurening
+});
+
+test("ANGREB exchange — push-spam: hver fabrikeret skrivning giver ÉN push pr. fraværende modspiller", async () => {
+  // Mallory (plads 0, sidder og kigger) tæller hn op i en løkke. Kvantificerer
+  // fundet: fan-out = alle fraværende siddende mennesker pr. skrivning (vs.
+  // tur-push'en: én modtager pr. skrivning). Ingen server-side rate-grænse.
+  const M = "MalloryMalloryMalloryMallory";
+  const uids = [M, B, C, D];
+  const pl = [{hd: [card]}, {hd: [card]}, {hd: [card]}, {hd: [card]}];
+  const calls = [];
+  const reads = [];
+  let prev = {status: "playing", uids, state: {ph: "play", hn: 1}};
+  for (let k = 0; k < 10; k++) {
+    const next = {status: "playing", uids,
+      state: {ph: "exchange", hn: 2 + k, eb: {}, pl}};
+    await handleGameTurnUpdate({
+      before: prev, after: next, code: "SPAM1",
+      pushToUser: async (uid) => calls.push(uid),
+      markStale: async () => {},
+      presenceAt: async (code, uid) => {
+        reads.push(uid);
+        return uid === M ? NOW - 1000 : null;
+      },
+      now: NOW,
+    });
+    prev = next;
+  }
+  assert.equal(calls.length, 30); // 10 skrivninger × 3 fraværende ofre
+  assert.equal(calls.includes(M), false);
+  assert.equal(reads.length, 40); // 10 × 4 presence-reads (inkl. Mallory)
+});
+
+test("ANGREB exchange — ph-vip play↔exchange med SAMME hn udløser også push hver anden skrivning", async () => {
+  const uids = [A, B, null, null];
+  const pl = [{hd: [card]}, {hd: [card]}];
+  let prev = {status: "playing", uids, state: {ph: "play", hn: 7, cp: 0}};
+  const types = [];
+  for (let k = 0; k < 6; k++) {
+    const next = {status: "playing", uids,
+      state: {ph: k % 2 === 0 ? "exchange" : "play", hn: 7, cp: 1, eb: {}, pl}};
+    await handleGameTurnUpdate({
+      before: prev, after: next, code: "VIP1",
+      pushToUser: async (uid, msg) => types.push(`${msg.data.type}:${uid === B ? "B" : "A"}`),
+      markStale: async () => {},
+      presenceAt: async (code, uid) => (uid === A ? NOW - 1000 : null),
+      now: NOW,
+    });
+    prev = next;
+  }
+  // exchange→B på hver vip TIL exchange (3), tur→B (cp=1) på hver vip TIL play (3).
+  assert.deepEqual(types, ["exchange:B", "turn:B", "exchange:B", "turn:B",
+    "exchange:B", "turn:B"]);
+});
+
+test("ANGREB — skæv spil-kode (frit valgt doc-id) giver INGEN push, " +
+    "hverken bytte eller tur", async () => {
+  // Security-fund: koden gik urenset ind i body/gameCode — et falsk spil med
+  // en phishing-tekst som id gav en troværdig besked "fra Partners".
+  const evil = "X — din konto er spærret, log ind på evil.example";
+  const calls = [];
+  const presence = [];
+  await handleGameTurnUpdate({
+    ...duoHandStart,
+    code: evil,
+    pushToUser: async (uid, msg) => calls.push(msg),
+    markStale: async () => {},
+    presenceAt: async (c, uid) => { presence.push(uid); return null; },
+    now: NOW,
+  });
+  await handleGameTurnUpdate({
+    ...TURN,
+    code: evil,
+    pushToUser: async (uid, msg) => calls.push(msg),
+    markStale: async () => {},
+    presenceAt: async (c, uid) => { presence.push(uid); return null; },
+    now: NOW,
+  });
+  assert.equal(calls.length, 0);
+  assert.equal(presence.length, 0, "afvist FØR presence-læsningen");
+  // Kontrol: samme skrivninger med en gyldig kode sender (ellers beviste
+  // testen ingenting).
+  await handleGameTurnUpdate({
+    ...duoHandStart,
+    code: "AB12",
+    pushToUser: async (uid, msg) => calls.push(msg),
+    markStale: async () => {},
+    presenceAt: async () => null,
+    now: NOW,
+  });
+  assert.equal(calls.length, 2);
+});
+
+test("skæv spil-kode: stats-markeringen ved spil-slut sker stadig", async () => {
+  const staled = [];
+  await handleGameTurnUpdate({
+    before: {status: "playing"},
+    after: {status: "over", uids: [A, B, C, D]},
+    code: "ikke en kode!",
+    pushToUser: async () => { throw new Error("skal ikke kaldes"); },
+    markStale: async (uids) => staled.push(uids),
+  });
+  assert.deepEqual(staled, [[A, B, C, D]]);
+});

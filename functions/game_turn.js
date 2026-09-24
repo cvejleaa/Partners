@@ -21,6 +21,13 @@ const {isGameOverTransition, staleTargets, UID_FORM} = require("./game_over");
 /// begreber ikke kan drive fra hinanden.
 const PRESENT_WINDOW_MS = 35000;
 
+/// Formen på en spil-kode, der må stå i en push (body, gameCode, deep-link).
+/// Den ENE vagt — delt med onInboxCreate. Spil-dokumentets id vælges frit af
+/// den, der opretter det (reglerne begrænser det ikke), så et falsk spil med
+/// id'et "X — din konto er spærret, log ind på …" gav ellers en troværdig
+/// phishing-tekst i en besked, der kommer fra Partners (security-fund).
+const GAME_CODE_FORM = /^[A-Za-z0-9]{1,12}$/;
+
 /**
  * Skal der sendes en "din tur"-push, og til hvem? Kun et ægte turn-skift
  * i play-fasen af et spil i gang tæller — ikke lobby/exchange/afsluttede
@@ -130,8 +137,12 @@ function exchangePushTargets(before, after) {
 async function handleGameTurnUpdate({
   before, after, code, pushToUser, markStale, presenceAt = null, now = null,
 }) {
-  const turnUid = turnPushTarget(before, after);
-  const exchangeUids = exchangePushTargets(before, after);
+  // En skæv spil-kode giver INGEN push (hverken tur eller bytte) — tjekket
+  // FØR presence-læsningen, så en afvisning er billig. Stats-markeringen ved
+  // spil-slut er ikke en besked og berøres ikke.
+  const codeOk = typeof code === "string" && GAME_CODE_FORM.test(code);
+  const turnUid = codeOk ? turnPushTarget(before, after) : null;
+  const exchangeUids = codeOk ? exchangePushTargets(before, after) : [];
   const staleUids = isGameOverTransition(before, after) ?
     staleTargets(after) : [];
 
@@ -210,4 +221,5 @@ async function handleGameTurnUpdate({
 
 module.exports = {
   turnPushTarget, exchangePushTargets, handleGameTurnUpdate, PRESENT_WINDOW_MS,
+  GAME_CODE_FORM,
 };
