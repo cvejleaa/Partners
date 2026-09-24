@@ -29,7 +29,6 @@ class VariantPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool inList = variants.any((VariantConfig v) => v.id == selected.id);
     final String? desc = descriptionOf?.call(selected);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,7 +53,6 @@ class VariantPicker extends StatelessWidget {
                       items: <DropdownMenuItem<String>>[
                         for (final VariantConfig v in <VariantConfig>[
                           ...variants,
-                          if (!inList) selected,
                         ])
                           DropdownMenuItem<String>(
                               value: v.id,
