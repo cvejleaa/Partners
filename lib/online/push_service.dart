@@ -35,7 +35,8 @@ final ValueNotifier<String?> openOnlineGameCode = ValueNotifier<String?>(null);
 bool showForegroundPush(PushMessage msg, String? openGameCode) {
   final bool aboutAGame = msg.type == 'turn' || msg.type == 'exchange';
   if (!aboutAGame) return true;
-  return openGameCode == null || msg.gameCode != openGameCode;
+  // gameCode er aldrig null, så "intet spil åbent" (null) vises altid.
+  return msg.gameCode != openGameCode;
 }
 
 /// Letvægts-besked vist når der kommer en foregrund-push (browser-fanen er åben).

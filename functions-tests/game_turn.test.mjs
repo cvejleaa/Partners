@@ -321,6 +321,17 @@ test("presence: gammelt stempel → present:false", async () => {
   assert.equal(calls[0].extra.present, false);
 });
 
+test("presence: stempel PRÆCIS PRESENT_WINDOW_MS gammelt → present:false " +
+    "(grænsen er '<', ikke '<=')", async () => {
+  // TM-fund: uden en test PÅ grænsen kan '<' erstattes med '<=' uden at
+  // noget andet sted her bliver rødt — de to andre presence-tests ligger
+  // begge 1000 ms fra grænsen, ikke PÅ den.
+  const calls = await capture({
+    presenceAt: async () => NOW - PRESENT_WINDOW_MS,
+  });
+  assert.equal(calls[0].extra.present, false);
+});
+
 test("presence: intet stempel → present:false, ikke ukendt", async () => {
   // Har man aldrig aabnet spillet, sad man beviseligt ikke og kiggede.
   const calls = await capture({presenceAt: async () => null});
@@ -611,4 +622,60 @@ test("exchangePushTargets — SPILSTART (lobby → playing, intet state før) " 
     state: {ph: "exchange", cp: 0, hn: 1, eb: {},
       pl: [{hd: [card]}, {hd: [card]}, {hd: []}, {hd: []}]}};
   assert.deepEqual(exchangePushTargets(before, after), [A, B]);
+});
+
+// ---- TM-fund: tre huller lukket (mutationstest af exchangePushTargets) ----
+// De tre tests herunder blev tilføjet, fordi hver fjernet vagt lod HELE
+// game_turn.test.mjs-suiten forblive grøn — de gamle fixtures skelnede ikke.
+
+test("exchangePushTargets — SAMMENFALDET skrivning: en tidligere hånds " +
+    "exchange-fase (before) og en NY hånds exchange-start (after) tæller " +
+    "stadig som 'begyndt', selvom before.ph OGSÅ er 'exchange'", () => {
+  // `began` er IKKE kun `bState.ph !== 'exchange'`: den ægte hånd-motor
+  // (game_engine.dart) går altid play → exchange, aldrig exchange → exchange,
+  // så inden for ÉN klient-skrivning kan dette ikke opstå. Men Cloud
+  // Functions-triggere GARANTERER ikke én invocation pr. skrivning ved
+  // hurtige på-hinanden-følgende skrivninger — before/after kan være
+  // slutpunkterne af flere sammenlagte skrivninger, og kan derfor spænde over
+  // en hel hånd (gammel hånds exchange-afslutning + play + NY hånds
+  // exchange-start), hvor både before og after viser ph:'exchange'. Kun
+  // hn-skiftet afslører at det er en ny hånd. Uden `aState.hn !== bState.hn`
+  // ville denne (sjældne, men reelle) sammenfaldne skrivning aldrig sende
+  // byttefase-push.
+  const before = {status: "playing", uids: [A, B, A, B],
+    state: {ph: "exchange", cp: 1, hn: 3, eb: {"0": card, "1": card},
+      pl: [{hd: []}, {hd: []}, {hd: []}, {hd: []}]}};
+  const after = {status: "playing", uids: [A, B, A, B],
+    state: {ph: "exchange", cp: 1, hn: 4, eb: {},
+      pl: [{hd: [card]}, {hd: [card]}, {hd: []}, {hd: []}]}};
+  assert.deepEqual(exchangePushTargets(before, after), [A, B]);
+});
+
+test("exchangePushTargets — to pladser med SAMME uid og BEGGE en hånd " +
+    "(fabrikeret state) giver modtageren ÉN push, ikke to", () => {
+  // Normal spilstate har aldrig to hånd-bærende pladser med samme uid (Duos
+  // spejl-plads har altid tom hånd) — men `state` skrives af klienten uden
+  // servervalidering, så en fabrikeret pl[i] kan sagtens påstå det modsatte.
+  // Dedupen (`!out.includes(uid)`) er den ENESTE vagt mod dobbelt-push i det
+  // tilfælde: alle andre fixtures i denne fil har tom hånd på den anden af to
+  // ens uid'er, så hånd-tjekket alene allerede udelukker dem, og dedupen kan
+  // fjernes uden at noget andet sted bliver rødt.
+  const after = {status: "playing", uids: [A, A], state: {ph: "exchange",
+    hn: 1, eb: {}, pl: [{hd: [card]}, {hd: [card]}]}};
+  const before = {status: "playing", uids: [A, A], state: {ph: "play", hn: 0}};
+  assert.deepEqual(exchangePushTargets(before, after), [A]);
+});
+
+test("exchangePushTargets — spil IKKE i gang (status 'over'), men med fuld " +
+    "uids/pl/hn-data, giver INGEN push", () => {
+  // De ældre "lobby/afsluttet"-fixtures har intet uids/pl — et tomt fixture
+  // beviser intet, for uden status-tjekket giver de STADIG [] (n=0, loopet
+  // kører aldrig). Her er der ægte data, så en fjernet status==='playing'-
+  // vagt rent faktisk ville sende en "vælg dit byttekort"-push til et
+  // afsluttet spil.
+  const before = {status: "playing", uids: [A, B], state: {ph: "play", hn: 1}};
+  const after = {status: "over", uids: [A, B],
+    state: {ph: "exchange", hn: 2, eb: {},
+      pl: [{hd: [card]}, {hd: [card]}]}};
+  assert.deepEqual(exchangePushTargets(before, after), []);
 });
