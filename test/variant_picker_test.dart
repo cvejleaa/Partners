@@ -72,6 +72,12 @@ void main() {
     // VariantPicker IKKE tilføjet [_archived] til items-listen selv (den
     // sidder ikke i [variants]), ville byggetrinnet kaste en assertion her.
     expect(tester.takeException(), isNull);
-    expect(find.text(_archived.name), findsOneWidget);
+    // Navnet står både i badgen og i dropdownens lukkede visning — det er
+    // DROPDOWNENS valgte værdi, testen handler om.
+    expect(
+        find.descendant(
+            of: find.byType(DropdownButton<String>),
+            matching: find.text(_archived.name)),
+        findsOneWidget);
   });
 }
