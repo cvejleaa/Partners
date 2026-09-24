@@ -7,7 +7,7 @@ import '../../game/ai/ai_player.dart';
 import '../../models/variant_config.dart';
 import '../../state/card_rules_controller.dart';
 import '../../state/variant_card_rules_controller.dart';
-import '../widgets/variant_badge.dart';
+import '../widgets/variant_picker.dart';
 import 'admin_screen.dart';
 import 'game_screen.dart';
 import 'self_test_screen.dart';
@@ -134,65 +134,25 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             // (ikke SegmentedButton), så den kan rumme flere kommende varianter.
             // Listen/varianten/beskrivelsen beregnes ÉN gang pr. build
             // (QC-fund: fire watch-kald og dobbeltberegning før).
+            // Samme vælger som online ("Nyt spil" og lobbyen): VariantPicker.
             Builder(builder: (BuildContext context) {
               final List<VariantConfig> variants =
                   ref.watch(selectableVariantsProvider);
-              final VariantConfig current = _variantFrom(variants);
-              final String? desc = _displayDescription(current);
-              // Arkiveres den valgte custom mens skærmen er åben, ryger den
-              // ud af listen — dropdown-value skal så falde til klassisk
-              // (samme fallback som _variantFrom bruger for reglerne).
-              final String dropdownValue =
-                  variants.any((VariantConfig v) => v.id == _variantId)
-                      ? _variantId
-                      : classicVariant.id;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      VariantBadge(variant: current, compact: true),
-                      const SizedBox(width: 8),
-                      const Text('Spil:'),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          value: dropdownValue,
-                          items: <DropdownMenuItem<String>>[
-                            // Indbyggede + admins egne (ikke-arkiverede).
-                            for (final VariantConfig v in variants)
-                              DropdownMenuItem<String>(
-                                  value: v.id,
-                                  child: Text(_displayName(v),
-                                      overflow: TextOverflow.ellipsis)),
-                          ],
-                          onChanged: (String? id) {
-                            if (id != null) {
-                              setState(() {
-                                _variantId = id;
-                                // Duo har kun to rækker: sad "Dig" på en
-                                // række, der nu er skjult, flyttes du op.
-                                if (_humanSeat >= _rowCount(_variantFrom(
-                                    variants))) {
-                                  _humanSeat = 0;
-                                }
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (desc != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2, bottom: 6),
-                      child: Text(
-                        desc,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                ],
+              return VariantPicker(
+                variants: variants,
+                // Arkiveres den valgte custom mens skærmen er åben, falder
+                // den til klassisk (samme fallback som _variantFrom).
+                selected: _variantFrom(variants),
+                nameOf: _displayName,
+                descriptionOf: _displayDescription,
+                onChanged: (String id) => setState(() {
+                  _variantId = id;
+                  // Duo har kun to rækker: sad "Dig" på en række, der nu er
+                  // skjult, flyttes du op.
+                  if (_humanSeat >= _rowCount(_variantFrom(variants))) {
+                    _humanSeat = 0;
+                  }
+                }),
               );
             }),
             const SizedBox(height: 12),

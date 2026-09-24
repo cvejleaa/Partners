@@ -250,3 +250,28 @@ List<String> playerNamesOnce(VariantConfig v, List<dynamic> names) =>
             names[s] != kOpenSeatName)
           names[s] as String,
     ];
+
+/// Antal spilbare pladser, der HAR en spiller eller en computer. Den ENE
+/// tælling, "kan startes" (lobbyCanStart), startknappen og hjælpeteksten
+/// bruger — ellers kunne de tre blive uenige.
+int lobbyFilledSeats(
+        VariantConfig v, List<dynamic> uids, List<dynamic> aiSeats) =>
+    lobbyPlayableSeats(v).length - lobbyOpenSeats(v, uids, aiSeats);
+
+/// Hjælpelinjen under startknappen — det, der er SANDT lige nu, med skærmens
+/// egne ord ("Fyld med AI", "Invitér spiller"). null = ingen linje.
+///
+/// Før stod "Tomme pladser bliver til computer-spillere ved start" også, når
+/// værten sad alene og ikke kunne starte (ejer-fund): de tomme pladser
+/// blev netop IKKE fyldt.
+String? lobbyStartHint(VariantConfig v, int filled, int open) {
+  if (filled < 2) {
+    return v.seatsShareController
+        ? '${v.name} er 1 mod 1 — invitér din modstander, eller tryk '
+            '"Fyld med AI" på din modstanders plads.'
+        : 'Mindst 2 spillere — invitér en spiller, eller tryk '
+            '"Fyld med AI" på en plads.';
+  }
+  if (open > 0) return 'Tomme pladser bliver til computer-spillere ved start.';
+  return null;
+}

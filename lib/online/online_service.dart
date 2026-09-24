@@ -393,14 +393,12 @@ enum LobbyNeed {
 bool lobbyCanStart(
     List<dynamic> uids, List<dynamic> aiSeats, Map<String, dynamic> ready,
     {VariantConfig variant = classicVariant}) {
-  int filled = 0;
+  final int filled = lobbyFilledSeats(variant, uids, aiSeats);
   bool anyHuman = false;
   bool allHumansReady = true;
   for (final int i in lobbyPlayableSeats(variant)) {
     if (i >= uids.length) continue;
     final dynamic u = uids[i];
-    final bool ai = i < aiSeats.length && aiSeats[i] == true;
-    if (u != null || ai) filled++;
     if (u != null) {
       anyHuman = true;
       if (ready['$u'] != true) allHumansReady = false;

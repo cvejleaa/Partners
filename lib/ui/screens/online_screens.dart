@@ -11,9 +11,11 @@ import '../../online/friends_service.dart';
 import '../../online/lobby_seats.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
+import '../../state/settings_controller.dart';
 import '../../state/variant_card_rules_controller.dart';
 import '../../utils/palette.dart';
 import '../widgets/variant_badge.dart';
+import '../widgets/variant_picker.dart';
 import 'online_game_screen.dart';
 
 // ---------------------------------------------------------------------------
@@ -488,42 +490,42 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
     }
   }
 
-  /// Opret et spil (evt. som [variant]), invitér de valgte venner og åbn
-  /// lobbyen. Varianten sættes FØR invitationerne, så de inviterede ser det
-  /// rigtige spil fra start.
-  Future<void> _createGame(BuildContext context, OnlineService svc,
-      {VariantConfig? variant}) async {
-    // Vis først dialog hvor man kan vælge venner at invitere.
-    // Brugere uden venner ser blot et hint og kan trykke "Opret".
-    final List<FriendRef>? invitees =
-        await showDialog<List<FriendRef>>(
+  /// "Opret nyt spil": ÉN dialog vælger spillet (øverst) og vennerne (under),
+  /// så oprettes lobbyen, varianten sættes (samme vej som lobbyens vælger),
+  /// vennerne inviteres, og lobbyen åbnes. Varianten sættes FØR
+  /// invitationerne, så de inviterede ser det rigtige spil fra start.
+  Future<void> _createGame(BuildContext context, OnlineService svc) async {
+    final _NewGameChoice? choice = await showDialog<_NewGameChoice>(
       context: context,
-      builder: (_) => const _InviteFriendsDialog(),
+      builder: (_) => const _NewGameDialog(),
     );
-    if (invitees == null) return; // brugeren annullerede
+    if (choice == null) return; // brugeren annullerede
+    ref
+        .read(settingsProvider.notifier)
+        .setLastOnlineVariantId(choice.variantId);
     final code = await svc.createGame(
       colorValue: kPalette.first.color.toARGB32(),
       rules: ref.read(cardRulesProvider),
     );
-    // Fejler skiftet til Duo, stopper flowet HER — med beskeden synlig på
-    // den skærm, man står på — i stedet for at invitere venner til og åbne
-    // en lobby, der tavst er klassisk. Lobbyen findes stadig under "Mine
-    // spil", hvor varianten kan vælges igen.
-    if (variant != null && context.mounted) {
-      final bool ok =
-          await runLobbyAction(context, svc.setVariant(code, variant.id));
+    // Fejler skiftet til varianten, stopper flowet HER — med beskeden synlig
+    // på den skærm, man står på — i stedet for at invitere venner til en
+    // lobby med et andet spil. Lobbyen findes stadig under "Mine spil".
+    if (choice.variantId != classicVariant.id) {
+      if (!context.mounted) return;
+      final bool ok = await runLobbyAction(
+          context, setLobbyVariant(ref, svc, code, choice.variantId));
       if (!ok) return;
     }
     // Send invitationer til markerede venner. Fejl pr. ven må ikke
     // forhindre at lobbyen åbnes.
-    if (invitees.isNotEmpty) {
+    if (choice.invitees.isNotEmpty) {
       final friends = ref.read(friendsServiceProvider);
-      for (final f in invitees) {
+      for (final f in choice.invitees) {
         try {
           await svc.invite(code, f.uid);
           await friends.sendGameInvite(f.uid, code);
         } catch (_) {
-          // Ignorér en enkelt fejl — vis evt. snackbar nedenfor.
+          // Ignorér en enkelt fejl.
         }
       }
     }
@@ -560,17 +562,6 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
               icon: const Icon(Icons.add),
               label: const Text('Opret nyt spil'),
               onPressed: () => _createGame(context, svc),
-            ),
-            const SizedBox(height: 8),
-            // Duo har sin egen knap HER, hvor man leder efter "spil med en
-            // ven": varianten er valgt, før invitationerne sendes — ellers
-            // inviterede man tre venner til et 1 mod 1 og skulle bagefter
-            // finde variant-listen i lobbyen.
-            OutlinedButton.icon(
-              icon: const Icon(Icons.people_outline),
-              label: const Text('Opret Duo (1 mod 1)'),
-              onPressed: () =>
-                  _createGame(context, svc, variant: partnersDuo),
             ),
             const SizedBox(height: 20),
             const Text('Mine spil & invitationer',
@@ -765,6 +756,9 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           final bool canStart = lobbyCanStart(
               uids, aiSeats, Map<String, dynamic>.from(ready),
               variant: variant);
+          final int filled = lobbyFilledSeats(variant, uids, aiSeats);
+          final String? startHint =
+              lobbyStartHint(variant, filled, openSeats);
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -774,75 +768,23 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                 Text('Del koden $code, eller invitér spillere på email.'),
                 const SizedBox(height: 12),
                 // Variant — "hvad spiller vi". Alle deltagere ser den; kun
-                // værten kan ændre den (afgør bræt/kort for alle).
-                Row(
-                  children: <Widget>[
-                    VariantBadge(
-                      variant: variant,
-                      compact: true,
-                      displayName:
-                          variantDisplayName(variant, variantsRaw),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Spil:'),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: isHost
-                          ? Builder(builder: (BuildContext _) {
-                              // Værtens egen variant-liste (inkl. egne
-                              // varianter oprettet EFTER lobbyen blev til).
-                              final List<VariantConfig> selectable =
-                                  ref.watch(selectableVariantsProvider);
-                              final bool inList = selectable
-                                  .any((VariantConfig v) => v.id == variant.id);
-                              return DropdownButton<String>(
-                                isExpanded: true,
-                                value: variant.id,
-                                items: <DropdownMenuItem<String>>[
-                                  for (final VariantConfig v in <VariantConfig>[
-                                    ...selectable,
-                                    // Allerede-valgt variant der siden er
-                                    // arkiveret: behold som gyldigt valg.
-                                    if (!inList) variant,
-                                  ])
-                                    DropdownMenuItem<String>(
-                                        value: v.id,
-                                        child: Text(
-                                            variantDisplayName(v, variantsRaw),
-                                            overflow: TextOverflow.ellipsis)),
-                                ],
-                                onChanged: (String? id) {
-                                  if (id == null) return;
-                                  // QC-fund: lobbyens cardRulesVariants-kopi
-                                  // er taget ved OPRETTELSEN — en custom
-                                  // valgt nu skal have sit entry med, ellers
-                                  // ser gæsterne klassisk look og starten
-                                  // finder ingen regler.
-                                  final dynamic entry = ref
-                                      .read(variantCardRulesProvider)
-                                      .toRawJson()[id];
-                                  runLobbyAction(
-                                      context,
-                                      svc.setVariant(code, id,
-                                          entry: entry is Map<String, dynamic>
-                                              ? entry
-                                              : null));
-                                },
-                              );
-                            })
-                          : Text(variantDisplayName(variant, variantsRaw),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600)),
-                    ),
-                  ],
+                // værten kan ændre den (afgør bræt/kort for alle). Samme
+                // vælger som "Nyt spil" og lokal opsætning.
+                VariantPicker(
+                  // Værtens egen liste (inkl. egne varianter oprettet EFTER
+                  // lobbyen blev til); en arkiveret, allerede valgt variant
+                  // står stadig som gyldigt valg.
+                  variants: ref.watch(selectableVariantsProvider),
+                  selected: variant,
+                  nameOf: (VariantConfig v) =>
+                      variantDisplayName(v, variantsRaw),
+                  descriptionOf: (VariantConfig v) =>
+                      variantDisplayDescription(v, variantsRaw),
+                  onChanged: isHost
+                      ? (String id) => runLobbyAction(
+                          context, setLobbyVariant(ref, svc, code, id))
+                      : null,
                 ),
-                if (variantDisplayDescription(variant, variantsRaw) != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2, bottom: 4),
-                    child: Text(
-                        variantDisplayDescription(variant, variantsRaw)!,
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ),
                 const SizedBox(height: 8),
                 for (final int i in playable)
                   _seatCard(context, svc,
@@ -902,17 +844,17 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                         ? () => runLobbyAction(
                             context, svc.startGameFromLobby(code))
                         : null,
-                    child: Text(canStart
+                    child: Text(canStart || filled < 2
                         ? 'Start spil'
-                        : (playable.length - openSeats < 2
-                            ? 'Mindst 2 pladser kræves'
-                            : 'Venter på at alle er klar…')),
+                        : 'Venter på at alle er klar…'),
                   ),
-                if (isHost && openSeats > 0)
+                // Det, der er SANDT lige nu (lobbyStartHint) — ikke "tomme
+                // pladser bliver til computere", når de netop ikke gør.
+                if (isHost && startHint != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
-                      'Tomme pladser bliver til computer-spillere ved start.',
+                      startHint,
                       style: TextStyle(
                           fontSize: 12, color: Colors.grey.shade600),
                       textAlign: TextAlign.center,
@@ -1040,62 +982,114 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
 // Dialog: vælg venner at invitere ved oprettelse af nyt spil
 // ---------------------------------------------------------------------------
 
-class _InviteFriendsDialog extends ConsumerStatefulWidget {
-  const _InviteFriendsDialog();
+/// Resultatet af "Nyt spil"-dialogen.
+typedef _NewGameChoice = ({String variantId, List<FriendRef> invitees});
+
+/// "Nyt spil": hvilket spil (øverst — samme vælger som lobbyen og lokal
+/// opsætning) og hvem der inviteres (under). Ét sted, så et hurtigt spil
+/// ikke koster flere tryk end før, og så varianten afgør hvem man kan
+/// invitere: Duo er 1 mod 1 — højst én ven.
+class _NewGameDialog extends ConsumerStatefulWidget {
+  const _NewGameDialog();
 
   @override
-  ConsumerState<_InviteFriendsDialog> createState() =>
-      _InviteFriendsDialogState();
+  ConsumerState<_NewGameDialog> createState() => _NewGameDialogState();
 }
 
-class _InviteFriendsDialogState extends ConsumerState<_InviteFriendsDialog> {
+class _NewGameDialogState extends ConsumerState<_NewGameDialog> {
   final Set<String> _selected = <String>{};
+  String? _variantId;
 
   @override
   Widget build(BuildContext context) {
     final friendsAsync = ref.watch(friendsStreamProvider);
+    final List<VariantConfig> variants = ref.watch(selectableVariantsProvider);
+    final dynamic variantsRaw =
+        ref.watch(variantCardRulesProvider).toRawJson();
+    // Forvalg: den sidst brugte variant; findes den ikke længere (arkiveret
+    // custom), klassisk.
+    final String wanted = _variantId ??
+        ref.watch(settingsProvider).lastOnlineVariantId ??
+        classicVariant.id;
+    final VariantConfig variant = variants.firstWhere(
+        (VariantConfig v) => v.id == wanted,
+        orElse: () => classicVariant);
+    final bool duo = variant.seatsShareController;
+    // Kun Duo har et loft (1 modstander). Klassisk: som før — inviterer man
+    // flere, end der er pladser, tager de første pladserne.
+    final bool tooMany = duo && _selected.length > variant.handCount(4) - 1;
     return AlertDialog(
-      title: const Text('Inviter venner'),
+      title: const Text('Nyt spil'),
       content: SizedBox(
-        width: 320,
-        child: friendsAsync.when(
-          loading: () => const SizedBox(
-            height: 80,
-            child: Center(child: CircularProgressIndicator()),
-          ),
-          error: (e, _) => Text('Fejl: $e'),
-          data: (friends) {
-            if (friends.isEmpty) {
-              return const Text(
-                'Tilføj venner i din profil for at invitere direkte.',
-              );
-            }
-            return ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 320),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: friends.length,
-                itemBuilder: (_, i) {
-                  final f = friends[i];
-                  final picked = _selected.contains(f.uid);
-                  return CheckboxListTile(
-                    value: picked,
-                    title: Text(f.displayName),
-                    subtitle: Text(f.email.isEmpty ? '—' : f.email),
-                    onChanged: (v) {
-                      setState(() {
-                        if (v == true) {
-                          _selected.add(f.uid);
-                        } else {
-                          _selected.remove(f.uid);
-                        }
-                      });
-                    },
+        width: 340,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            VariantPicker(
+              variants: variants,
+              selected: variant,
+              nameOf: (VariantConfig v) => variantDisplayName(v, variantsRaw),
+              descriptionOf: (VariantConfig v) =>
+                  variantDisplayDescription(v, variantsRaw),
+              onChanged: (String id) => setState(() => _variantId = id),
+            ),
+            const SizedBox(height: 8),
+            Text(duo ? 'Invitér din modstander' : 'Invitér venner',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Flexible(
+              child: friendsAsync.when(
+                loading: () => const SizedBox(
+                  height: 80,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (e, _) => Text('Fejl: $e'),
+                data: (friends) {
+                  if (friends.isEmpty) {
+                    return const Text(
+                      'Tilføj venner i din profil for at invitere direkte.',
+                    );
+                  }
+                  return ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: friends.length,
+                      itemBuilder: (_, i) {
+                        final f = friends[i];
+                        final picked = _selected.contains(f.uid);
+                        return CheckboxListTile(
+                          value: picked,
+                          title: Text(f.displayName),
+                          subtitle: Text(f.email.isEmpty ? '—' : f.email),
+                          onChanged: (v) {
+                            setState(() {
+                              if (v == true) {
+                                _selected.add(f.uid);
+                              } else {
+                                _selected.remove(f.uid);
+                              }
+                            });
+                          },
+                        );
+                      },
+                    ),
                   );
                 },
               ),
-            );
-          },
+            ),
+            // Skiftede man til Duo med flere markeret: sig det, i stedet for
+            // tavst at invitere tre til et 1 mod 1.
+            if (tooMany)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '${variant.name} er 1 mod 1 — vælg højst én modstander.',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+          ],
         ),
       ),
       actions: <Widget>[
@@ -1104,20 +1098,36 @@ class _InviteFriendsDialogState extends ConsumerState<_InviteFriendsDialog> {
           child: const Text('Annullér'),
         ),
         FilledButton(
-          onPressed: () {
-            final friends = ref.read(friendsStreamProvider).valueOrNull ??
-                const <FriendRef>[];
-            final picked =
-                friends.where((f) => _selected.contains(f.uid)).toList();
-            Navigator.pop(context, picked);
-          },
+          onPressed: tooMany
+              ? null
+              : () {
+                  final friends =
+                      ref.read(friendsStreamProvider).valueOrNull ??
+                          const <FriendRef>[];
+                  final picked = friends
+                      .where((f) => _selected.contains(f.uid))
+                      .toList();
+                  Navigator.pop<_NewGameChoice>(
+                      context, (variantId: variant.id, invitees: picked));
+                },
           child: Text(_selected.isEmpty
               ? 'Opret uden invitationer'
-              : 'Opret og inviter (${_selected.length})'),
+              : 'Opret og invitér (${_selected.length})'),
         ),
       ],
     );
   }
+}
+
+/// Sæt lobbyens variant — den ENE vej, som både "Nyt spil" og lobbyens
+/// vælger bruger. En CUSTOM variant skal have sit entry (config-doc'ets
+/// variants.{id}) med, ellers ser gæsterne klassisk udseende, og starten
+/// finder ingen regler (QC-fund; før sendte kun lobbyens vælger det).
+Future<void> setLobbyVariant(
+    WidgetRef ref, OnlineService svc, String code, String id) {
+  final dynamic entry = ref.read(variantCardRulesProvider).toRawJson()[id];
+  return svc.setVariant(code, id,
+      entry: entry is Map<String, dynamic> ? entry : null);
 }
 
 /// Kør en lobby-handling og VIS en afvisning. Før blev setVariant/joinGame/

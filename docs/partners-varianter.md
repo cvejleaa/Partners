@@ -251,8 +251,8 @@ Udgivet 2022 (Årets Familiespil 2022, nomineret til Guldbrikken). Alder 8+,
 spilletid ca. 15-45 min. 1 mod 1, ingen hold — "man er sin egen partner".
 
 **I APPEN (2026-09-23):** Duo kan spilles mod computeren (opsætningen) og
-ONLINE mod en ven ("Opret Duo (1 mod 1)" på Online-siden, eller variant-listen
-i lobbyen). Et spillers to sæt har samme farve og skelnes med et mærke: RING på
+ONLINE mod en ven ("Opret nyt spil" på Online-siden, hvor spillet vælges
+øverst i dialogen — eller variant-listen i lobbyen). Et spillers to sæt har samme farve og skelnes med et mærke: RING på
 sættet ved hånd-pladsen, PRIK på det andet — på brikkerne og i sættets start- og
 målbrønde.
 

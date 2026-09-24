@@ -138,6 +138,39 @@ void main() {
           2);
     });
 
+    test('hjælpeteksten siger det, der er SANDT (ejer-fund)', () {
+      // Duo-vært alene: kan IKKE starte — ingen "tomme pladser bliver til
+      // computere" (de gør netop ikke).
+      final List<dynamic> alone = <dynamic>['a', null, 'a', null];
+      final List<dynamic> noAi = <dynamic>[false, false, false, false];
+      expect(lobbyFilledSeats(partnersDuo, alone, noAi), 1);
+      final String duoHint = lobbyStartHint(partnersDuo,
+          lobbyFilledSeats(partnersDuo, alone, noAi),
+          lobbyOpenSeats(partnersDuo, alone, noAi))!;
+      expect(duoHint, contains('din modstanders plads'));
+      expect(duoHint, isNot(contains('computer-spillere')));
+      // Klassisk vært alene: samme modsigelse fandtes — nu samme sandhed.
+      final List<dynamic> classicAlone = <dynamic>['a', null, null, null];
+      final String classicHint = lobbyStartHint(
+          classicVariant,
+          lobbyFilledSeats(classicVariant, classicAlone, noAi),
+          lobbyOpenSeats(classicVariant, classicAlone, noAi))!;
+      expect(classicHint, startsWith('Mindst 2 spillere'));
+      // Klassisk med 2 udfyldt og 2 åbne: DÅ bliver de tomme til computere.
+      final List<dynamic> two = <dynamic>['a', 'b', null, null];
+      expect(
+          lobbyStartHint(classicVariant,
+              lobbyFilledSeats(classicVariant, two, noAi),
+              lobbyOpenSeats(classicVariant, two, noAi)),
+          'Tomme pladser bliver til computer-spillere ved start.');
+      // Fuld Duo-lobby: ingen linje.
+      final List<dynamic> full = <dynamic>['a', 'b', 'a', 'b'];
+      expect(
+          lobbyStartHint(partnersDuo, lobbyFilledSeats(partnersDuo, full, noAi),
+              lobbyOpenSeats(partnersDuo, full, noAi)),
+          isNull);
+    });
+
     test('"Mine spil": én gang pr. spiller og én åben plads i Duo-lobbyen', () {
       final GameSummary g = gameSummaryFromDoc('ABCD', <String, dynamic>{
         'status': 'lobby',

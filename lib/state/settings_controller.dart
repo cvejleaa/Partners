@@ -18,6 +18,7 @@ class Settings {
     this.themeMode = ThemeMode.system,
     this.pushEnabled = false,
     this.preferredColorValue,
+    this.lastOnlineVariantId,
   });
 
   final bool soundEnabled;
@@ -35,6 +36,11 @@ class Settings {
   /// præference (brættets oprindelige farver).
   final int? preferredColorValue;
 
+  /// Den variant, man sidst oprettede et online-spil med — forvalget i "Nyt
+  /// spil"-dialogen, så et hurtigt spil af samme slags ikke koster ekstra
+  /// tryk. null = klassisk.
+  final String? lastOnlineVariantId;
+
   Settings copyWith({
     bool? soundEnabled,
     bool? hapticsEnabled,
@@ -42,6 +48,7 @@ class Settings {
     bool? pushEnabled,
     int? preferredColorValue,
     bool clearPreferredColor = false,
+    String? lastOnlineVariantId,
   }) {
     return Settings(
       soundEnabled: soundEnabled ?? this.soundEnabled,
@@ -51,6 +58,7 @@ class Settings {
       preferredColorValue: clearPreferredColor
           ? null
           : (preferredColorValue ?? this.preferredColorValue),
+      lastOnlineVariantId: lastOnlineVariantId ?? this.lastOnlineVariantId,
     );
   }
 
@@ -61,6 +69,8 @@ class Settings {
         'pushEnabled': pushEnabled,
         if (preferredColorValue != null)
           'preferredColorValue': preferredColorValue,
+        if (lastOnlineVariantId != null)
+          'lastOnlineVariantId': lastOnlineVariantId,
       };
 
   factory Settings.fromJson(Map<String, dynamic> json) {
@@ -70,6 +80,9 @@ class Settings {
       themeMode: _themeModeFromName(json['themeMode'] as String?),
       pushEnabled: json['pushEnabled'] as bool? ?? false,
       preferredColorValue: (json['preferredColorValue'] as num?)?.toInt(),
+      lastOnlineVariantId: json['lastOnlineVariantId'] is String
+          ? json['lastOnlineVariantId'] as String
+          : null,
     );
   }
 
@@ -130,6 +143,11 @@ class SettingsController extends StateNotifier<Settings> {
 
   void setThemeMode(ThemeMode mode) {
     state = state.copyWith(themeMode: mode);
+    _save();
+  }
+
+  void setLastOnlineVariantId(String id) {
+    state = state.copyWith(lastOnlineVariantId: id);
     _save();
   }
 
