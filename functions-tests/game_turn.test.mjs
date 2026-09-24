@@ -16,7 +16,8 @@ import {test} from "node:test";
 import assert from "node:assert/strict";
 import pkg from "../functions/game_turn.js";
 
-const {turnPushTarget, handleGameTurnUpdate, PRESENT_WINDOW_MS} = pkg;
+const {turnPushTarget, exchangePushTargets, handleGameTurnUpdate,
+  PRESENT_WINDOW_MS} = pkg;
 
 // Realistiske Firebase-uid'er (28 tegn), som game_over.test.mjs.
 const A = "AaBbCcDdEeFfGgHhIiJjKkLl0001";
@@ -356,4 +357,94 @@ test("presence slaas IKKE op, naar der ikke skal sendes push", async () => {
     now: NOW,
   });
   assert.equal(opslag, 0);
+});
+
+// ---- BYTTEFASE-PUSH ("vælg dit byttekort") ----
+// Uden den stod et spil mellem to mennesker stille efter hver hånd: den, der
+// ikke lavede sidste træk, fik ingen besked om at byttet ventede.
+
+const card = {r: "ace", s: "spades"};
+// En hånd-start: play → exchange, hn 3 → 4. Plads 0/1 har kort; plads 2/3
+// har ingen (Duo-spejl) — [A,B,A,B].
+const duoHandStart = {
+  before: {status: "playing", uids: [A, B, A, B],
+    state: {ph: "play", cp: 1, hn: 3}},
+  after: {status: "playing", uids: [A, B, A, B],
+    state: {ph: "exchange", cp: 1, hn: 4, eb: {},
+      pl: [{hd: [card]}, {hd: [card]}, {hd: []}, {hd: []}]}},
+};
+
+test("exchangePushTargets — hånd-start i Duo: begge spillere, hver ÉN gang", () => {
+  assert.deepEqual(
+      exchangePushTargets(duoHandStart.before, duoHandStart.after), [A, B]);
+});
+
+test("exchangePushTargets — den, der allerede har afgivet, får ingen", () => {
+  const after = structuredClone(duoHandStart.after);
+  after.state.eb = {"0": card};
+  assert.deepEqual(exchangePushTargets(duoHandStart.before, after), [B]);
+});
+
+test("exchangePushTargets — klassisk: alle fire mennesker, AI-plads udelades", () => {
+  const after = {status: "playing", uids: [A, B, C, null],
+    state: {ph: "exchange", hn: 2, eb: {},
+      pl: [{hd: [card]}, {hd: [card]}, {hd: [card]}, {hd: [card]}]}};
+  const before = {status: "playing", uids: [A, B, C, null],
+    state: {ph: "play", hn: 1}};
+  assert.deepEqual(exchangePushTargets(before, after), [A, B, C]);
+});
+
+test("exchangePushTargets — MIDT i byttefasen (et kort afgives) giver ingen", () => {
+  // Kun en NY byttefase tæller — ellers fik de andre en push, hver gang én
+  // afgav sit kort.
+  const before = structuredClone(duoHandStart.after);
+  const after = structuredClone(duoHandStart.after);
+  after.state.eb = {"1": card};
+  assert.deepEqual(exchangePushTargets(before, after), []);
+});
+
+test("exchangePushTargets — play-fasen, lobby og afsluttet spil giver ingen", () => {
+  assert.deepEqual(exchangePushTargets(TURN.before, TURN.after), []);
+  assert.deepEqual(exchangePushTargets({status: "lobby"},
+      {status: "lobby", state: {ph: "exchange", hn: 1}}), []);
+  assert.deepEqual(exchangePushTargets({status: "playing"},
+      {status: "over", state: {ph: "exchange", hn: 1}}), []);
+});
+
+test("exchangePushTargets — ANGREB: sti-agtigt uid og skæv state giver intet", () => {
+  const after = {status: "playing", uids: ["../users/x", B],
+    state: {ph: "exchange", hn: 1, eb: "x", pl: [{hd: [card]}, "skæv"]}};
+  assert.deepEqual(exchangePushTargets({status: "playing"}, after), []);
+});
+
+test("handleGameTurnUpdate — byttefase-push: type exchange, springer den over, der SIDDER der", async () => {
+  const calls = [];
+  await handleGameTurnUpdate({
+    ...duoHandStart,
+    code: "DUO1",
+    pushToUser: async (uid, msg, extra) => calls.push({uid, msg, extra}),
+    markStale: async () => {},
+    // A sidder og kigger (lavede fx håndens sidste træk); B er væk.
+    presenceAt: async (code, uid) => (uid === A ? NOW - 1000 : null),
+    now: NOW,
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].uid, B);
+  assert.equal(calls[0].msg.data.type, "exchange");
+  assert.equal(calls[0].msg.data.gameCode, "DUO1");
+  assert.equal(calls[0].extra.present, false);
+});
+
+test("handleGameTurnUpdate — byttefase-push sendes, selvom presence-opslaget FEJLER", async () => {
+  const calls = [];
+  await handleGameTurnUpdate({
+    ...duoHandStart,
+    code: "DUO1",
+    pushToUser: async (uid, msg, extra) => calls.push({uid, extra}),
+    markStale: async () => {},
+    presenceAt: async () => { throw new Error("nede"); },
+    now: NOW,
+  });
+  assert.deepEqual(calls.map((c) => c.uid), [A, B]);
+  assert.equal(calls[0].extra.present, null);
 });

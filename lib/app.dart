@@ -542,7 +542,7 @@ class _PartnersAppState extends ConsumerState<PartnersApp>
       // Tur-beskeder i FORGRUNDEN springes over: er du i appen, ser du allerede
       // hvis tur det er (bræt/liste). Systemnotifikationen i baggrunden er den
       // vigtige. Invitationer vises stadig som SnackBar.
-      if (msg.type == 'turn') return;
+      if (msg.type == 'turn' || msg.type == 'exchange') return;
       final messenger = _scaffoldMessengerKey.currentState;
       if (messenger == null) return;
       messenger.showSnackBar(SnackBar(

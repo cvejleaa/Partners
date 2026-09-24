@@ -29,7 +29,10 @@ const messaging = firebase.messaging();
 function targetFor(type, gameCode) {
   if (!gameCode) return '/';
   const code = encodeURIComponent(gameCode);
-  return type === 'turn' ? '/?game=' + code : '/?invite=' + code;
+  // Byttefase-push'en ('exchange') handler også om et spil i gang.
+  return type === 'turn' || type === 'exchange'
+    ? '/?game=' + code
+    : '/?invite=' + code;
 }
 
 // Beskederne sendes DATA-only, så browseren IKKE selv viser en notifikation.

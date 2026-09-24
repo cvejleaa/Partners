@@ -38,8 +38,9 @@ class PushMessage {
   final String gameCode;
   final DateTime receivedAt;
 
-  /// 'turn' | 'invite' | '' — bruges til at afgøre om en foregrunds-besked skal
-  /// vises som SnackBar (tur-beskeder springes over når man er i appen).
+  /// 'turn' | 'exchange' | 'invite' | '' — bruges til at afgøre om en
+  /// foregrunds-besked skal vises som SnackBar (tur- og byttefase-beskeder
+  /// springes over når man er i appen).
   final String type;
 }
 

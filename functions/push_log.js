@@ -39,7 +39,7 @@ const STALE_CODES = [
  * og GDPR-graenserne kan mutationstestes.
  *
  * @param {object} opts
- * @param {string} opts.type "turn" | "invite"
+ * @param {string} opts.type "turn" | "exchange" | "invite"
  * @param {Array<object>} opts.responses res.responses fra sendEachForMulticast
  * @param {boolean|null} [opts.present] sad modtageren og kiggede? (kun turn)
  * @return {object} felter til logger.info/error

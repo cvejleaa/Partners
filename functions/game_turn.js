@@ -73,6 +73,46 @@ function turnPushTarget(before, after) {
 }
 
 /**
+ * Hvem skal have en "vælg dit byttekort"-push? Når en ny hånd begynder
+ * (fasen skifter TIL 'exchange', eller hånd-nummeret skifter i den), skal
+ * hver menneskelig spiller, der har kort på hånden og endnu ikke har afgivet
+ * sit byttekort, vælge et — og uden en besked stod et spil mellem to
+ * mennesker stille efter hver hånd, til nogen tilfældigvis åbnede appen (fund
+ * fra spil-rådgiveren på Duo online; gælder alle varianter).
+ *
+ * "Har kort på hånden" (state.pl[i].hd) genkender pladserne med en hånd
+ * POSITIVT — Duos spejl-pladser har ingen kort og samme uid, så modtageren
+ * nævnes én gang. AI-pladser har intet uid. Samme UID_FORM-vagt som
+ * turnPushTarget: state skrives af klienten.
+ * @param {object} before dokumentet før ændringen
+ * @param {object} after dokumentet efter ændringen
+ * @return {string[]} uids der skal have en byttefase-push (unikke)
+ */
+function exchangePushTargets(before, after) {
+  if ((after || {}).status !== "playing") return [];
+  const aState = (after || {}).state || {};
+  const bState = (before || {}).state || {};
+  if (aState.ph !== "exchange") return [];
+  const began = bState.ph !== "exchange" || aState.hn !== bState.hn;
+  if (!began) return [];
+  const uids = Array.isArray((after || {}).uids) ? after.uids : [];
+  const pl = Array.isArray(aState.pl) ? aState.pl : [];
+  const eb = (aState.eb && typeof aState.eb === "object") ? aState.eb : {};
+  const out = [];
+  const n = Math.min(uids.length, pl.length, 4);
+  for (let i = 0; i < n; i++) {
+    const hand = (pl[i] || {}).hd;
+    if (!Array.isArray(hand) || hand.length === 0) continue;
+    if (Object.prototype.hasOwnProperty.call(eb, String(i))) continue;
+    const uid = uids[i];
+    if (typeof uid === "string" && UID_FORM.test(uid) && !out.includes(uid)) {
+      out.push(uid);
+    }
+  }
+  return out;
+}
+
+/**
  * Håndter ÉN skrivning til games/{code}: send evt. en "din tur"-push, og
  * markér evt. deltagernes statistik som forældet ved spil-slut.
  * @param {object} opts
@@ -91,6 +131,7 @@ async function handleGameTurnUpdate({
   before, after, code, pushToUser, markStale, presenceAt = null, now = null,
 }) {
   const turnUid = turnPushTarget(before, after);
+  const exchangeUids = exchangePushTargets(before, after);
   const staleUids = isGameOverTransition(before, after) ?
     staleTargets(after) : [];
 
@@ -128,6 +169,36 @@ async function handleGameTurnUpdate({
       webpush: {headers: {Urgency: "high", TTL: "300"}},
     }, {present}));
   }
+  // Byttefase-push. Modsat tur-push'en springes den OVER for den, der sidder
+  // i spillet lige nu: den går til flere på én gang, og den, der lavede
+  // håndens sidste træk (og dermed udløste den), sidder næsten altid der.
+  // Fejler presence-opslaget, sendes den (hellere én for meget end et spil,
+  // der står stille).
+  for (const uid of exchangeUids) {
+    tasks.push((async () => {
+      let present = null;
+      if (presenceAt) {
+        try {
+          const at = await presenceAt(code, uid);
+          const t = now === null ? Date.now() : now;
+          present = at === null || at === undefined ?
+            false : (t - at) < PRESENT_WINDOW_MS;
+        } catch (e) {
+          present = null;
+        }
+      }
+      if (present === true) return;
+      await pushToUser(uid, {
+        data: {
+          type: "exchange",
+          gameCode: code,
+          title: "Partners — vælg dit byttekort",
+          body: `Ny hånd i spil ${code} — vælg dit byttekort`,
+        },
+        webpush: {headers: {Urgency: "high", TTL: "300"}},
+      }, {present});
+    })());
+  }
   if (staleUids.length) {
     tasks.push(markStale(staleUids));
   }
@@ -137,4 +208,6 @@ async function handleGameTurnUpdate({
   if (rejected) throw rejected.reason;
 }
 
-module.exports = {turnPushTarget, handleGameTurnUpdate, PRESENT_WINDOW_MS};
+module.exports = {
+  turnPushTarget, exchangePushTargets, handleGameTurnUpdate, PRESENT_WINDOW_MS,
+};
