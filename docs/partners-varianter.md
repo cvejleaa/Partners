@@ -274,6 +274,10 @@ Kendte huller, navngivet:
   en modstander med egen klient (gælder alle varianter; i Duo er modtageren
   din eneste modstander).
 - Ingen tur-autoritet på serveren (gælder alle varianter).
+- Byttefase-push'en sendes ÉN gang, når byttet begynder. Afgiver den ene sit
+  kort, og den anden aldrig gør, kommer der ingen påmindelse, og der er ingen
+  AI-overtagelse i byttefasen (kun i play-fasen) — et spil kan stadig stå
+  stille dér (QC, navngivet).
 - Ingen tutorial om Duo.
 
 **KILDE: æskens egen regelbog (side 3-4) og pladen, fotograferet af ejeren

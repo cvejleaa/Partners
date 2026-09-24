@@ -600,3 +600,15 @@ test("skæv spil-kode: stats-markeringen ved spil-slut sker stadig", async () =>
   });
   assert.deepEqual(staled, [[A, B, C, D]]);
 });
+
+test("exchangePushTargets — SPILSTART (lobby → playing, intet state før) " +
+    "giver alle menneskelige spillere", () => {
+  // Den faktiske skrivning fra startGameFromLobby: lobby-doc'et har intet
+  // 'state' før start, og onlineInitialState har allerede delt ud
+  // (startNewHand) — så første skrivning er ph 'exchange', hn 1.
+  const before = {status: "lobby", uids: [A, B, A, B]};
+  const after = {status: "playing", uids: [A, B, A, B],
+    state: {ph: "exchange", cp: 0, hn: 1, eb: {},
+      pl: [{hd: [card]}, {hd: [card]}, {hd: []}, {hd: []}]}};
+  assert.deepEqual(exchangePushTargets(before, after), [A, B]);
+});

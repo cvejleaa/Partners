@@ -80,6 +80,31 @@ function turnPushTarget(before, after) {
 }
 
 /**
+ * Sidder [uid] og kigger på spillet [code] lige nu? true/false — eller null,
+ * hvis det ikke kan afgøres (intet opslag, eller det fejlede). Den ENE
+ * udregning, delt af tur- og byttefase-push'en (QC-fund: to kopier).
+ *
+ * Kan KUN afgøres i sendeøjeblikket: presence-stemplet overskrives ved hvert
+ * heartbeat, så der er ingen historik at regne baglæns fra.
+ * @param {function(string, string): Promise<number|null>|null} presenceAt
+ * @param {string} code spil-koden
+ * @param {string} uid modtageren
+ * @param {number|null} now "nu" i ms (null = Date.now())
+ * @return {Promise<boolean|null>}
+ */
+async function presentNow(presenceAt, code, uid, now) {
+  if (!presenceAt) return null;
+  try {
+    const at = await presenceAt(code, uid);
+    const t = now === null ? Date.now() : now;
+    return at === null || at === undefined ?
+      false : (t - at) < PRESENT_WINDOW_MS;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
  * Hvem skal have en "vælg dit byttekort"-push? Når en ny hånd begynder
  * (fasen skifter TIL 'exchange', eller hånd-nummeret skifter i den), skal
  * hver menneskelig spiller, der har kort på hånden og endnu ikke har afgivet
@@ -146,25 +171,11 @@ async function handleGameTurnUpdate({
   const staleUids = isGameOverTransition(before, after) ?
     staleTargets(after) : [];
 
-  // Sad modtageren og kiggede? Kan KUN afgoeres nu: presence-stemplet
-  // overskrives ved hvert heartbeat, saa der er ingen historik at regne
-  // baglaens fra. Svarer paa "sender vi til nogen, der allerede sidder der" —
-  // og kan senere begrunde at springe push'en over. Koster eet ekstra
-  // dokument-read pr. tur-push.
-  //
-  // Maalingen maa ALDRIG kunne forhindre selve push'en: fejler opslaget,
-  // logger vi bare "ved ikke" (null).
-  let present = null;
-  if (turnUid && presenceAt) {
-    try {
-      const at = await presenceAt(code, turnUid);
-      const t = now === null ? Date.now() : now;
-      present = at === null || at === undefined ?
-        false : (t - at) < PRESENT_WINDOW_MS;
-    } catch (e) {
-      present = null;
-    }
-  }
+  // Sad modtageren af tur-push'en og kiggede? Kun en MÅLING her (den sendes
+  // uanset) — og den må aldrig kunne forhindre selve push'en: fejler
+  // opslaget, logger vi bare "ved ikke" (null). Koster ét dokument-read.
+  const present = turnUid ?
+    await presentNow(presenceAt, code, turnUid, now) : null;
 
   const tasks = [];
   if (turnUid) {
@@ -187,17 +198,7 @@ async function handleGameTurnUpdate({
   // der står stille).
   for (const uid of exchangeUids) {
     tasks.push((async () => {
-      let present = null;
-      if (presenceAt) {
-        try {
-          const at = await presenceAt(code, uid);
-          const t = now === null ? Date.now() : now;
-          present = at === null || at === undefined ?
-            false : (t - at) < PRESENT_WINDOW_MS;
-        } catch (e) {
-          present = null;
-        }
-      }
+      const present = await presentNow(presenceAt, code, uid, now);
       if (present === true) return;
       await pushToUser(uid, {
         data: {

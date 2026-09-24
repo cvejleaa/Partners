@@ -22,6 +22,22 @@ import 'online_service.dart';
 const String _kVapidKey =
     'BHKKeJhMTO_nQN2lgRk4Z8ijLmD4vUWalLCZN2O4ldXOwB2LOL3gtsC7WET9GmeSHTYNfySdo-mQSgfgSd6lZQM';
 
+/// Koden på det online-spil, der er ÅBENT på skærmen lige nu (null = intet).
+/// Sættes af OnlineGameScreen. Bruges til at afgøre, om en forgrunds-push om
+/// et spil allerede ses — presence er pr. spil, så en push om spil B kan godt
+/// nå en, der sidder i spil A.
+final ValueNotifier<String?> openOnlineGameCode = ValueNotifier<String?>(null);
+
+/// Skal en forgrunds-push vises som SnackBar? Tur- og byttefase-beskeder om
+/// det spil, man SIDDER i, springes over (man ser det allerede på brættet).
+/// Om et ANDET spil vises de — før blev de slugt, uanset hvilket spil man så
+/// på (QC-fund), og netop den bruger var push'en lavet til at nå.
+bool showForegroundPush(PushMessage msg, String? openGameCode) {
+  final bool aboutAGame = msg.type == 'turn' || msg.type == 'exchange';
+  if (!aboutAGame) return true;
+  return openGameCode == null || msg.gameCode != openGameCode;
+}
+
 /// Letvægts-besked vist når der kommer en foregrund-push (browser-fanen er åben).
 @immutable
 class PushMessage {

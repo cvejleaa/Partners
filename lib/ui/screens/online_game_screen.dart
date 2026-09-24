@@ -16,6 +16,7 @@ import '../../models/playing_card.dart';
 import '../../models/piece.dart';
 import '../../models/variant_config.dart';
 import '../../online/online_service.dart';
+import '../../online/push_service.dart';
 import '../../online/replay_story.dart';
 import '../../online/serialize.dart';
 import '../../state/display_config.dart';
@@ -187,6 +188,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _capturedSvc = _svc;
+    openOnlineGameCode.value = widget.code;
     // ignore: discarded_futures
     _svc.heartbeat(widget.code);
     _heartbeat = Timer.periodic(kPresenceInterval, (_) {
@@ -311,6 +313,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Kun hvis det stadig er MIG — et nyt spil kan være åbnet ovenpå.
+    if (openOnlineGameCode.value == widget.code) {
+      openOnlineGameCode.value = null;
+    }
     _flushSeen();
     _heartbeat?.cancel();
     _presenceThrottle?.cancel();
