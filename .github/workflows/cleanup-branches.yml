@@ -1,0 +1,103 @@
+# Ryd op i test-branches — en KNAP (Actions → "Ryd op i test-branches" →
+# "Run workflow"), ikke noget der kører af sig selv.
+#
+# Mutationstestene (Test Manager) pusher korte branches (mut/…, tm-verify-…
+# osv.) for at få CI til at køre på én bevidst fejl. Selve sessionen kan ikke
+# slette dem (proxyen afviser sletning), så de hober sig op.
+#
+# Sikkerhed:
+# - Første kørsel SLETTER INGENTING: "slet" er slået fra som standard, og
+#   kørslen skriver kun listen over det, den ville slette (se kørslens
+#   Summary). Først når listen er set, køres den igen med "slet" slået til.
+# - Beholdes ALTID: repoets standardbranch (main), grenene i "behold",
+#   beskyttede branches og enhver branch med en ÅBEN pull request.
+# - Kun manuel start (workflow_dispatch) og kun den, der kan starte
+#   workflows i repoet.
+name: Ryd op i test-branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      slet:
+        description: "Slet grenene (slået fra = vis kun listen)"
+        type: boolean
+        default: false
+      behold:
+        description: "Branches der ALTID beholdes (adskilt af mellemrum)"
+        type: string
+        default: "main claude/partners-game-app-Z6NJW"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: cleanup-branches
+  cancel-in-progress: false
+
+jobs:
+  ryd-op:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find (og evt. slet) test-branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # Input via miljøvariabler, aldrig direkte i scriptet — så et
+          # skævt input ikke kan blive til kommandoer.
+          SLET: ${{ inputs.slet }}
+          BEHOLD: ${{ inputs.behold }}
+          STANDARD: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          # Branches med en åben pull request røres aldrig.
+          prs="$(gh pr list -R "$REPO" --state open --limit 500 \
+                   --json headRefName -q '.[].headRefName' | tr '\n' ' ')"
+          keep=" $STANDARD $BEHOLD $prs "
+
+          # Alle IKKE-beskyttede branches.
+          mapfile -t alle < <(gh api --paginate \
+            "repos/$REPO/branches?per_page=100" \
+            -q '.[] | select(.protected | not) | .name')
+
+          slettes=()
+          beholdes=()
+          for b in "${alle[@]}"; do
+            case "$keep" in
+              *" $b "*) beholdes+=("$b") ;;
+              *) slettes+=("$b") ;;
+            esac
+          done
+
+          {
+            if [ "$SLET" = "true" ]; then
+              echo "## Sletter ${#slettes[@]} branches"
+            else
+              echo "## Prøvekørsel — INTET slettet"
+              echo
+              echo "Disse ${#slettes[@]} branches VILLE blive slettet. Ser"
+              echo "listen rigtig ud, så kør igen med **slet** slået til."
+            fi
+            echo
+            echo "**Beholdes (${#beholdes[@]}):** ${beholdes[*]:-}"
+            echo
+            for b in "${slettes[@]}"; do echo "- \`$b\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$SLET" != "true" ]; then
+            printf 'Ville slette: %s\n' "${slettes[@]}"
+            exit 0
+          fi
+
+          fejl=0
+          for b in "${slettes[@]}"; do
+            if gh api -X DELETE "repos/$REPO/git/refs/heads/$b" >/dev/null; then
+              echo "Slettet: $b"
+            else
+              echo "::warning::Kunne ikke slette $b"
+              fejl=$((fejl + 1))
+            fi
+          done
+          echo "Færdig. Fejl: $fejl" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$fejl" -eq 0 ]
