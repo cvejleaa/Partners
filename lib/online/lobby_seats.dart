@@ -265,6 +265,7 @@ int lobbyFilledSeats(
 /// værten sad alene og ikke kunne starte (ejer-fund): de tomme pladser
 /// blev netop IKKE fyldt.
 String? lobbyStartHint(VariantConfig v, int filled, int open) {
+  if (open > 0) return 'Tomme pladser bliver til computer-spillere ved start.';
   if (filled < 2) {
     return v.seatsShareController
         ? '${v.name} er 1 mod 1 — invitér din modstander, eller tryk '
@@ -272,7 +273,6 @@ String? lobbyStartHint(VariantConfig v, int filled, int open) {
         : 'Mindst 2 spillere — invitér en spiller, eller tryk '
             '"Fyld med AI" på en plads.';
   }
-  if (open > 0) return 'Tomme pladser bliver til computer-spillere ved start.';
   return null;
 }
 
