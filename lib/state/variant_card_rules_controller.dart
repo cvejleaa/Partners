@@ -494,5 +494,5 @@ class VariantCardRulesController extends StateNotifier<VariantsAdminState> {
 Map<Rank, CardRuleConfig> materializedOverrides(
         CardRules effective, List<Rank> ranks) =>
     <Rank, CardRuleConfig>{
-      for (final Rank r in ranks) r: effective.forRank(r),
+      for (final Rank r in Rank.values) r: effective.forRank(r),
     };
