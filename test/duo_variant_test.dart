@@ -396,15 +396,18 @@ void main() {
   });
 
   test('4×1 i Duos mål med tilbageslag er IKKE et byt (ejer-fund)', () {
-    // To brikker i målet og den inderste cirkel fri: 4×1 kan flytte A ind og
-    // lade B slå tilbage til As felt — A→Bs felt og B→As felt, samme FORM
-    // som et byt. Genkendt som byt, ventede spilfladen på et "flyt eller
-    // byt"-valg uden knapper, og ingen brik lyste.
+    // Ejerens bræt: to brikker på målets to yderste cirkler (den inderste
+    // fri) og den tredje på banen to felter før eget ♥ (felt 42 af 44).
+    // 4×1: A (cirkel 1) kan ikke komme længere ind, vender og går 2 baglæns
+    // ud på banen til felt 42; C (felt 42) går 2 frem ind på cirkel 1.
+    // A→Cs felt og C→As felt — samme FORM som et byt. Genkendt som byt,
+    // ventede spilfladen på et "flyt eller byt"-valg uden knapper, og ingen
+    // brik lyste.
     final GameState s = duoState(<List<PiecePosition>>[
       <PiecePosition>[
         const HomeStretchPosition(0, 0),
         const HomeStretchPosition(0, 1),
-        const StartPosition(0, 2),
+        const TrackPosition(42),
       ],
       hjemme(1), hjemme(2), hjemme(3),
     ]);
