@@ -123,6 +123,25 @@ void main() {
     });
   });
 
+  test('admin: de indbyggede varianter med egne kort er 25 år OG Duo', () {
+    // Admin var hardkodet til 25 år — Duo kunne ikke vælges (ejer-fund).
+    expect(editableBuiltinVariants.map((VariantConfig v) => v.id).toList(),
+        <String>['p25', 'duo']);
+    expect(isEditableBuiltin('duo'), isTrue);
+    expect(isEditableBuiltin('classic'), isFalse,
+        reason: 'klassisk redigeres i sin egen kolonne');
+    expect(isEditableBuiltin('cv-x'), isFalse);
+  });
+
+  test('admin: Duos bunke har 10 rangs — J/D/K er ikke med', () {
+    final List<Rank> r = ranksInDeck(partnersDuo);
+    expect(r, hasLength(10));
+    expect(r, isNot(contains(Rank.jack)));
+    expect(r, isNot(contains(Rank.king)));
+    expect(ranksInDeck(classicVariant), hasLength(13));
+    expect(ranksInDeck(partners25), hasLength(13));
+  });
+
   test('admin: Duo falder til sit kode-seed, ikke en tom custom', () {
     const VariantsAdminState s = VariantsAdminState();
     final VariantAdminConfig duo = s.configFor('duo');

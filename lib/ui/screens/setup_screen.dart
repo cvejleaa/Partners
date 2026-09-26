@@ -47,23 +47,18 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
   /// Navn/beskrivelse med admins evt. egne tekster. Customs bærer allerede
   /// deres admin-navn/-beskrivelse fra materialiseringen (variantFromRaw);
-  /// kun 25 år har en kode-tekst der kan afløses.
+  /// de indbyggede varianter med egne kort (25 år, Duo) har en kode-tekst,
+  /// som admin kan afløse.
   String _displayName(VariantConfig v) => variantNameFrom(
       v,
-      v.id == partners25.id
-          ? ref
-              .watch(variantCardRulesProvider)
-              .configFor(partners25.id)
-              .name
+      isEditableBuiltin(v.id)
+          ? ref.watch(variantCardRulesProvider).configFor(v.id).name
           : null);
 
   String? _displayDescription(VariantConfig v) => variantDescriptionFrom(
       v,
-      v.id == partners25.id
-          ? ref
-              .watch(variantCardRulesProvider)
-              .configFor(partners25.id)
-              .description
+      isEditableBuiltin(v.id)
+          ? ref.watch(variantCardRulesProvider).configFor(v.id).description
           : null);
 
   @override

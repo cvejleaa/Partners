@@ -790,3 +790,21 @@ int pickStarter(VariantConfig v, Random rng) {
   ];
   return handSeats[rng.nextInt(handSeats.length)];
 }
+
+/// De INDBYGGEDE varianter med egne kortregler (25 år, Duo) — dem admin kan
+/// redigere side om side med klassisk. Afledt af registret, så en ny
+/// indbygget variant kommer med af sig selv (før var admin hardkodet til
+/// 25 år, og Duo manglede — ejer-fund).
+List<VariantConfig> get editableBuiltinVariants => <VariantConfig>[
+      for (final VariantConfig v in kAllVariants)
+        if (v.cardRuleOverrides != null) v,
+    ];
+
+bool isEditableBuiltin(String id) =>
+    editableBuiltinVariants.any((VariantConfig v) => v.id == id);
+
+/// Rangene i [v]'s bunke (alle 13, hvis varianten ikke begrænser dem).
+List<Rank> ranksInDeck(VariantConfig v) => <Rank>[
+      for (final Rank r in Rank.values)
+        if (v.deckRanks == null || v.deckRanks!.contains(r)) r,
+    ];

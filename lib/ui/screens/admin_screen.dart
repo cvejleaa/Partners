@@ -97,7 +97,7 @@ class AdminScreen extends ConsumerWidget {
         title: const Text('Admin — Kortfunktioner'),
         actions: <Widget>[
           IconButton(
-            tooltip: 'Hent fra database NU (klassisk + 25 år)',
+            tooltip: 'Hent fra database NU (klassisk + varianter)',
             icon: const Icon(Icons.cloud_download, color: Colors.white),
             onPressed: () async {
               // BEGGE datasæt — ellers lyver knappen om det ene.
@@ -110,7 +110,7 @@ class AdminScreen extends ConsumerWidget {
                   SnackBar(
                       content: Text(s.lastLoadError.isEmpty
                           ? 'Hentet — klassisk: ${s.lastLoadSource} · '
-                              '25 år: $vs'
+                              'varianter: $vs'
                           : 'Læsefejl: ${s.lastLoadError}')),
                 );
               }
@@ -132,11 +132,11 @@ class AdminScreen extends ConsumerWidget {
                 final String msg = err.isEmpty && vErr.isEmpty
                     ? (vStored
                         ? 'Gemt (klassisk + varianter)'
-                        : 'Gemt (klassisk) · 25 år følger de indbyggede '
-                            'specialkort (intet at gemme)')
+                        : 'Gemt (klassisk) · varianterne følger deres '
+                            'indbyggede kort (intet at gemme)')
                     : <String>[
                         if (err.isNotEmpty) 'Klassisk: $err',
-                        if (vErr.isNotEmpty) '25 år: $vErr',
+                        if (vErr.isNotEmpty) 'Varianter: $vErr',
                       ].join(' · ');
                 ScaffoldMessenger.of(context)
                     .showSnackBar(SnackBar(content: Text(msg)));
@@ -154,10 +154,11 @@ class AdminScreen extends ConsumerWidget {
                 builder: (BuildContext ctx) => AlertDialog(
                   title: const Text('Nulstil kortregler?'),
                   content: const Text(
-                      'Klassisk sættes til standardreglerne. Partners 25 år '
-                      'mister dine tilpasninger og går tilbage til de fem '
-                      'indbyggede specialkort (4×1, 5↷, 7/+2−5, byt/9, '
-                      '11/1×1). Dette kan ikke fortrydes.'),
+                      'Klassisk sættes til standardreglerne. De indbyggede '
+                      'varianter (Partners 25 år, Partners Duo) mister dine '
+                      'tilpasninger og går tilbage til deres egne kort '
+                      '(fra æsken). Dine egne varianter røres ikke. Dette '
+                      'kan ikke fortrydes.'),
                   actions: <Widget>[
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -170,14 +171,16 @@ class AdminScreen extends ConsumerWidget {
               );
               if (ok != true) return;
               ctrl.resetDefaults();
-              // Kun 25 år nulstilles — egne varianter er admins arbejde og
-              // røres ikke af den generelle nulstilling (de har deres egne
-              // "Nulstil kort"/"Arkivér"-greb i variant-sektionen).
-              await variantCtrl.resetRules(partners25.id);
+              // Kun de INDBYGGEDE varianter (25 år, Duo) nulstilles — egne
+              // varianter er admins arbejde og røres ikke af den generelle
+              // nulstilling (de har deres egne "Nulstil kort"/"Arkivér"-greb).
+              for (final VariantConfig v in editableBuiltinVariants) {
+                await variantCtrl.resetRules(v.id);
+              }
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content:
-                        Text('Nulstillet: klassisk = standard, 25 år = de fem specialkort')));
+                    content: Text('Nulstillet: klassisk = standard, de '
+                        'indbyggede varianter = deres egne kort')));
               }
             },
             icon: const Icon(Icons.restore, color: Colors.white),
@@ -245,8 +248,8 @@ class AdminScreen extends ConsumerWidget {
                   final String vSource =
                       ref.watch(variantCardRulesLoadSourceProvider);
                   return Text(
-                    '25 år-regler: ${vSource.isEmpty ? 'henter…' : vSource} '
-                    '(seed = de indbyggede specialkort, firestore = dine gemte, prefs = '
+                    'Variant-regler: ${vSource.isEmpty ? 'henter…' : vSource} '
+                    '(seed = variantens indbyggede kort, firestore = dine gemte, prefs = '
                     'lokal kopi)',
                     style: const TextStyle(fontSize: 12),
                   );
@@ -274,7 +277,7 @@ class AdminScreen extends ConsumerWidget {
                 border: Border.all(color: Colors.red),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Text('25 år-regler: $variantSaveErr',
+              child: Text('Variant-regler: $variantSaveErr',
                   style: const TextStyle(fontSize: 12, color: Colors.red)),
             ),
           const _BoardMinTile(),
@@ -283,9 +286,12 @@ class AdminScreen extends ConsumerWidget {
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
             child: Text(
-              'Hvert kort har TO kolonner: venstre = klassisk, højre = '
-              'Partners 25 år. De redigeres uafhængigt — en 25 år-kolonne '
-              'uden egen regel FØLGER klassisk. Ændringer gemmes automatisk i '
+              'Hvert kort har TO kolonner: venstre = klassisk, højre = den '
+              'variant, der er valgt ovenfor (25 år, Duo eller en af dine '
+              'egne). De redigeres uafhængigt — en variant-kolonne uden egen '
+              'regel FØLGER klassisk. Kort, der ikke er i variantens bunke '
+              '(fx J/D/K i Duo), har kun en klassisk kolonne. Ændringer '
+              'gemmes automatisk i '
               'Firebase; ser felterne ud som standarder selv om du har gemt '
               'før, så tryk på sky-pil-ned (øverst) for at hente fra databasen '
               'nu.',
@@ -582,10 +588,10 @@ class _RankTile extends ConsumerWidget {
     final CardRules classic = ref.watch(cardRulesProvider);
     final String selId = ref.watch(selectedAdminVariantIdProvider);
     final VariantAdminConfig va = ref.watch(selectedVariantAdminProvider);
-    final VariantConfig selVariant = selId == partners25.id
-        ? partners25
-        : variantFromRaw(
-            selId, ref.watch(variantCardRulesProvider).toRawJson());
+    // Indbyggede varianter (25 år, Duo) giver deres kode-config; customs
+    // materialiseres fra config-doc'et.
+    final VariantConfig selVariant =
+        variantFromRaw(selId, ref.watch(variantCardRulesProvider).toRawJson());
     final String selLabel = selVariant.shortLabel;
     final CardRuleConfig classicCfg = classic.forRank(rank);
     // De EFFEKTIVE variant-regler for denne rang — beregnet med SAMME resolver
@@ -596,7 +602,11 @@ class _RankTile extends ConsumerWidget {
     final CardRuleConfig variantCfg =
         effectiveCardRules(selVariant, classic, stored: va.overrides)
             .forRank(rank);
-    final bool diverges = !CardRules.sameConfig(classicCfg, variantCfg);
+    // Findes kortet overhovedet i variantens bunke? (Duo: ikke J/D/K.) Så er
+    // variantens regel for det meningsløs — kun klassisk kan redigeres.
+    final bool inDeck = ranksInDeck(selVariant).contains(rank);
+    final bool diverges =
+        inDeck && !CardRules.sameConfig(classicCfg, variantCfg);
     final bool hasOwn = va.overrides.containsKey(rank);
 
     return Card(
@@ -606,6 +616,13 @@ class _RankTile extends ConsumerWidget {
         title: Row(
           children: <Widget>[
             Text('Kort $label'),
+            if (!inDeck)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text('ikke i $selLabel',
+                    style: const TextStyle(
+                        fontSize: 12, color: Colors.black54)),
+              ),
             if (diverges)
               Padding(
                 padding: const EdgeInsets.only(left: 8),
@@ -633,7 +650,14 @@ class _RankTile extends ConsumerWidget {
               onChanged: (CardRuleConfig cfg) =>
                   ref.read(cardRulesProvider.notifier).updateRank(rank, cfg),
             );
-            final Widget p25Col = _ConfigEditor(
+            final Widget p25Col = !inDeck
+                ? Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                        'Kortet findes ikke i ${selVariant.name}-bunken.',
+                        style: const TextStyle(color: Colors.black54)),
+                  )
+                : _ConfigEditor(
               title: selVariant.name,
               config: variantCfg,
               onChanged: (CardRuleConfig cfg) => ref
@@ -1033,7 +1057,8 @@ class _ConfigEditorState extends State<_ConfigEditor> {
   }
 }
 
-/// Header-sektion for variant-kolonnen: VÆLGEREN (25 år + egne varianter),
+/// Header-sektion for variant-kolonnen: VÆLGEREN (indbyggede varianter med
+/// egne kort + egne varianter),
 /// "Ny variant"-grebet, admins navn/mærke/beskrivelse/tema, "kopiér
 /// klassisk"-grebet (fuldt uafhængigt snapshot i ét tryk), afvigelses-tælleren
 /// og sanity-advarsler for BEGGE regelsæt. Advarsler, aldrig spærringer —
@@ -1243,21 +1268,22 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
     final VariantAdminConfig va = all.configFor(selId);
     _syncMeta(selId, va);
     final Map<String, dynamic> raw = all.toRawJson();
-    final VariantConfig selVariant =
-        selId == partners25.id ? partners25 : variantFromRaw(selId, raw);
+    final VariantConfig selVariant = variantFromRaw(selId, raw);
+    final List<Rank> deckRanks = ranksInDeck(selVariant);
     final String selLabel = selVariant.shortLabel;
     // Samme resolver som spil-oprettelsen — én kilde til "hvad får spillerne".
     final CardRules effective =
         effectiveCardRules(selVariant, classic, stored: va.overrides);
-    final int divergent = Rank.values
+    final int divergent = deckRanks
         .where((Rank r) => !CardRules.sameRank(classic, effective, r))
         .length;
     final List<String> classicWarnings = deckSanityWarnings(classic);
     final List<String> variantWarnings = deckSanityWarnings(effective);
-    // Vælgeren: 25 år + ALLE customs (også arkiverede — admin skal kunne
-    // gendanne dem; de markeres i teksten).
+    // Vælgeren: de indbyggede varianter med egne kort (25 år, Duo) + ALLE
+    // customs (også arkiverede — admin skal kunne gendanne dem; de markeres
+    // i teksten).
     final List<String> selectableIds = <String>[
-      partners25.id,
+      for (final VariantConfig v in editableBuiltinVariants) v.id,
       ...customVariantIdsFrom(raw, includeArchived: true),
     ];
 
@@ -1284,9 +1310,9 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
                         DropdownMenuItem<String>(
                           value: id,
                           child: Text(
-                            id == partners25.id
-                                ? variantNameFrom(
-                                    partners25, all.configFor(id).name)
+                            isEditableBuiltin(id)
+                                ? variantNameFrom(variantFromRaw(id, raw),
+                                    all.configFor(id).name)
                                 : '${variantFromRaw(id, raw).name}'
                                     '${all.configFor(id).archived ? ' (arkiveret)' : ''}',
                             overflow: TextOverflow.ellipsis,
@@ -1315,7 +1341,7 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
               children: <Widget>[
                 const Spacer(),
                 Text(
-                  '$divergent af ${Rank.values.length} kort afviger fra '
+                  '$divergent af ${deckRanks.length} kort afviger fra '
                   'klassisk',
                   style: TextStyle(
                     fontSize: 12,
@@ -1329,7 +1355,8 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
             ),
             const SizedBox(height: 8),
             // Navn/beskrivelse: vises i variant-vælgeren og online-lobbyen.
-            // Tomt felt = variantens indbyggede tekst (kun 25 år har en).
+            // Tomt felt = variantens indbyggede tekst (de indbyggede
+            // varianter har en; customs har ingen).
             TextField(
               controller: _nameCtrl,
               maxLength: kMaxCustomNameLength,
@@ -1337,8 +1364,8 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
                 isDense: true,
                 counterText: '',
                 labelText: 'Navn i variant-vælgeren',
-                hintText: selId == partners25.id ? 'Partners 25 år' : null,
-                helperText: selId == partners25.id
+                hintText: isEditableBuiltin(selId) ? selVariant.name : null,
+                helperText: isEditableBuiltin(selId)
                     ? 'Tomt = indbygget navn.'
                     : 'Variantens id ($selId) er fast og følger IKKE med '
                         'ved omdøbning.',
@@ -1410,14 +1437,16 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
                 OutlinedButton.icon(
                   icon: const Icon(Icons.copy_all, size: 18),
                   label: Text(
-                      'Kopiér klassisk til $selLabel (alle 13 kort)'),
+                      'Kopiér klassisk til $selLabel '
+                      '(alle ${deckRanks.length} kort)'),
                   onPressed: () async {
                     final bool? ok = await showDialog<bool>(
                       context: context,
                       builder: (BuildContext ctx) => AlertDialog(
                         title: Text('Kopiér klassisk til $selLabel?'),
                         content: Text(
-                            'Alle 13 kort får en EGEN regel (den nuværende '
+                            'Alle ${deckRanks.length} kort får en EGEN regel '
+                            '(den nuværende '
                             'effektive $selLabel-regel). Derefter er '
                             '$selLabel et fuldt uafhængigt sæt: senere '
                             'klassisk-ændringer følger IKKE med.'),
