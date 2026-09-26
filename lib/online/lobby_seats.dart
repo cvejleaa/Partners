@@ -201,7 +201,7 @@ class LobbySeats {
       // hvor værten beholdt sin farve fra forrige parti (ejer-fund).
       int k = 0;
       for (final int s in handSeats) {
-        if (k < kDuoColors.length) c.colors[s] = kDuoColors[k++];
+        if (k < 1) c.colors[s] = kDuoColors[k++];
       }
       return c.mirrored(to);
     }
