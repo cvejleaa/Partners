@@ -1,5 +1,7 @@
-// Duos farvepar er det samme lokalt og online: opsætningens to første
-// standardfarver (rød, blå) = kDuoColors.
+// Duos online-farvepar (kDuoColors) er paletten første to farver (rød,
+// blå). NB: at lokal opsætning faktisk starter på netop de to (setup_screen
+// _colorIdx = [0, 1, …]) dækkes IKKE her — ingen test rører SetupScreens
+// widget-state (navngivet hul).
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/online/lobby_seats.dart';
