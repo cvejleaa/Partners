@@ -350,17 +350,14 @@ class VariantCardRulesController extends StateNotifier<VariantsAdminState> {
     _touch(id, cfg.copyWith(overrides: next));
   }
 
-  /// "Kopiér klassisk til varianten": materialisér ALLE rangs som overrides ud
-  /// fra [effective] (variantens aktuelle effektive regler). Derefter er
-  /// varianten et fuldt uafhængigt snapshot — en senere klassisk ændring
-  /// rører den ikke.
-  void materializeAll(String id, CardRules effective) {
+  /// "Kopiér klassisk til varianten": materialisér alle rangs i VARIANTENS
+  /// bunke ([ranks]) som overrides ud fra [effective] (variantens aktuelle
+  /// effektive regler). Derefter er varianten et fuldt uafhængigt snapshot —
+  /// en senere klassisk ændring rører den ikke.
+  void materializeAll(String id, CardRules effective, List<Rank> ranks) {
     final cfg = state.configFor(id);
-    _touch(
-        id,
-        cfg.copyWith(overrides: <Rank, CardRuleConfig>{
-          for (final Rank r in Rank.values) r: effective.forRank(r),
-        }));
+    _touch(id,
+        cfg.copyWith(overrides: materializedOverrides(effective, ranks)));
   }
 
   void updateMeta(String id,
@@ -489,3 +486,13 @@ class VariantCardRulesController extends StateNotifier<VariantsAdminState> {
     super.dispose();
   }
 }
+
+/// Overrides for "Kopiér klassisk": én pr. rang i [ranks] — KUN variantens
+/// bunke. Før blev alle 13 skrevet, også J/D/K for Duo: regler for kort, der
+/// ikke findes i spillet, og som admin bagefter ikke kunne se eller rydde
+/// enkeltvis (QC-fund).
+Map<Rank, CardRuleConfig> materializedOverrides(
+        CardRules effective, List<Rank> ranks) =>
+    <Rank, CardRuleConfig>{
+      for (final Rank r in ranks) r: effective.forRank(r),
+    };

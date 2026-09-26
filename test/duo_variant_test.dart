@@ -142,6 +142,24 @@ void main() {
     expect(ranksInDeck(partners25), hasLength(13));
   });
 
+  test('admin: "Kopiér klassisk" til Duo skriver 10 regler — ingen J/D/K', () {
+    final CardRules eff = effectiveCardRules(partnersDuo, CardRules.defaults());
+    final Map<Rank, CardRuleConfig> m =
+        materializedOverrides(eff, ranksInDeck(partnersDuo));
+    expect(m, hasLength(10));
+    expect(m.keys, isNot(contains(Rank.jack)));
+    expect(m.keys, isNot(contains(Rank.queen)));
+    expect(m.keys, isNot(contains(Rank.king)));
+    // Indholdet er variantens EFFEKTIVE regel — fx Duo-esset (♥/1).
+    expect(m[Rank.ace]!.forwardSteps, <int>[1]);
+    // Klassisk-formet variant: alle 13, som før.
+    expect(
+        materializedOverrides(
+            effectiveCardRules(partners25, CardRules.defaults()),
+            ranksInDeck(partners25)),
+        hasLength(13));
+  });
+
   test('admin: Duo falder til sit kode-seed, ikke en tom custom', () {
     const VariantsAdminState s = VariantsAdminState();
     final VariantAdminConfig duo = s.configFor('duo');

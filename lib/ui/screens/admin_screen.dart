@@ -650,7 +650,7 @@ class _RankTile extends ConsumerWidget {
               onChanged: (CardRuleConfig cfg) =>
                   ref.read(cardRulesProvider.notifier).updateRank(rank, cfg),
             );
-            final Widget p25Col = !inDeck
+            final Widget variantCol = !inDeck
                 ? Padding(
                     padding: const EdgeInsets.all(8),
                     child: Text(
@@ -687,7 +687,7 @@ class _RankTile extends ConsumerWidget {
               return Column(children: <Widget>[
                 classicCol,
                 const Divider(height: 20),
-                p25Col,
+                variantCol,
               ]);
             }
             return Row(
@@ -695,7 +695,7 @@ class _RankTile extends ConsumerWidget {
               children: <Widget>[
                 Expanded(child: classicCol),
                 const SizedBox(width: 20),
-                Expanded(child: p25Col),
+                Expanded(child: variantCol),
               ],
             );
           }),
@@ -1463,7 +1463,7 @@ class _VariantAdminHeaderState extends ConsumerState<_VariantAdminHeader> {
                     if (ok == true && mounted) {
                       ref
                           .read(variantCardRulesProvider.notifier)
-                          .materializeAll(selId, effective);
+                          .materializeAll(selId, effective, deckRanks);
                     }
                   },
                 ),
