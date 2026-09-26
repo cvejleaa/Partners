@@ -67,6 +67,7 @@ bool isSwapMove(Move m) {
   final MoveStep a = m.steps[0];
   final MoveStep b = m.steps[1];
   if (a.pieceId == b.pieceId) return false;
-  if (a.from is! TrackPosition || b.from is! TrackPosition) return false;
+  // MUTATION (mut/swap-onlyfrom): kun ÉN af de to (a.from) skal på banen.
+  if (a.from is! TrackPosition) return false;
   return a.to == b.from && b.to == a.from;
 }
