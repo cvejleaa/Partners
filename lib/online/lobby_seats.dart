@@ -16,9 +16,9 @@ class LobbyError implements Exception {
   String toString() => message;
 }
 
-/// Partners Duos farvepar: rød (værten, plads 0) mod grøn (plads 1). Samme
-/// par lokalt (setup_screen) og online.
-const List<int> kDuoColors = <int>[0xFFE53935, 0xFF43A047];
+/// Partners Duos farvepar: rød (værten, plads 0) mod blå (plads 1) — samme
+/// som lokal opsætning og en ny lobby (ejer-bekræftet).
+const List<int> kDuoColors = <int>[0xFFE53935, 0xFF1E88E5];
 
 /// Tekst på en tom plads.
 const String kOpenSeatName = 'Åben';
@@ -196,7 +196,7 @@ class LobbySeats {
           c.names[t] = c.names[s];
         }
       }
-      // Duos faste farvepar (rød mod grøn). Beholdt man pladsernes klassiske
+      // Duos faste farvepar (rød mod blå). Beholdt man pladsernes klassiske
       // farver, blev parret tilfældigt — fx blå mod grøn efter en revanche,
       // hvor værten beholdt sin farve fra forrige parti (ejer-fund).
       int k = 0;
