@@ -389,6 +389,16 @@ void main() {
         isSwapLogSteps(steps(
             const HomeStretchPosition(0, 0), const HomeStretchPosition(0, 1))),
         isFalse);
+    // Én på banen og én i målet — i begge rækkefølger (en vagt, der kun
+    // tjekker den ene side, skal blive rød).
+    expect(
+        isSwapLogSteps(
+            steps(const TrackPosition(5), const HomeStretchPosition(0, 0))),
+        isFalse);
+    expect(
+        isSwapLogSteps(
+            steps(const HomeStretchPosition(0, 0), const TrackPosition(5))),
+        isFalse);
   });
 
   group('"mens du var væk"', () {

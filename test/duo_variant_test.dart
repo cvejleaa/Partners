@@ -425,6 +425,26 @@ void main() {
     expect(MoveOptions.classify(ms).needsChoice, isFalse);
   });
 
+  test('isSwapMove: BEGGE fra-positioner skal stå på banen — i begge rækkefølger',
+      () {
+    // Motoren lægger altid mål-brikken først i Duos falske byt, så testen
+    // ovenfor rammer kun den ene side. Håndbygget: en mutation, der kun
+    // tjekker ÉN af de to brikker, bliver rød her (TM-fund, CI-efterprøvet).
+    Move m(PiecePosition a, PiecePosition b) => Move(
+          card: const PlayingCard(Rank.jack, Suit.hearts),
+          steps: <MoveStep>[
+            MoveStep(pieceId: 'x', from: a, to: b),
+            MoveStep(pieceId: 'y', from: b, to: a),
+          ],
+        );
+    const PiecePosition track = TrackPosition(5);
+    const PiecePosition goal = HomeStretchPosition(0, 0);
+    expect(isSwapMove(m(track, goal)), isFalse);
+    expect(isSwapMove(m(goal, track)), isFalse);
+    // Kontrol: to brikker på banen ER et byt.
+    expect(isSwapMove(m(track, const TrackPosition(30))), isTrue);
+  });
+
   test('et helt parti med den RIGTIGE Duo-variant afsluttes (seed 0-9)', () {
     for (int seed = 0; seed < 10; seed++) {
       final List<String> trace = <String>[];
