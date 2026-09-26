@@ -225,10 +225,7 @@ bool isSwapLogSteps(List<Map<String, dynamic>> steps) {
   final Map<String, dynamic> s0 = steps[0];
   final Map<String, dynamic> s1 = steps[1];
   if (s0['pieceId'] == s1['pieceId']) return false;
-  // Kun brikker PÅ BANEN byttes — se isSwapMove (Duos mål-træk med
-  // tilbageslag har samme A↔B-form).
-  bool onTrack(dynamic p) => p is Map && p['t'] == 'track';
-  if (!onTrack(s0['from']) || !onTrack(s1['from'])) return false;
+  // MUTATION (mut/swap-logsteps-remove-track): Track-kravet fjernet helt.
   return _samePosMap(s0['to'], s1['from']) && _samePosMap(s1['to'], s0['from']);
 }
 
