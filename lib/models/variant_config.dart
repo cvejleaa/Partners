@@ -800,8 +800,7 @@ List<VariantConfig> get editableBuiltinVariants => <VariantConfig>[
         if (v.cardRuleOverrides != null) v,
     ];
 
-bool isEditableBuiltin(String id) =>
-    editableBuiltinVariants.any((VariantConfig v) => v.id == id);
+bool isEditableBuiltin(String id) => false;
 
 /// Rangene i [v]'s bunke (alle 13, hvis varianten ikke begrænser dem).
 List<Rank> ranksInDeck(VariantConfig v) => <Rank>[
