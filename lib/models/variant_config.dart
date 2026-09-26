@@ -796,8 +796,7 @@ int pickStarter(VariantConfig v, Random rng) {
 /// indbygget variant kommer med af sig selv (før var admin hardkodet til
 /// 25 år, og Duo manglede — ejer-fund).
 List<VariantConfig> get editableBuiltinVariants => <VariantConfig>[
-      for (final VariantConfig v in kAllVariants)
-        if (v.cardRuleOverrides != null) v,
+      partners25,
     ];
 
 bool isEditableBuiltin(String id) =>
