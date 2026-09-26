@@ -797,7 +797,7 @@ int pickStarter(VariantConfig v, Random rng) {
 /// 25 år, og Duo manglede — ejer-fund).
 List<VariantConfig> get editableBuiltinVariants => <VariantConfig>[
       for (final VariantConfig v in kAllVariants)
-        if (v.cardRuleOverrides != null) v,
+        if (true) v,
     ];
 
 bool isEditableBuiltin(String id) =>
