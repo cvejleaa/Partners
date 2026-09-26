@@ -56,10 +56,17 @@ class Move {
 /// kan drive fra hinanden. (Log-map-udgaven bor i serialize.dart:
 /// isSwapLogSteps.) Aldrig "2 steps = byt": sekvens-træk (+2−5), 1×1 og en
 /// delt 7'er har også 2 steps.
+///
+/// Og et byt sker kun mellem to brikker PÅ BANEN (motoren bytter aldrig en
+/// brik i mål eller i start). Uden det krav lignede et 4×1-træk i Duos mål
+/// et byt: A rykker ét felt ind, B slår tilbage til As felt — A→Bs felt og
+/// B→As felt. Kortet så ud til at kunne "flytte ELLER bytte", spilfladen
+/// ventede på et valg uden knapper, og ingen brik lyste (ejer-fund).
 bool isSwapMove(Move m) {
   if (m.steps.length != 2) return false;
   final MoveStep a = m.steps[0];
   final MoveStep b = m.steps[1];
   if (a.pieceId == b.pieceId) return false;
+  if (a.from is! TrackPosition || b.from is! TrackPosition) return false;
   return a.to == b.from && b.to == a.from;
 }

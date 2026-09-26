@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/app.dart';
 import 'package:partners/game/card_rules.dart';
 import 'package:partners/game/deck.dart';
+import 'package:partners/game/move_options.dart';
 import 'package:partners/game/move_text.dart';
 import 'package:partners/game/rules.dart';
 import 'package:partners/models/board.dart';
@@ -392,6 +393,33 @@ void main() {
       expect(describeBounce(s, st), '7 frem — baglæns ud af målet igen');
       expect(stepDistance(s, st), 7);
     });
+  });
+
+  test('4×1 i Duos mål med tilbageslag er IKKE et byt (ejer-fund)', () {
+    // To brikker i målet og den inderste cirkel fri: 4×1 kan flytte A ind og
+    // lade B slå tilbage til As felt — A→Bs felt og B→As felt, samme FORM
+    // som et byt. Genkendt som byt, ventede spilfladen på et "flyt eller
+    // byt"-valg uden knapper, og ingen brik lyste.
+    final GameState s = duoState(<List<PiecePosition>>[
+      <PiecePosition>[
+        const HomeStretchPosition(0, 0),
+        const HomeStretchPosition(0, 1),
+        const StartPosition(0, 2),
+      ],
+      hjemme(1), hjemme(2), hjemme(3),
+    ]);
+    final List<Move> ms = Rules(s.geometry).legalMoves(
+        s, s.players[0], const PlayingCard(Rank.four, Suit.spades));
+    bool swapShaped(Move m) =>
+        m.steps.length == 2 &&
+        m.steps[0].pieceId != m.steps[1].pieceId &&
+        m.steps[0].to == m.steps[1].from &&
+        m.steps[1].to == m.steps[0].from;
+    // Scenariet findes (ellers beviste testen ingenting) …
+    expect(ms.where(swapShaped), isNotEmpty);
+    // … men ingen af dem er et byt, og kortet kræver intet tilstandsvalg.
+    expect(ms.where(isSwapMove), isEmpty);
+    expect(MoveOptions.classify(ms).needsChoice, isFalse);
   });
 
   test('et helt parti med den RIGTIGE Duo-variant afsluttes (seed 0-9)', () {

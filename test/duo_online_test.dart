@@ -15,6 +15,7 @@ import 'package:partners/models/variant_config.dart';
 import 'package:partners/online/lobby_seats.dart';
 import 'package:partners/online/online_service.dart';
 import 'package:partners/online/replay_story.dart';
+import 'package:partners/online/serialize.dart';
 import 'package:partners/stats/replay_engine.dart';
 import 'package:partners/stats/user_stats.dart';
 
@@ -371,6 +372,23 @@ void main() {
       expect(back.duoOpponentStats['b']!.games, 1);
       expect(back.duoOpponentStats['b']!.wins, 1);
     });
+  });
+
+  test('log-byt: kun brikker på banen — mål-træk med tilbageslag er ikke et byt',
+      () {
+    List<Map<String, dynamic>> steps(PiecePosition a, PiecePosition b) =>
+        <Map<String, dynamic>>[
+          <String, dynamic>{'pieceId': 'p0.0', 'from': posToMap(a), 'to': posToMap(b)},
+          <String, dynamic>{'pieceId': 'p0.1', 'from': posToMap(b), 'to': posToMap(a)},
+        ];
+    expect(
+        isSwapLogSteps(
+            steps(const TrackPosition(5), const TrackPosition(30))),
+        isTrue);
+    expect(
+        isSwapLogSteps(steps(
+            const HomeStretchPosition(0, 0), const HomeStretchPosition(0, 1))),
+        isFalse);
   });
 
   group('"mens du var væk"', () {
