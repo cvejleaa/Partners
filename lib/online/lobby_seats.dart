@@ -196,13 +196,6 @@ class LobbySeats {
           c.names[t] = c.names[s];
         }
       }
-      // Duos faste farvepar (rød mod blå). Beholdt man pladsernes klassiske
-      // farver, blev parret tilfældigt — fx blå mod grøn efter en revanche,
-      // hvor værten beholdt sin farve fra forrige parti (ejer-fund).
-      int k = 0;
-      for (final int s in handSeats) {
-        if (k < kDuoColors.length) c.colors[s] = kDuoColors[k++];
-      }
       return c.mirrored(to);
     }
     if (from.seatsShareController) {
