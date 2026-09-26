@@ -425,6 +425,21 @@ void main() {
     expect(MoveOptions.classify(ms).needsChoice, isFalse);
   });
 
+  test('isSwapMove: BEGGE fra-positioner skal på banen, ordre-uafhaengigt (mut-verifikation)', () {
+    // Syntetisk, haandbygget Move — uafhaengig af om motoren rent faktisk kan
+    // producere denne raekkefoelge. Braekker isSwapMove hvis KUN a.from (eller
+    // slet ingen af dem) tjekkes: a.from er paa banen, b.from er i maalet, men
+    // formen (A->Bs felt, B->As felt) er stadig til stede.
+    const Move m = Move(
+      card: PlayingCard(Rank.jack, Suit.hearts),
+      steps: <MoveStep>[
+        MoveStep(pieceId: 'x', from: TrackPosition(5), to: HomeStretchPosition(0, 0)),
+        MoveStep(pieceId: 'y', from: HomeStretchPosition(0, 0), to: TrackPosition(5)),
+      ],
+    );
+    expect(isSwapMove(m), isFalse);
+  });
+
   test('et helt parti med den RIGTIGE Duo-variant afsluttes (seed 0-9)', () {
     for (int seed = 0; seed < 10; seed++) {
       final List<String> trace = <String>[];
