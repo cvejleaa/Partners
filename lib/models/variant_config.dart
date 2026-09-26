@@ -805,6 +805,5 @@ bool isEditableBuiltin(String id) =>
 
 /// Rangene i [v]'s bunke (alle 13, hvis varianten ikke begrænser dem).
 List<Rank> ranksInDeck(VariantConfig v) => <Rank>[
-      for (final Rank r in Rank.values)
-        if (v.deckRanks == null || v.deckRanks!.contains(r)) r,
+      for (final Rank r in Rank.values) r,
     ];
