@@ -69,8 +69,8 @@ void main() {
       final LobbySeats s = seats(<dynamic>['a', null, 'b', null])
           .switchVariant(classicVariant, partnersDuo);
       expect(s.uids, <dynamic>['a', 'b', 'a', 'b']);
-      expect(s.colors[1], green, reason: 'gæsten beholder sin farve');
-      expect(s.colors[3], green);
+      // Duos faste par: rød mod grøn, spejlet.
+      expect(s.colors, <int>[red, green, red, green]);
     });
 
     test('skift til Duo: gæsten får pladsen FØR en computer på en lavere plads',
@@ -82,6 +82,20 @@ void main() {
           .switchVariant(classicVariant, partnersDuo);
       expect(s.uids, <dynamic>['a', 'c', 'a', 'c']);
       expect(s.aiSeats, <bool>[false, false, false, false]);
+    });
+
+    test('skift til Duo: rød mod grøn — også når værten havde en anden farve',
+        () {
+      // Revanche: værten beholdt blå fra forrige parti → pladserne blev
+      // [blå, grøn, gul, rød], og Duo endte som blå mod grøn (ejer-fund).
+      final LobbySeats s = LobbySeats(
+        uids: <dynamic>['a', null, null, null],
+        names: <dynamic>['a', kOpenSeatName, kOpenSeatName, kOpenSeatName],
+        colors: <int>[blue, green, yellow, red],
+        aiSeats: <bool>[false, false, false, false],
+      ).switchVariant(classicVariant, partnersDuo);
+      expect(s.colors, <int>[red, green, red, green]);
+      expect(kDuoColors, <int>[red, green]);
     });
 
     test('skift til Duo med 3 spillere afvises med en forklaring', () {

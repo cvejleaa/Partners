@@ -141,7 +141,19 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 nameOf: _displayName,
                 descriptionOf: _displayDescription,
                 onChanged: (String id) => setState(() {
+                  final VariantConfig before = _variantFrom(variants);
                   _variantId = id;
+                  // Standardfarverne følger varianten (Duo: rød mod grøn),
+                  // men kun hvis man ikke selv har valgt farver.
+                  final List<int> was = defaultColorIndexesFor(before);
+                  if (_colorIdx.take(was.length).toList().join() ==
+                      was.join()) {
+                    final List<int> now =
+                        defaultColorIndexesFor(_variantFrom(variants));
+                    for (int i = 0; i < now.length; i++) {
+                      _colorIdx[i] = now[i];
+                    }
+                  }
                   // Duo har kun to rækker: sad "Dig" på en række, der nu er
                   // skjult, flyttes du op.
                   if (_humanSeat >= _rowCount(_variantFrom(variants))) {
@@ -269,6 +281,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     );
   }
 }
+
+/// Standardfarverne (indeks i kPalette) for opsætningens rækker. Duo: rød
+/// mod grøn — samme par som online (kDuoColors); ellers de fire klassiske.
+List<int> defaultColorIndexesFor(VariantConfig v) =>
+    v.seatsShareController ? const <int>[0, 2, 1, 3] : const <int>[0, 1, 2, 3];
 
 /// Én udfyldt række i opsætningen.
 typedef RowSetup = ({String name, Color color, bool isHuman});
