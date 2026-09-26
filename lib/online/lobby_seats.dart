@@ -18,7 +18,7 @@ class LobbyError implements Exception {
 
 /// Partners Duos farvepar: rød (værten, plads 0) mod blå (plads 1) — samme
 /// som lokal opsætning og en ny lobby (ejer-bekræftet).
-const List<int> kDuoColors = <int>[0xFFE53935, 0xFF1E88E5];
+const List<int> kDuoColors = <int>[0xFF1E88E5, 0xFFE53935];
 
 /// Tekst på en tom plads.
 const String kOpenSeatName = 'Åben';
