@@ -822,11 +822,7 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     //
     // Og beslutningen kræver, at man kan SE brættet (er der et byt værd at
     // lave?). Et ark eller en dialog dækker netop dét (QC-fund).
-    final bool isHybrid = card != null &&
-        !card.isExit &&
-        state.cardRules.forRank(card.rank!).swap &&
-        !_isSwapCard(state, card) &&
-        MoveOptions.classify(_candidateMoves).needsChoice;
+    final bool isHybrid = _hybridChoiceAvailable(state);
     // Bliver STÅENDE efter valget, ligesom nierens: man skal kunne skifte
     // mening, indtil en brik er trykket.
     final bool isMultiAbility = card != null && _multiChoicePending(state);
@@ -1134,13 +1130,30 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
   bool _awaitingChoice(GameState state) {
     if (_selectedCard == null) return false;
-    // Byt ELLER flyt (25 års nier).
-    if (_hybridSwapMode == null &&
-        MoveOptions.classify(_candidateMoves).needsChoice) {
+    // Byt ELLER flyt (25 års nier). SAMME betingelse som knapperne
+    // (_hybridChoiceAvailable) — ellers kan brættet mørklægges og vente på
+    // et valg, der ingen knapper har. Det skete: et 4×1-træk i Duos mål
+    // lignede et byt i formen, needsChoice blev sand, men kortet har ingen
+    // byt-evne, så knapperne kom aldrig (ejer-fund).
+    if (_hybridSwapMode == null && _hybridChoiceAvailable(state)) {
       return true;
     }
     // Én brik ELLER flere brikker (25 års knægt: 11 frem ELLER 1×1).
     return _multiPieceMode == null && _multiChoicePending(state);
+  }
+
+  /// Skal "flyt ELLER byt"-valget stilles for det valgte kort? Den ENE
+  /// betingelse — både knapperne i statuslinjen og mørklægningen af brættet
+  /// (_awaitingChoice) læser den, så de to aldrig kan være uenige. Kræver at
+  /// kortet faktisk HAR en byt-evne ved siden af en bevægelse, og at der er
+  /// træk af begge slags.
+  bool _hybridChoiceAvailable(GameState state) {
+    final PlayingCard? card = _selectedCard;
+    return card != null &&
+        !card.isExit &&
+        state.cardRules.forRank(card.rank!).swap &&
+        !_isSwapCard(state, card) &&
+        MoveOptions.classify(_candidateMoves).needsChoice;
   }
 
   /// Har kortet BÅDE en multi-brik-evne og en helt anden evne på én brik?
