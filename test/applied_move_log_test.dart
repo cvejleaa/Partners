@@ -5,6 +5,8 @@
 // (ejer-fund, klassisk). playMoveForLog/passHandForLog er den ENE vej (brugt
 // af OnlineService.mutateLogged og AI-trækket).
 
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:partners/game/game_engine.dart';
 import 'package:partners/models/board.dart';
@@ -110,5 +112,58 @@ void main() {
     ];
     expect(isRecentDuplicateMove(log, passLogEntry(2, 4, hn: 4)), isFalse);
     expect(isRecentDuplicateMove(log, passLogEntry(2, 4, hn: 3)), isTrue);
+  });
+
+  // ---- hn læses FØR trækket (TM-hul: push_log_hn_test låser kontrakten på
+  // motoren, men ikke at playMoveForLog/passHandForLog faktisk LÆSER før).
+  // Et træk, der tømmer sidste hånd, tæller handNumber op synkront; læst
+  // bagefter ville logindlægget bære den NÆSTE hånds nummer (2 i stedet for 1).
+
+  test('et håndafsluttende TRÆK logges med hånden det hørte til (hn læst FØR)',
+      () {
+    final GameState s = makeState(
+      currentPlayerIndex: 0,
+      piecePositions: <List<PiecePosition>>[
+        <PiecePosition>[
+          const TrackPosition(9),
+          const StartPosition(0, 1),
+          const StartPosition(0, 2),
+          const StartPosition(0, 3),
+        ],
+        start(1), start(2), start(3),
+      ],
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[five], <PlayingCard>[], <PlayingCard>[], <PlayingCard>[],
+      ],
+    );
+    final int before = s.handNumber;
+    final Map<String, dynamic>? e = playMoveForLog(
+        GameEngine(state: s, rng: Random(1)), 0, submitted);
+    expect(e, isNotNull);
+    expect(s.handNumber, before + 1,
+        reason: 'forudsætning: trækket tømte sidste hånd og startede en ny — '
+            'ellers beviser testen intet om læse-rækkefølgen');
+    expect(e!['hn'], before,
+        reason: 'hn = hånden trækket hørte til ($before), ikke den nye '
+            '(${s.handNumber})');
+  });
+
+  test('et håndafsluttende PAS logges med hånden det hørte til (hn læst FØR)',
+      () {
+    final GameState s = makeState(
+      currentPlayerIndex: 0,
+      hands: <List<PlayingCard>>[
+        <PlayingCard>[five], <PlayingCard>[], <PlayingCard>[], <PlayingCard>[],
+      ],
+    );
+    final GameEngine engine = GameEngine(state: s, rng: Random(1));
+    expect(engine.canPlay(0), isFalse, reason: 'forudsætning: pas er lovligt');
+    final int before = s.handNumber;
+    final Map<String, dynamic>? e = passHandForLog(engine, 0);
+    expect(e, isNotNull);
+    expect(s.handNumber, before + 1, reason: 'forudsætning: hånden skiftede');
+    expect(e!['hn'], before);
+    expect(e['cardsDiscarded'], 1,
+        reason: 'antallet læses FØR hånden tømmes (efter ville det være 0)');
   });
 }
