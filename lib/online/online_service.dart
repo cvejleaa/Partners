@@ -1561,8 +1561,8 @@ class OnlineService {
 /// træk tæller handNumber op). Ren funktion af motoren — testbar uden
 /// Firestore; brugt af [OnlineService.mutateLogged] og AI-trækket.
 Map<String, dynamic>? playMoveForLog(GameEngine engine, int seat, Move move) {
-  final int hn = engine.state.handNumber;
   final Move? applied = engine.applyMove(seat, move);
+  final int hn = engine.state.handNumber;
   return applied == null ? null : moveLogEntry(seat, applied, hn: hn);
 }
 
