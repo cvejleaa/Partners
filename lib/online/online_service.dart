@@ -1569,9 +1569,10 @@ Map<String, dynamic>? playMoveForLog(GameEngine engine, int seat, Move move) {
 /// Som [playMoveForLog] for at smide hånden: null, hvis motoren afviste
 /// (spilleren KAN spille, eller det er ikke hans tur).
 Map<String, dynamic>? passHandForLog(GameEngine engine, int seat) {
-  final int hn = engine.state.handNumber;
   final int discarded = engine.state.players[seat].hand.length;
-  return engine.passHand(seat) ? passLogEntry(seat, discarded, hn: hn) : null;
+  final bool ok = engine.passHand(seat);
+  final int hn = engine.state.handNumber;
+  return ok ? passLogEntry(seat, discarded, hn: hn) : null;
 }
 
 /// [hn] er håndnummeret. Uden det kan afstanden mellem to log-poster ikke
