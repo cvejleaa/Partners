@@ -286,4 +286,28 @@ void main() {
         <int>[0, 1])!;
     expect(gap, clean);
   });
+
+  test('en umulig stilling (to brikker i samme start-felt) → null', () {
+    // p0.0 gik fra start-felt (0,0) ud på banen. Står p0.1 stadig i (0,0),
+    // kan brættet før trækket ikke have set sådan ud: to brikker i ét felt.
+    final Map<String, dynamic> e = move(0, <Map<String, dynamic>>[
+      step('p0.0', const StartPosition(0, 0), const TrackPosition(0)),
+    ]);
+    expect(
+        positionsBeforeFrom(<String, PiecePosition>{
+          'p0.0': const TrackPosition(0),
+          'p0.1': const StartPosition(0, 0), // samme felt som p0.0 kommer fra
+        }, <Map<String, dynamic>>[e], <int>[0]),
+        isNull);
+    // Positiv kontrol (så testen ikke er grøn på tom logik): står p0.1 i sit
+    // EGET start-felt, er brættet muligt og rulles tilbage.
+    final List<Map<String, PiecePosition>>? ok = positionsBeforeFrom(
+        <String, PiecePosition>{
+          'p0.0': const TrackPosition(0),
+          'p0.1': const StartPosition(0, 1),
+        }, <Map<String, dynamic>>[e], <int>[0]);
+    expect(ok, isNotNull);
+    expect(ok!.single['p0.0'], const StartPosition(0, 0));
+    expect(ok.single['p0.1'], const StartPosition(0, 1));
+  });
 }
