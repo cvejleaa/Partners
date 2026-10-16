@@ -221,7 +221,7 @@ class GameEngine extends ChangeNotifier {
     player.hand.remove(matched.card);
     state.discard.add(matched.card);
     _afterMove(playerIndex);
-    return matched;
+    return move;
   }
 
   void _reject(int playerIndex, Move move, String reason) {
