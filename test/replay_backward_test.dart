@@ -10,6 +10,7 @@
 // tilbageslag i målet.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:partners/game/card_rules.dart';
 import 'package:partners/models/board.dart';
 import 'package:partners/models/game_state.dart';
 import 'package:partners/models/move.dart';
@@ -64,6 +65,48 @@ void main() {
           expect(back![i], before[i],
               reason: '${v.id} seed $seed: stillingen før træk $i');
         }
+      }
+    });
+  }
+
+  // Genspilningen FREMAD (replayGame) bruges stadig af statistikken og som
+  // reserve for gamle logs. Den skal ende præcis i den rigtige stilling —
+  // ellers var det den, der fjernede brættet i ejerens klassiske parti.
+  for (final VariantConfig v in <VariantConfig>[
+    classicVariant,
+    partners25,
+    partnersDuo,
+  ]) {
+    test('${v.id}: genspilning fremad ender i den rigtige stilling', () {
+      for (int seed = 0; seed < 3; seed++) {
+        final List<Map<String, dynamic>> log = <Map<String, dynamic>>[];
+        final List<Map<String, PiecePosition>> before =
+            <Map<String, PiecePosition>>[];
+        playFullGame(
+          seed: seed,
+          variant: v,
+          onMove: (int seat, Move m, GameState s) {
+            log.add(Map<String, dynamic>.from(moveLogEntry(seat, m)));
+            before.add(snap(s));
+          },
+        );
+        final Map<String, PiecePosition> now = before.removeLast();
+        log.removeLast();
+        final ReplayResult r = replayGame(
+          playerNames: const <String>['A', 'B', 'C', 'D'],
+          isHuman: const <bool>[true, true, true, true],
+          playerColors: const <int>[0, 0, 0, 0],
+          cardRules: effectiveCardRules(v, CardRules.defaults()),
+          log: log,
+          variant: v,
+        );
+        // Første træk, hvor genspilningen afviger — så en fejl peger på
+        // præcis det træk.
+        for (int i = 0; i < log.length; i++) {
+          expect(r.events[i].positionsBefore, before[i],
+              reason: '${v.id} seed $seed: før træk $i (${log[i]})');
+        }
+        expect(snap(r.finalState), now, reason: '${v.id} seed $seed: slut');
       }
     });
   }
