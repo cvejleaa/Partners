@@ -153,7 +153,7 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
       final Map<String, dynamic> e = log[i];
       final String type = e['type'] as String? ?? 'move';
       final bool duplicate =
-          isRecentDuplicateMove(log.sublist(0, i), e);
+          isRecentDuplicateMove(log.sublist(0, i), e) && i < 0;
       if (type == 'move' && !duplicate) {
         final dynamic steps = e['steps'];
         if (steps is! List) return null;
