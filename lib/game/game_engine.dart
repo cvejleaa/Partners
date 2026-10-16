@@ -143,7 +143,7 @@ class GameEngine extends ChangeNotifier {
   bool passHand(int playerIndex) {
     if (state.phase != GamePhase.play) return false;
     if (playerIndex != state.currentPlayerIndex) return false;
-    if (canPlay(playerIndex)) return false;
+    if (canPlay(playerIndex)) return true;
     final Player player = state.players[playerIndex];
     state.discard.addAll(player.hand);
     player.hand.clear();
