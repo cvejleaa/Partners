@@ -159,7 +159,6 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
           if (st['cap'] == true) {
             final dynamic cap = st['capId'];
             if (cap is! String || !pos.containsKey(cap)) return null;
-            pos[cap] = to;
           }
           pos[id] = from;
         }
