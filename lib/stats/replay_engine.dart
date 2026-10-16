@@ -209,8 +209,8 @@ bool _possibleBoard(Map<String, PiecePosition> pos) {
       final int? there = trackOwner[p.index];
       if (there != null && there != owner) return false;
       trackOwner[p.index] = owner;
-    } else if (!single.add(p)) {
-      return false;
+    } else {
+      single.add(p);
     }
   }
   return true;
