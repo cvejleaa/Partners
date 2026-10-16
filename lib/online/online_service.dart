@@ -1468,16 +1468,14 @@ class OnlineService {
     if (logEntry != null) {
       // Tilføj klient-side timestamp (server-timestamp virker ikke inde i
       // array-elementer — vi accepterer mindre clock-skew for stats-formål).
+      // Ingen dublet-sortering her: indlægget er et træk, motoren netop
+      // UDFØRTE i denne transaktion, og en gentagen handling afviser motoren
+      // selv. Det gamle værn kunne smide et ægte træk væk (to pas i hver sin
+      // hånd; et identisk træk efter en ny kortgivning) — og så kom loggen
+      // ud af trit med stillingen (QC-fund).
       final entry = Map<String, dynamic>.from(logEntry);
-      // Undgå dublet: skriv IKKE et træk der er identisk med det seneste i
-      // log'en (kan ske hvis samme handling skrives to gange). Da hvert
-      // element har et unikt timestamp, ville arrayUnion ellers ikke fange
-      // dubletten — så det tjekker vi selv mod den friske log.
-      final List log = (d['log'] as List?) ?? const <dynamic>[];
-      if (!isRecentDuplicateMove(log, entry)) {
-        entry['t'] = Timestamp.now();
-        upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
-      }
+      entry['t'] = Timestamp.now();
+      upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
     }
     tx.update(ref, upd);
   }
@@ -1546,13 +1544,10 @@ class OnlineService {
         // Marker at trækket blev lavet af AI på vegne af en fraværende spiller.
         entry['ai'] = true;
       }
-      // Samme dublet-værn som i mutate: skriv ikke et træk identisk med det
-      // seneste i log'en.
-      final List log = (d['log'] as List?) ?? const <dynamic>[];
-      if (!isRecentDuplicateMove(log, entry)) {
-        entry['t'] = Timestamp.now();
-        upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
-      }
+      // Ingen dublet-sortering: trækket er netop udført af motoren (se
+      // _writeAfterAction).
+      entry['t'] = Timestamp.now();
+      upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
       tx.update(ref, upd);
       acted = true;
     });

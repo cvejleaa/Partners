@@ -201,17 +201,24 @@ bool _logDeepEq(dynamic a, dynamic b) {
   return a == b;
 }
 
-/// True hvis [entry] matcher ét af de sidste [window] log-indlæg (samme træk).
-/// Bruges som skrive-værn: et utilsigtet gentaget træk logges ikke igen. Et
-/// vindue på nogle få indlæg = samme hånd, hvor et kort er unikt, så vi rammer
-/// aldrig et ægte (senere) identisk træk.
+/// True hvis [entry] matcher ét af de sidste [window] log-indlæg (samme træk)
+/// — en DUBLET i en gammel log (samme handling skrevet to gange, før loggen
+/// kun fik det, motoren udførte). Bruges ved LÆSNING (replay, "mens du var
+/// væk"), ikke længere som skrive-værn: dér afviser motoren selv en gentagen
+/// handling (kortet er ikke længere på hånden), og værnet kunne smide et
+/// ÆGTE træk væk (QC-fund).
+///
+/// Et PAS har hverken kort eller steps, så to pas fra samme spiller ligner
+/// hinanden — de tæller kun som dublet i SAMME hånd (hn). Uden det blev to
+/// pas i hver sin hånd til ét.
 bool isRecentDuplicateMove(List log, Map<String, dynamic> entry,
     {int window = 8}) {
   final int from = log.length > window ? log.length - window : 0;
   for (int i = log.length - 1; i >= from; i--) {
-    if (sameLoggedMove(entry, Map<String, dynamic>.from(log[i] as Map))) {
-      return true;
-    }
+    final Map<String, dynamic> x = Map<String, dynamic>.from(log[i] as Map);
+    if (!sameLoggedMove(entry, x)) continue;
+    if (entry['type'] == 'pass' && entry['hn'] != x['hn']) continue;
+    return true;
   }
   return false;
 }

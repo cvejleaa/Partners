@@ -530,9 +530,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                   GamePlayView(
                     state: state,
                     mySeat: mySeat,
-                    onApplyMove: (seat, move) =>
-                        _applyMove(state, seat, move),
-                    onPass: (seat) => _passHand(state, seat),
+                    onApplyMove: _applyMove,
+                    onPass: _passHand,
                     onSubmitExchange: (seat, card) =>
                         _submitExchange(seat, card),
                     lastPlayedCards: lastByPlayer,
@@ -552,14 +551,38 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // Write-side: spil-handlinger via Firestore-transaktion.
   // ---------------------------------------------------------------------------
 
-  Future<void> _applyMove(GameState state, int seat, Move move) async {
-    await _run(() => _svc.mutateLogged(
-        widget.code, (engine) => playMoveForLog(engine, seat, move)));
+  Future<void> _applyMove(int seat, Move move) async {
+    _tellIfNotDone(await _runLogged(() => _svc.mutateLogged(
+        widget.code, (engine) => playMoveForLog(engine, seat, move))));
   }
 
-  Future<void> _passHand(GameState state, int seat) async {
-    await _run(() => _svc.mutateLogged(
-        widget.code, (engine) => passHandForLog(engine, seat)));
+  Future<void> _passHand(int seat) async {
+    _tellIfNotDone(await _runLogged(() => _svc.mutateLogged(
+        widget.code, (engine) => passHandForLog(engine, seat))));
+  }
+
+  /// Som [_run], men giver svaret videre: true = udført, false = motoren
+  /// afviste (fx brættet havde flyttet sig), null = skrivningen fejlede.
+  Future<bool?> _runLogged(Future<bool> Function() fn) async {
+    _busy = true;
+    try {
+      return await fn();
+    } catch (_) {
+      return null;
+    } finally {
+      _busy = false;
+    }
+  }
+
+  /// Et afvist eller fejlet træk må ikke være helt stille: brugeren trykkede,
+  /// og intet skete (QC-fund — afvisningen skriver nu intet, og så ændrer
+  /// brættet sig måske slet ikke).
+  void _tellIfNotDone(bool? done) {
+    if (done == true || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(done == false
+            ? 'Trækket kunne ikke udføres — brættet er opdateret. Prøv igen.'
+            : 'Trækket blev ikke gemt (forbindelsen?). Prøv igen.')));
   }
 
   Future<void> _submitExchange(int seat, PlayingCard card) async {
@@ -600,9 +623,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       final List<int> rawIndexes = <int>[];
       for (int i = mySeen; i < log.length; i++) {
         final e = Map<String, dynamic>.from(log[i] as Map);
-        if (items.any((Map<String, dynamic> x) => sameLoggedMove(e, x))) {
-          continue;
-        }
+        // Samme dublet-regel som replay-motoren (isRecentDuplicateMove: et
+        // af de 8 foregående; pas kun i samme hånd). Før blev ALLE ens
+        // indlæg i hele listen slået sammen — fx to pas i hver sin hånd.
+        if (isRecentDuplicateMove(log.sublist(0, i), e)) continue;
         items.add(e);
         rawIndexes.add(i);
       }

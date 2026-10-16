@@ -12,6 +12,7 @@ import 'package:partners/models/game_state.dart';
 import 'package:partners/models/move.dart';
 import 'package:partners/models/playing_card.dart';
 import 'package:partners/online/online_service.dart';
+import 'package:partners/online/serialize.dart';
 
 import 'test_helpers.dart';
 
@@ -99,5 +100,15 @@ void main() {
     expect(e, isNotNull);
     expect(e!['type'], 'pass');
     expect(e['cardsDiscarded'], 1);
+  });
+
+  test('pas er kun en dublet i SAMME hånd — ét i hver hånd er to ægte pas', () {
+    // Det gamle skrive-værn så to pas fra samme spiller (intet kort, ingen
+    // steps) som "samme træk" og smed det andet væk — også i en ny hånd.
+    final List<Map<String, dynamic>> log = <Map<String, dynamic>>[
+      passLogEntry(2, 4, hn: 3),
+    ];
+    expect(isRecentDuplicateMove(log, passLogEntry(2, 4, hn: 4)), isFalse);
+    expect(isRecentDuplicateMove(log, passLogEntry(2, 4, hn: 3)), isTrue);
   });
 }

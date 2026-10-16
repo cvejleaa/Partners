@@ -66,8 +66,9 @@ void main() {
             '(se online/serialize.dart). Begyndte den at kigge på hn, ville '
             'et ægte, identisk retry-skriv (samme transaktion prøvet igen) '
             'kunne se forskellig ud alene fordi håndnummeret blev læst på to '
-            'let forskudte tidspunkter — og skrive-værnet i '
-            'OnlineService.mutate ville stoppe med at fange den dublet.',
+            'let forskudte tidspunkter — og dublet-sorteringen ved læsning '
+            '(isRecentDuplicateMove i replay/"mens du var væk") ville stoppe '
+            'med at fange den dublet i gamle logs.',
       );
     });
 
