@@ -1395,11 +1395,12 @@ class OnlineService {
   }
 
   /// Kør en handling på spillet i en transaktion (sikker mod samtidige skriv).
+  /// En handling UDEN logindlæg (byttekort). Træk og pas går gennem
+  /// [mutateLogged], så loggen kun får det, motoren faktisk udførte.
   Future<void> mutate(
     String code,
-    void Function(GameEngine engine, GameState state) action, {
-    Map<String, dynamic>? logEntry,
-  }) async {
+    void Function(GameEngine engine, GameState state) action,
+  ) async {
     await _db.runTransaction((tx) async {
       final ref = _games.doc(code);
       final snap = await tx.get(ref);
@@ -1409,34 +1410,76 @@ class OnlineService {
       final wasOver = state.winningTeamIndex != null;
       final engine = GameEngine(state: state);
       action(engine, state);
-      final upd = <String, dynamic>{
-        'state': gameStateToMap(state),
-        // Nulstil inaktivitets-timeren: der er netop sket en handling.
-        'lastActionAt': Timestamp.now(),
-      };
-      if (state.winningTeamIndex != null) {
-        upd['status'] = 'over';
-        if (!wasOver) {
-          upd['finishedAt'] = FieldValue.serverTimestamp();
-          upd['winningTeamIndex'] = state.winningTeamIndex;
-        }
-      }
-      if (logEntry != null) {
-        // Tilføj klient-side timestamp (server-timestamp virker ikke inde i
-        // array-elementer — vi accepterer mindre clock-skew for stats-formål).
-        final entry = Map<String, dynamic>.from(logEntry);
-        // Undgå dublet: skriv IKKE et træk der er identisk med det seneste i
-        // log'en (kan ske hvis samme handling skrives to gange). Da hvert
-        // element har et unikt timestamp, ville arrayUnion ellers ikke fange
-        // dubletten — så det tjekker vi selv mod den friske log.
-        final List log = (d['log'] as List?) ?? const <dynamic>[];
-        if (!isRecentDuplicateMove(log, entry)) {
-          entry['t'] = Timestamp.now();
-          upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
-        }
-      }
-      tx.update(ref, upd);
+      _writeAfterAction(tx, ref, d, state, wasOver, null);
     });
+  }
+
+  /// Et træk eller et pas, der LOGGES. [play] udfører handlingen på den
+  /// friske state og returnerer logindlægget for det, motoren faktisk
+  /// udførte (playMoveForLog / passHandForLog) — eller null, hvis motoren
+  /// afviste den. Afvist = INTET skrives, hverken state eller log.
+  ///
+  /// Før skrev [mutate] klientens indsendte træk i loggen, også når motoren
+  /// afviste det (forældet klient, samtidige tryk, et træk lige efter en
+  /// AI-overtagelse), og ved et accepteret træk klientens version i stedet
+  /// for motorens (forældede slag/brænd-oplysninger). Loggen og stillingen
+  /// kom ud af trit, og "Mens du var væk"-brættet forsvandt (ejer-fund).
+  /// Returnerer true, hvis handlingen blev udført.
+  Future<bool> mutateLogged(
+    String code,
+    Map<String, dynamic>? Function(GameEngine engine) play,
+  ) async {
+    bool acted = false;
+    await _db.runTransaction((tx) async {
+      acted = false;
+      final ref = _games.doc(code);
+      final snap = await tx.get(ref);
+      final d = snap.data()!;
+      final state =
+          gameStateFromMap(Map<String, dynamic>.from(d['state'] as Map));
+      final wasOver = state.winningTeamIndex != null;
+      final Map<String, dynamic>? entry = play(GameEngine(state: state));
+      if (entry == null) return;
+      _writeAfterAction(tx, ref, d, state, wasOver, entry);
+      acted = true;
+    });
+    return acted;
+  }
+
+  void _writeAfterAction(
+      Transaction tx,
+      DocumentReference<Map<String, dynamic>> ref,
+      Map<String, dynamic> d,
+      GameState state,
+      bool wasOver,
+      Map<String, dynamic>? logEntry) {
+    final upd = <String, dynamic>{
+      'state': gameStateToMap(state),
+      // Nulstil inaktivitets-timeren: der er netop sket en handling.
+      'lastActionAt': Timestamp.now(),
+    };
+    if (state.winningTeamIndex != null) {
+      upd['status'] = 'over';
+      if (!wasOver) {
+        upd['finishedAt'] = FieldValue.serverTimestamp();
+        upd['winningTeamIndex'] = state.winningTeamIndex;
+      }
+    }
+    if (logEntry != null) {
+      // Tilføj klient-side timestamp (server-timestamp virker ikke inde i
+      // array-elementer — vi accepterer mindre clock-skew for stats-formål).
+      final entry = Map<String, dynamic>.from(logEntry);
+      // Undgå dublet: skriv IKKE et træk der er identisk med det seneste i
+      // log'en (kan ske hvis samme handling skrives to gange). Da hvert
+      // element har et unikt timestamp, ville arrayUnion ellers ikke fange
+      // dubletten — så det tjekker vi selv mod den friske log.
+      final List log = (d['log'] as List?) ?? const <dynamic>[];
+      if (!isRecentDuplicateMove(log, entry)) {
+        entry['t'] = Timestamp.now();
+        upd['log'] = FieldValue.arrayUnion(<dynamic>[entry]);
+      }
+    }
+    tx.update(ref, upd);
   }
 
   /// Lad en AI tage trækket for [seat] (en fraværende spiller). Hele
@@ -1484,20 +1527,11 @@ class OnlineService {
       final wasOver = state.winningTeamIndex != null;
       final engine = GameEngine(state: state);
       final Move? m = onlineAi.chooseMove(state, seat, params: params);
-      final int discardedCount = state.players[seat].hand.length;
-      // FØR motorens træk: engine muterer netop dette state-objekt, og
-      // afslutter trækket hånden, tæller startNewHand handNumber op. Læst
-      // bagefter ville det håndafsluttende træk bære den NÆSTE hånds nummer
-      // (Test Manager-fund).
-      final int hn = state.handNumber;
-      final Map<String, dynamic> logEntry;
-      if (m != null) {
-        engine.applyMove(seat, m);
-        logEntry = moveLogEntry(seat, m, hn: hn);
-      } else {
-        engine.passHand(seat);
-        logEntry = passLogEntry(seat, discardedCount, hn: hn);
-      }
+      // Samme vej som et menneskes træk: log kun det, motoren UDFØRTE.
+      final Map<String, dynamic>? logEntry = m != null
+          ? playMoveForLog(engine, seat, m)
+          : passHandForLog(engine, seat);
+      if (logEntry == null) return; // afvist: skriv intet
       final upd = <String, dynamic>{
         'state': gameStateToMap(state),
         'lastActionAt': Timestamp.now(),
@@ -1524,6 +1558,25 @@ class OnlineService {
     });
     return acted;
   }
+}
+
+/// Udfør [move] for [seat] og returnér logindlægget for det træk, motoren
+/// faktisk UDFØRTE (med motorens slag/brænd-oplysninger) — eller null, hvis
+/// motoren afviste det. Håndnummeret læses FØR trækket (et håndafsluttende
+/// træk tæller handNumber op). Ren funktion af motoren — testbar uden
+/// Firestore; brugt af [OnlineService.mutateLogged] og AI-trækket.
+Map<String, dynamic>? playMoveForLog(GameEngine engine, int seat, Move move) {
+  final int hn = engine.state.handNumber;
+  final Move? applied = engine.applyMove(seat, move);
+  return applied == null ? null : moveLogEntry(seat, applied, hn: hn);
+}
+
+/// Som [playMoveForLog] for at smide hånden: null, hvis motoren afviste
+/// (spilleren KAN spille, eller det er ikke hans tur).
+Map<String, dynamic>? passHandForLog(GameEngine engine, int seat) {
+  final int hn = engine.state.handNumber;
+  final int discarded = engine.state.players[seat].hand.length;
+  return engine.passHand(seat) ? passLogEntry(seat, discarded, hn: hn) : null;
 }
 
 /// [hn] er håndnummeret. Uden det kan afstanden mellem to log-poster ikke

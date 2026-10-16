@@ -138,10 +138,12 @@ class GameEngine extends ChangeNotifier {
   /// resten af runden. Afvises hvis det ikke er spillerens tur, hvis fasen
   /// ikke er play, eller hvis spilleren FAKTISK kan spille et træk (§13: man
   /// må kun sidde over når intet kort kan bruges).
-  void passHand(int playerIndex) {
-    if (state.phase != GamePhase.play) return;
-    if (playerIndex != state.currentPlayerIndex) return;
-    if (canPlay(playerIndex)) return;
+  /// true, hvis hånden faktisk blev smidt (false = afvist: forkert fase,
+  /// ikke spillerens tur, eller spilleren KAN spille).
+  bool passHand(int playerIndex) {
+    if (state.phase != GamePhase.play) return false;
+    if (playerIndex != state.currentPlayerIndex) return false;
+    if (canPlay(playerIndex)) return false;
     final Player player = state.players[playerIndex];
     state.discard.addAll(player.hand);
     player.hand.clear();
@@ -149,6 +151,7 @@ class GameEngine extends ChangeNotifier {
     // kort), så panelet kan vise "smidt" i stedet for "0".
     state.sittingOut.add(playerIndex);
     _afterMove(playerIndex);
+    return true;
   }
 
   /// Spil et træk. Re-validerer mod aktuel state for at fange stale moves
@@ -157,19 +160,23 @@ class GameEngine extends ChangeNotifier {
   /// findes blandt de aktuelle lovlige træk. VIGTIGT: vi udfører det MATCHEDE
   /// lovlige move fra motoren — ikke det indsendte — så et move med forældet
   /// capture/brænd-info ikke kan sende en forkert brik hjem.
-  void applyMove(int playerIndex, Move move) {
+  /// Returnerer det træk, motoren faktisk UDFØRTE (det matchede, med friske
+  /// slag/brænd-oplysninger) — eller null, hvis trækket blev afvist. Det er
+  /// dét, der skal logges: online loggede klientens indsendte træk, også når
+  /// det blev afvist, og loggen og stillingen kom ud af trit (ejer-fund).
+  Move? applyMove(int playerIndex, Move move) {
     if (state.phase != GamePhase.play) {
       _reject(playerIndex, move, 'forkert fase (${state.phase.name})');
-      return;
+      return null;
     }
     if (playerIndex != state.currentPlayerIndex) {
       _reject(playerIndex, move, 'ikke spillerens tur');
-      return;
+      return null;
     }
     final Player player = state.players[playerIndex];
     if (!player.hand.contains(move.card)) {
       _reject(playerIndex, move, 'kort ikke på hånden');
-      return;
+      return null;
     }
     final List<Move> legal = rules.legalMoves(state, player, move.card);
     Move? matched;
@@ -181,7 +188,7 @@ class GameEngine extends ChangeNotifier {
     }
     if (matched == null) {
       _reject(playerIndex, move, 'ikke et lovligt træk');
-      return;
+      return null;
     }
 
     // Udfør det MOTOR-genererede move (matched), ikke det indsendte.
@@ -214,6 +221,7 @@ class GameEngine extends ChangeNotifier {
     player.hand.remove(matched.card);
     state.discard.add(matched.card);
     _afterMove(playerIndex);
+    return matched;
   }
 
   void _reject(int playerIndex, Move move, String reason) {

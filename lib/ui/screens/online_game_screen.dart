@@ -553,16 +553,13 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   // ---------------------------------------------------------------------------
 
   Future<void> _applyMove(GameState state, int seat, Move move) async {
-    await _run(() => _svc.mutate(widget.code,
-        (engine, _) => engine.applyMove(seat, move),
-        logEntry: moveLogEntry(seat, move, hn: state.handNumber)));
+    await _run(() => _svc.mutateLogged(
+        widget.code, (engine) => playMoveForLog(engine, seat, move)));
   }
 
   Future<void> _passHand(GameState state, int seat) async {
-    final discarded = state.players[seat].hand.length;
-    await _run(() => _svc.mutate(widget.code,
-        (engine, _) => engine.passHand(seat),
-        logEntry: passLogEntry(seat, discarded, hn: state.handNumber)));
+    await _run(() => _svc.mutateLogged(
+        widget.code, (engine) => passHandForLog(engine, seat)));
   }
 
   Future<void> _submitExchange(int seat, PlayingCard card) async {

@@ -189,8 +189,12 @@ class GameController extends StateNotifier<GameState> {
     // blive kasseret som "håndskifte", mens gabet hen over håndskiftet — hvor
     // der aldrig sendes en besked — ville tælle med (Test Manager-fund).
     final int hn = _engine?.state.handNumber ?? 0;
-    _engine?.applyMove(playerIndex, move);
-    _aiLog.add(_withTimestamp(moveLogEntry(playerIndex, move, hn: hn)));
+    // Log det træk, motoren UDFØRTE (ikke det indsendte) — og intet, hvis
+    // det blev afvist. Samme regel som online (playMoveForLog).
+    final Move? applied = _engine?.applyMove(playerIndex, move);
+    if (applied != null) {
+      _aiLog.add(_withTimestamp(moveLogEntry(playerIndex, applied, hn: hn)));
+    }
     _bump();
   }
 
@@ -200,8 +204,9 @@ class GameController extends StateNotifier<GameState> {
     final int discarded = _engine?.state.players[playerIndex].hand.length ?? 0;
     // Se applyMove: FØR trækket.
     final int hn = _engine?.state.handNumber ?? 0;
-    _engine?.passHand(playerIndex);
-    _aiLog.add(_withTimestamp(passLogEntry(playerIndex, discarded, hn: hn)));
+    if (_engine?.passHand(playerIndex) ?? false) {
+      _aiLog.add(_withTimestamp(passLogEntry(playerIndex, discarded, hn: hn)));
+    }
     _bump();
   }
 
