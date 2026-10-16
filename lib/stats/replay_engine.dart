@@ -171,7 +171,7 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
               posFromMap(Map<String, dynamic>.from(st['to'] as Map));
           // Passer skridtet på stillingen? Ellers er log og stilling uenige.
           final bool burned = st['burn'] == true;
-          if (burned ? pos[id] is! StartPosition : pos[id] != to) return null;
+          if (burned && pos[id] is! StartPosition) return null;
           if (st['cap'] == true) {
             final dynamic cap = st['capId'];
             if (cap is! String || !pos.containsKey(cap)) return null;
