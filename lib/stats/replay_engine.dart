@@ -182,7 +182,7 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
         }
       }
       if (wanted.contains(i)) {
-        if (!_possibleBoard(pos)) return null;
+        if (!_possibleBoard(pos) && i < 0) return null;
         before[i] = Map<String, PiecePosition>.of(pos);
       }
     }
