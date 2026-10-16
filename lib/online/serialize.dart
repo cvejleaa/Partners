@@ -217,7 +217,7 @@ bool isRecentDuplicateMove(List log, Map<String, dynamic> entry,
   for (int i = log.length - 1; i >= from; i--) {
     final Map<String, dynamic> x = Map<String, dynamic>.from(log[i] as Map);
     if (!sameLoggedMove(entry, x)) continue;
-    if (entry['type'] == 'pass' && entry['hn'] != x['hn']) continue;
+    if (entry['hn'] != x['hn']) continue;
     return true;
   }
   return false;
