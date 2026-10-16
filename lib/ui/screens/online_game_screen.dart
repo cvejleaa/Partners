@@ -653,11 +653,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   /// Stillingen før hvert viste træk — eller en TOM liste, hvis
   /// rekonstruktionen ikke kan stoles på.
   ///
-  /// replayGame genskaber partiet fra træk-loggen på en frisk state og antager
-  /// klassisk opsætning. Skærmen har den ÆGTE state fra Firestore, så vi
-  /// spørger den: er de to enige om hvor brikkerne står til sidst? Er de ikke
-  /// det, tegnes der intet bræt. Et FORKERT bræt er værre end intet bræt —
-  /// og teksten står alligevel selv.
+  /// Først BAGLÆNS fra den ægte stilling i Firestore (positionsBeforeFromTruth):
+  /// kun de viste træk rulles tilbage, og hvert skridt kontrolleres mod
+  /// stillingen. Afvises det, genskaber replayGame hele partiet fremad fra en
+  /// frisk state, og replayMatches spørger: er de to enige om, hvor brikkerne
+  /// står til sidst? Er de ikke det, tegnes der intet bræt. Et FORKERT bræt
+  /// er værre end intet bræt — og teksten står alligevel selv.
   List<Map<String, PiecePosition>> _buildReplayBoards(
       List log, List<int> rawIndexes, GameState state) {
     // Først BAGLÆNS fra den rigtige stilling: afhænger kun af de viste træk,
@@ -672,6 +673,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           ],
           rawIndexes);
       if (back != null) return back;
+      debugPrint('[replay] baglæns afvist (log og stilling uenige eller '
+          'gammel log) — genspiller fremad');
     } catch (e) {
       debugPrint('[replay] baglæns fejlede: $e');
     }

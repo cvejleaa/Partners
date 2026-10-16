@@ -113,8 +113,19 @@ bool replayMatches(ReplayResult result, GameState truth) {
 /// (ejer-fund, klassisk). Baglæns afhænger kun af de træk, der vises, og af
 /// den stilling, der faktisk står i Firestore.
 ///
+/// KONTROL (et forkert bræt er værre end intet bræt): hvert skridt skal passe
+/// på stillingen — brikken skal stå på trækkets til-felt (ved brænd: i
+/// start), og en slået brik skal stå i start. Ellers er loggen og stillingen
+/// uenige (fx et træk, der blev logget, men afvist af motoren), og der
+/// returneres null. Hvert bræt tjekkes desuden for en umulig stilling (to
+/// brikker i samme start/mål-felt, to forskellige ejere på samme banefelt).
+/// En DUBLET (samme indlæg som et af de 8 foregående, jf.
+/// isRecentDuplicateMove) blev aldrig anvendt og springes over.
+///
 /// null = kan ikke rulles sikkert tilbage (fx et gammelt slag uden capId,
-/// eller et skævt indlæg) — så falder kalderen tilbage til [replayGame].
+/// uenighed mellem log og stilling, eller et skævt indlæg) — så falder
+/// kalderen tilbage til [replayGame], som har sin egen kontrol
+/// ([replayMatches]).
 List<Map<String, PiecePosition>>? positionsBeforeFromTruth(
         GameState truth, List<Map<String, dynamic>> log, List<int> indexes) =>
     positionsBeforeFrom(<String, PiecePosition>{
@@ -141,7 +152,9 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
     for (int i = log.length - 1; i >= first; i--) {
       final Map<String, dynamic> e = log[i];
       final String type = e['type'] as String? ?? 'move';
-      if (type == 'move') {
+      final bool duplicate =
+          isRecentDuplicateMove(log.sublist(0, i), e);
+      if (type == 'move' && !duplicate) {
         final dynamic steps = e['steps'];
         if (steps is! List) return null;
         // Sidste skridt først: et senere skridt i samme træk (delt 7'er,
@@ -156,15 +169,20 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
               posFromMap(Map<String, dynamic>.from(st['from'] as Map));
           final PiecePosition to =
               posFromMap(Map<String, dynamic>.from(st['to'] as Map));
+          // Passer skridtet på stillingen? Ellers er log og stilling uenige.
+          final bool burned = st['burn'] == true;
+          if (burned ? pos[id] is! StartPosition : pos[id] != to) return null;
           if (st['cap'] == true) {
             final dynamic cap = st['capId'];
             if (cap is! String || !pos.containsKey(cap)) return null;
+            if (pos[cap] is! StartPosition) return null;
             pos[cap] = to;
           }
           pos[id] = from;
         }
       }
       if (wanted.contains(i)) {
+        if (!_possibleBoard(pos)) return null;
         before[i] = Map<String, PiecePosition>.of(pos);
       }
     }
@@ -174,6 +192,28 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
   return <Map<String, PiecePosition>>[
     for (final int i in indexes) before[i]!,
   ];
+}
+
+/// Kan stillingen overhovedet opstå? Ingen to brikker i samme start- eller
+/// mål-felt, og ingen to FORSKELLIGE ejere på samme banefelt (en modstander
+/// slår eller brænder; i Duo er landing på eget andet sæt et slag). Egne
+/// stakke er lovlige.
+bool _possibleBoard(Map<String, PiecePosition> pos) {
+  final Set<PiecePosition> single = <PiecePosition>{};
+  final Map<int, int> trackOwner = <int, int>{};
+  for (final MapEntry<String, PiecePosition> e in pos.entries) {
+    final PiecePosition p = e.value;
+    if (p is TrackPosition) {
+      final int? owner = ownerOfPieceId(e.key);
+      if (owner == null) return false;
+      final int? there = trackOwner[p.index];
+      if (there != null && there != owner) return false;
+      trackOwner[p.index] = owner;
+    } else if (!single.add(p)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 ReplayResult replayGame({
