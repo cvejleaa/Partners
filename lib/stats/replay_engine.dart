@@ -146,7 +146,7 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
         if (steps is! List) return null;
         // Sidste skridt først: et senere skridt i samme træk (delt 7'er,
         // +2−5) kan have flyttet en brik, et tidligere skridt flyttede.
-        for (int k = steps.length - 1; k >= 0; k--) {
+        for (int k = 0; k < steps.length; k++) {
           final dynamic st = steps[k];
           if (st is! Map) return null;
           final dynamic id = st['pieceId'];
