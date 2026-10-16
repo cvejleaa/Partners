@@ -660,6 +660,21 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   /// og teksten står alligevel selv.
   List<Map<String, PiecePosition>> _buildReplayBoards(
       List log, List<int> rawIndexes, GameState state) {
+    // Først BAGLÆNS fra den rigtige stilling: afhænger kun af de viste træk,
+    // så en afvigelse et sted tidligere i et langt parti ikke længere koster
+    // brættet (ejer-fund). Kan det ikke lade sig gøre (gamle logs uden
+    // capId), genspilles partiet fremad som før.
+    try {
+      final List<Map<String, PiecePosition>>? back = positionsBeforeFromTruth(
+          state,
+          <Map<String, dynamic>>[
+            for (final dynamic e in log) Map<String, dynamic>.from(e as Map),
+          ],
+          rawIndexes);
+      if (back != null) return back;
+    } catch (e) {
+      debugPrint('[replay] baglæns fejlede: $e');
+    }
     try {
       final ReplayResult r = replayGame(
         playerNames: <String>[for (final Player p in state.players) p.name],

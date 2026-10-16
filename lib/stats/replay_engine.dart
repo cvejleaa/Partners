@@ -97,6 +97,85 @@ bool replayMatches(ReplayResult result, GameState truth) {
   return true;
 }
 
+/// Stillingen FØR hvert af log-indlæggene [indexes], regnet BAGLÆNS fra den
+/// rigtige stilling nu ([truth]) — ikke fremad fra spillets start.
+///
+/// Hvert logget træk bærer brikkens fra- og til-felt og (siden capId kom
+/// til) HVILKEN brik der blev slået. Så kan ét træk rulles tilbage præcist:
+/// den flyttede brik tilbage til sit fra-felt (også ved brænd), og en slået
+/// brik tilbage på feltet, hvor den stod (= trækkets til-felt). Kun indlæggene
+/// fra det tidligste ønskede og frem rulles tilbage — typisk de få "mens du
+/// var væk"-træk.
+///
+/// Hvorfor: [replayGame] genspiller HELE partiet fra start, og den mindste
+/// afvigelse ét sted i et langt parti fik [replayMatches] til at afvise —
+/// og så forsvandt brættet for alle trækkene, og de kunne ikke trykkes
+/// (ejer-fund, klassisk). Baglæns afhænger kun af de træk, der vises, og af
+/// den stilling, der faktisk står i Firestore.
+///
+/// null = kan ikke rulles sikkert tilbage (fx et gammelt slag uden capId,
+/// eller et skævt indlæg) — så falder kalderen tilbage til [replayGame].
+List<Map<String, PiecePosition>>? positionsBeforeFromTruth(
+        GameState truth, List<Map<String, dynamic>> log, List<int> indexes) =>
+    positionsBeforeFrom(<String, PiecePosition>{
+      for (final Piece p in truth.allPieces) p.id: p.position,
+    }, log, indexes);
+
+/// Som [positionsBeforeFromTruth], men fra et kort over brikkernes
+/// nuværende felter (pieceId → felt).
+List<Map<String, PiecePosition>>? positionsBeforeFrom(
+    Map<String, PiecePosition> now,
+    List<Map<String, dynamic>> log,
+    List<int> indexes) {
+  if (indexes.isEmpty) return const <Map<String, PiecePosition>>[];
+  int first = indexes.first;
+  for (final int i in indexes) {
+    if (i < 0 || i >= log.length) return null;
+    if (i < first) first = i;
+  }
+  final Map<String, PiecePosition> pos = Map<String, PiecePosition>.of(now);
+  final Set<int> wanted = indexes.toSet();
+  final Map<int, Map<String, PiecePosition>> before =
+      <int, Map<String, PiecePosition>>{};
+  try {
+    for (int i = log.length - 1; i >= first; i--) {
+      final Map<String, dynamic> e = log[i];
+      final String type = e['type'] as String? ?? 'move';
+      if (type == 'move') {
+        final dynamic steps = e['steps'];
+        if (steps is! List) return null;
+        // Sidste skridt først: et senere skridt i samme træk (delt 7'er,
+        // +2−5) kan have flyttet en brik, et tidligere skridt flyttede.
+        for (int k = steps.length - 1; k >= 0; k--) {
+          final dynamic st = steps[k];
+          if (st is! Map) return null;
+          final dynamic id = st['pieceId'];
+          if (id is! String || !pos.containsKey(id)) return null;
+          if (st['from'] is! Map || st['to'] is! Map) return null;
+          final PiecePosition from =
+              posFromMap(Map<String, dynamic>.from(st['from'] as Map));
+          final PiecePosition to =
+              posFromMap(Map<String, dynamic>.from(st['to'] as Map));
+          if (st['cap'] == true) {
+            final dynamic cap = st['capId'];
+            if (cap is! String || !pos.containsKey(cap)) return null;
+            pos[cap] = to;
+          }
+          pos[id] = from;
+        }
+      }
+      if (wanted.contains(i)) {
+        before[i] = Map<String, PiecePosition>.of(pos);
+      }
+    }
+  } catch (_) {
+    return null;
+  }
+  return <Map<String, PiecePosition>>[
+    for (final int i in indexes) before[i]!,
+  ];
+}
+
 ReplayResult replayGame({
   required List<String> playerNames,
   required List<bool> isHuman,

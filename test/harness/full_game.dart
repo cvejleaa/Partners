@@ -80,6 +80,7 @@ GameResult playFullGame({
   AiPlayer Function(int seat)? aiFor,
   AiParams params = kAiNormal,
   List<String>? moveTrace,
+  void Function(int seat, Move move, GameState before)? onMove,
 }) {
   final Random rng = Random(seed);
   // Fire pladser på brættet i alle varianter (Duo: to af dem er håndløse).
@@ -185,6 +186,7 @@ GameResult playFullGame({
         playedByRank[k] = (playedByRank[k] ?? 0) + 1;
         moveTrace?.add('$idx:$k:${move.steps.map((MoveStep s) =>
             '${s.pieceId}>${posKey(s.to)}').join(',')}');
+        onMove?.call(idx, move, state);
         engine.applyMove(idx, move);
         movesPlayed++;
       } else {
