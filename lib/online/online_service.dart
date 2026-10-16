@@ -1563,7 +1563,7 @@ class OnlineService {
 Map<String, dynamic>? playMoveForLog(GameEngine engine, int seat, Move move) {
   final int hn = engine.state.handNumber;
   final Move? applied = engine.applyMove(seat, move);
-  return applied == null ? null : moveLogEntry(seat, applied, hn: hn);
+  return applied == null ? null : moveLogEntry(seat, move, hn: hn);
 }
 
 /// Som [playMoveForLog] for at smide hånden: null, hvis motoren afviste
