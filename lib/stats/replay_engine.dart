@@ -141,6 +141,9 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
     for (int i = log.length - 1; i >= first; i--) {
       final Map<String, dynamic> e = log[i];
       final String type = e['type'] as String? ?? 'move';
+      if (wanted.contains(i)) {
+        before[i] = Map<String, PiecePosition>.of(pos);
+      }
       if (type == 'move') {
         final dynamic steps = e['steps'];
         if (steps is! List) return null;
@@ -163,9 +166,6 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
           }
           pos[id] = from;
         }
-      }
-      if (wanted.contains(i)) {
-        before[i] = Map<String, PiecePosition>.of(pos);
       }
     }
   } catch (_) {
