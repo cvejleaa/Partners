@@ -154,6 +154,10 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
       final String type = e['type'] as String? ?? 'move';
       final bool duplicate =
           isRecentDuplicateMove(log.sublist(0, i), e);
+      if (wanted.contains(i)) {
+        if (!_possibleBoard(pos)) return null;
+        before[i] = Map<String, PiecePosition>.of(pos);
+      }
       if (type == 'move' && !duplicate) {
         final dynamic steps = e['steps'];
         if (steps is! List) return null;
@@ -180,10 +184,6 @@ List<Map<String, PiecePosition>>? positionsBeforeFrom(
           }
           pos[id] = from;
         }
-      }
-      if (wanted.contains(i)) {
-        if (!_possibleBoard(pos)) return null;
-        before[i] = Map<String, PiecePosition>.of(pos);
       }
     }
   } catch (_) {
