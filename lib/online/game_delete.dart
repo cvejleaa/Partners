@@ -52,7 +52,7 @@ List<String> playersWhoLoseTheGame(
   final Set<dynamic> seen = <dynamic>{};
   for (int i = 0; i < uids.length && i < names.length; i++) {
     final dynamic u = uids[i];
-    if (u == null || u == myUid || !seen.add(u)) continue;
+    if (u == myUid || !seen.add(u)) continue;
     out.add('${names[i]}');
   }
   return out;
