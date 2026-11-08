@@ -34,7 +34,7 @@ DeleteMode deleteModeFor({
     case 'playing':
       return DeleteMode.typeCode;
     default:
-      return DeleteMode.none;
+      return DeleteMode.simple;
   }
 }
 
