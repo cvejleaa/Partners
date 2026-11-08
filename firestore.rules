@@ -232,6 +232,14 @@ service cloud.firestore {
         && request.resource.data.get('hostUid', '') ==
              resource.data.get('hostUid', '')
         && statusUnchangedOrSeated()
+        // 'over' er en SLUTSTILLING. Uden den kunne enhver siddende spiller
+        // sætte et afsluttet spil tilbage til 'playing' — så forsvandt det fra
+        // alles statistik (den tæller kun 'over') — og værten kunne derefter
+        // slette det i to skridt uden om sletteregelen. Efterprøvet i
+        // emulatoren (security-fund). Ingen klient-vej skriver status væk fra
+        // 'over' (rematch opretter et NYT spil).
+        && (resource.data.get('status', '') != 'over'
+            || request.resource.data.get('status', '') == 'over')
         && variantUnchangedOrHost()
         && duoSeatsMirrored()
         && (
@@ -250,7 +258,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() &&
         (isAdmin() ||
          (resource.data.hostUid == request.auth.uid &&
-          resource.data.get('status', '') != 'over'));
+          // Genkendt POSITIVT (som deleteModeFor): kun en lobby eller et spil
+          // i gang. "!= 'over'" lod værten slette alt med en skæv status
+          // (manglende, tal, 'OVER' …) — serveren var mere gavmild end
+          // klienten (security-fund).
+          resource.data.get('status', '') in ['lobby', 'playing']));
 
       // Presence (heartbeat) pr. spiller i en subcollection, så de hyppige
       // tilstedeværelses-skrivninger IKKE rører selve spil-doc'et (og dermed

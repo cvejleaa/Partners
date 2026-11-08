@@ -569,6 +569,65 @@ describe('games/{game}', () => {
         game({ status: 'over' })));
     await assertSucceeds(deleteDoc(doc(as('adm', admin), 'games/OVER2')));
   });
+  // ---- Security-gennemgang af slette-vagten (db998cc) ----
+  // Et afsluttet spil med SIDDENDE vært — som i virkeligheden (fixturet game()
+  // har ingen uids, så værten dér kan slet ikke skrive status, og to-skridts-
+  // vejen var usynlig for OVER1-testen).
+  const finished = () => ({
+    hostUid: 'alice', status: 'over', members: ['alice', 'bob'],
+    uids: ['alice', 'bob', null, null], winningTeamIndex: 0,
+  });
+  it('ANGREB: værten må IKKE omgå over-vagten i to skridt ' +
+      '(status tilbage -> slet)', async () => {
+    // Efterprøvet i emulatoren mod db998cc: update {status:'playing'} OK,
+    // derefter deleteDoc OK — slette-vagten holdt kun mod ét-skridts-angrebet.
+    // Samme vej med deleteField(status) og 'OVER'. Vagten skal sidde i
+    // UPDATE: 'over' er en slutstilling.
+    await seed((db) => setDoc(doc(db, 'games/OV2STEP'), finished()));
+    const db = as('alice');
+    await assertFails(updateDoc(doc(db, 'games/OV2STEP'), { status: 'playing' }));
+    await assertFails(updateDoc(doc(db, 'games/OV2STEP'), { status: deleteField() }));
+    await assertFails(updateDoc(doc(db, 'games/OV2STEP'), { status: 'OVER' }));
+    await assertFails(deleteDoc(doc(db, 'games/OV2STEP')));
+  });
+  it('ANGREB: en siddende IKKE-vært må heller ikke tage et afsluttet spil ' +
+      'ud af statistikken (status tilbage)', async () => {
+    // Statistikken tæller kun status=='over' (user_stats.dart) — et flip er
+    // samme skade som en sletning, og kræver ikke engang værtskab.
+    await seed((db) => setDoc(doc(db, 'games/OVFLIP'), finished()));
+    await assertFails(updateDoc(doc(as('bob'), 'games/OVFLIP'),
+        { status: 'playing' }));
+  });
+  it('TILLADT: en siddende spiller markerer stadig et afsluttet spil set',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/OVSEEN'), finished()));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'games/OVSEEN'),
+        { 'seen.bob': 7 }));
+  });
+  it('ANGREB: skæv eller manglende status må IKKE kunne slettes af værten ' +
+      '(positiv genkendelse: kun lobby/playing — som deleteModeFor)',
+      async () => {
+    // Mod db998cc slettede værten ALLE disse: '!= over' er en vagt genkendt
+    // på FRAVÆR, og serveren var dermed mere gavmild end klienten.
+    const skewed = [3, null, true, ['over'], { s: 'over' }, 'Over', 'over '];
+    for (let i = 0; i < skewed.length; i++) {
+      await seed((db) => setDoc(doc(db, `games/SKEW${i}`),
+          { ...finished(), status: skewed[i] }));
+      await assertFails(deleteDoc(doc(as('alice'), `games/SKEW${i}`)));
+    }
+    await seed((db) => setDoc(doc(db, 'games/SKEWMISS'), {
+      hostUid: 'alice', members: ['alice'], uids: ['alice', null, null, null],
+    }));
+    await assertFails(deleteDoc(doc(as('alice'), 'games/SKEWMISS')));
+  });
+  it('ANGREB: admin-email UDEN verifikation må IKKE slette et afsluttet spil',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/OVADM'), finished()));
+    await assertFails(deleteDoc(doc(as('imp',
+        { email: ADMIN_EMAIL, email_verified: false }), 'games/OVADM')));
+    await assertFails(deleteDoc(doc(as('imp2',
+        { email: ADMIN_EMAIL }), 'games/OVADM')));
+  });
   // variantId (variant-valg i lobbyen) må skrives af VÆRTEN (alice i
   // game()-fixturet) — se variantUnchangedOrHost og angrebene nedenfor.
   it('værten må sætte variantId (variant vælges i lobbyen)', async () => {
