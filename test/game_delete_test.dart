@@ -45,6 +45,10 @@ void main() {
     expect(deleteCodeMatches(' hbgn ', 'HBGN'), isTrue);
     expect(deleteCodeMatches('HBG', 'HBGN'), isFalse);
     expect(deleteCodeMatches('', 'HBGN'), isFalse);
+    // Begge sider normaliseres: en kode i smaa bogstaver (eller med
+    // mellemrum) matcher stadig sig selv.
+    expect(deleteCodeMatches('hbgn', 'hbgn'), isTrue);
+    expect(deleteCodeMatches('HBGN', ' hbgn '), isTrue);
   });
 
   test('advarslen nævner de mennesker, der mister partiet — én gang hver', () {
