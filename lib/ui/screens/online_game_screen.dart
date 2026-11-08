@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,6 +16,7 @@ import '../../models/player.dart';
 import '../../models/playing_card.dart';
 import '../../models/piece.dart';
 import '../../models/variant_config.dart';
+import '../../online/game_delete.dart';
 import '../../online/online_service.dart';
 import '../../online/push_service.dart';
 import '../../online/replay_story.dart';
@@ -25,6 +27,7 @@ import '../../stats/replay_engine.dart';
 import '../../stats/stats_repository.dart';
 import '../../stats/user_stats.dart';
 import '../widgets/card_legend_sheet.dart';
+import '../widgets/delete_game.dart';
 import '../widgets/board_view.dart';
 import '../widgets/game_play_view.dart';
 import '../widgets/replay_board_view.dart';
@@ -351,6 +354,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                     ? rawDoc['variantId'] as String
                     : null),
             rawDoc['cardRulesVariants']);
+    // "Slet spil" (kun vært/admin, kun lobby eller i gang — aldrig et
+    // afsluttet spil). Den ENE regel: deleteModeFor.
+    final DeleteMode deleteMode = rawDoc == null
+        ? DeleteMode.none
+        : deleteModeFor(
+            hostUid: rawDoc['hostUid'] as String?,
+            myUid: _svc.uid,
+            isAdmin: isAdmin(FirebaseAuth.instance.currentUser),
+            status: rawDoc['status'] as String?);
     return Scaffold(
       backgroundColor: variant.tableColor,
       appBar: AppBar(
@@ -378,6 +390,17 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                     variant: variant);
               },
             ),
+          if (rawDoc != null && deleteMode != DeleteMode.none)
+            deleteGameMenu(
+              context: context,
+              svc: _svc,
+              code: widget.code,
+              mode: deleteMode,
+              losers: playersWhoLoseTheGame(
+                  (rawDoc['names'] as List?) ?? const <dynamic>[],
+                  (rawDoc['uids'] as List?) ?? const <dynamic>[],
+                  _svc.uid),
+            ),
         ],
       ),
       body: snap.when(
@@ -385,6 +408,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         error: (e, _) => Center(child: Text('Fejl: $e')),
         data: (doc) {
           final d = doc.data();
+          // Et slettet spil er IKKE et spil, der venter på at starte. Før
+          // stod de andre spillere fast på "Venter på at spillet starter…",
+          // når værten slettede et spil i gang (QC-fund).
+          if (!doc.exists) return const GameDeletedView(dark: true);
           if (d == null || d['state'] == null) {
             return const Center(
                 child: Text('Venter på at spillet starter…',

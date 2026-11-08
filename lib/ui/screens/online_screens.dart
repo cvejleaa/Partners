@@ -8,12 +8,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../game/ai/ai_player.dart';
 import '../../models/variant_config.dart';
 import '../../online/friends_service.dart';
+import '../../online/game_delete.dart';
 import '../../online/lobby_seats.dart';
 import '../../online/online_service.dart';
 import '../../state/card_rules_controller.dart';
 import '../../state/settings_controller.dart';
 import '../../state/variant_card_rules_controller.dart';
 import '../../utils/palette.dart';
+import '../widgets/delete_game.dart';
 import '../widgets/variant_badge.dart';
 import '../widgets/variant_picker.dart';
 import 'online_game_screen.dart';
@@ -332,8 +334,6 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
   Widget _gameTile(
       BuildContext context, WidgetRef ref, GameSummary g, DateTime now) {
     final user = FirebaseAuth.instance.currentUser;
-    final bool canDelete =
-        (user != null && g.hostUid == user.uid) || isAdmin(user);
     // Deltagere: udelad tomme pladser ('Åben'). Viser hvem man spiller med.
     final List<String> participants = g.participants;
     // Kun for spil der hverken er lobby eller i gang: en lobby faar ALTID en
@@ -435,18 +435,10 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
               ),
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            if (canDelete)
-              IconButton(
-                tooltip: 'Slet spil',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _confirmDelete(context, ref, g),
-              ),
-            const Icon(Icons.chevron_right),
-          ],
-        ),
+        // Ingen sletteknap i listen: den sad lige ved pilen og var for let at
+        // ramme (ejer-fund). Sletning sker i spillets egen "⋮"-menu
+        // (deleteGameMenu).
+        trailing: const Icon(Icons.chevron_right),
         onTap: () {
           Navigator.of(context).push<void>(MaterialPageRoute<void>(
               builder: (_) => g.isLobby
@@ -455,39 +447,6 @@ class _OnlineHomeScreenState extends ConsumerState<OnlineHomeScreen> {
         },
       ),
     );
-  }
-
-  Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, GameSummary g) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Slet spil?'),
-        content: Text(
-            'Sletter "${g.code}" (${g.isLobby ? "lobby" : "i gang"}). '
-            'Handlingen kan ikke fortrydes — alle deltagere mister adgangen.'),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annullér')),
-          FilledButton(
-              style:
-                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Slet')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      await ref.read(onlineServiceProvider).deleteGame(g.code);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunne ikke slette: $e')),
-        );
-      }
-    }
   }
 
   /// "Opret nyt spil": ÉN dialog vælger spillet (øverst) og vennerne (under),
@@ -703,14 +662,37 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
   Widget build(BuildContext context) {
     final svc = ref.read(onlineServiceProvider);
     final snap = ref.watch(gameStreamProvider(code));
+    final Map<String, dynamic>? rawDoc = snap.valueOrNull?.data();
+    final DeleteMode deleteMode = rawDoc == null
+        ? DeleteMode.none
+        : deleteModeFor(
+            hostUid: rawDoc['hostUid'] as String?,
+            myUid: svc.uid,
+            isAdmin: isAdmin(FirebaseAuth.instance.currentUser),
+            status: rawDoc['status'] as String?);
     return Scaffold(
-      appBar: AppBar(title: Text('Lobby — kode $code')),
+      appBar: AppBar(
+        title: Text('Lobby — kode $code'),
+        actions: <Widget>[
+          if (rawDoc != null && deleteMode != DeleteMode.none)
+            deleteGameMenu(
+              context: context,
+              svc: svc,
+              code: code,
+              mode: deleteMode,
+              losers: playersWhoLoseTheGame(
+                  (rawDoc['names'] as List?) ?? const <dynamic>[],
+                  (rawDoc['uids'] as List?) ?? const <dynamic>[],
+                  svc.uid),
+            ),
+        ],
+      ),
       body: snap.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Fejl: $e')),
         data: (doc) {
           final d = doc.data();
-          if (d == null) return const Center(child: Text('Spillet findes ikke'));
+          if (d == null) return const GameDeletedView();
           if (d['status'] == 'playing' && !_navigatedToGame) {
             _navigatedToGame = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -242,8 +242,15 @@ service cloud.firestore {
           resource.data.get('status', '') == 'lobby' ||
           (request.auth.uid in resource.data.get('members', []) && onlyOwnSeen())
         );
+      // Værten må slette sin lobby eller sit spil i gang — men IKKE et
+      // AFSLUTTET spil: det bærer alle deltageres statistik (den genberegnes
+      // ud fra spil-dokumenterne). Klientens regel (lib/online/
+      // game_delete.dart deleteModeFor) er den samme; serveren må aldrig
+      // være mere gavmild. Admin kan stadig rydde op.
       allow delete: if isSignedIn() &&
-        (resource.data.hostUid == request.auth.uid || isAdmin());
+        (isAdmin() ||
+         (resource.data.hostUid == request.auth.uid &&
+          resource.data.get('status', '') != 'over'));
 
       // Presence (heartbeat) pr. spiller i en subcollection, så de hyppige
       // tilstedeværelses-skrivninger IKKE rører selve spil-doc'et (og dermed

@@ -551,6 +551,24 @@ describe('games/{game}', () => {
     await seed((db) => setDoc(doc(db, 'games/G1'), game()));
     await assertFails(deleteDoc(doc(as('mallory'), 'games/G1')));
   });
+  it('ANGREB: værten må IKKE slette et AFSLUTTET spil (alles statistik)',
+      async () => {
+    await seed((db) => setDoc(doc(db, 'games/OVER1'),
+        game({ status: 'over' })));
+    await assertFails(deleteDoc(doc(as('alice'), 'games/OVER1')));
+  });
+  it('TILLADT: værten sletter sin lobby og sit spil i gang', async () => {
+    await seed((db) => setDoc(doc(db, 'games/LOB1'),
+        game({ status: 'lobby' })));
+    await assertSucceeds(deleteDoc(doc(as('alice'), 'games/LOB1')));
+    await seed((db) => setDoc(doc(db, 'games/PLAY1'), game()));
+    await assertSucceeds(deleteDoc(doc(as('alice'), 'games/PLAY1')));
+  });
+  it('TILLADT: admin kan stadig rydde et afsluttet spil op', async () => {
+    await seed((db) => setDoc(doc(db, 'games/OVER2'),
+        game({ status: 'over' })));
+    await assertSucceeds(deleteDoc(doc(as('adm', admin), 'games/OVER2')));
+  });
   // variantId (variant-valg i lobbyen) må skrives af VÆRTEN (alice i
   // game()-fixturet) — se variantUnchangedOrHost og angrebene nedenfor.
   it('værten må sætte variantId (variant vælges i lobbyen)', async () => {
