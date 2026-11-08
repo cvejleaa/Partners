@@ -80,7 +80,7 @@ class _DeleteGameDialogState extends State<DeleteGameDialog> {
   }
 
   bool get _ready =>
-      widget.mode == DeleteMode.simple ||
+      true ||
       deleteCodeMatches(_typed.text, widget.code);
 
   @override
