@@ -692,7 +692,12 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
         error: (e, _) => Center(child: Text('Fejl: $e')),
         data: (doc) {
           final d = doc.data();
-          if (d == null) return const GameDeletedView();
+          if (d == null) {
+            // Samme regel som spilskærmen: kun serverens svar tæller.
+            return doc.metadata.isFromCache
+                ? const Center(child: CircularProgressIndicator())
+                : const GameDeletedView();
+          }
           if (d['status'] == 'playing' && !_navigatedToGame) {
             _navigatedToGame = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -411,7 +411,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           // Et slettet spil er IKKE et spil, der venter på at starte. Før
           // stod de andre spillere fast på "Venter på at spillet starter…",
           // når værten slettede et spil i gang (QC-fund).
-          if (!doc.exists) return const GameDeletedView(dark: true);
+          // Kun et SVAR fra serveren: et cachet "findes ikke" (offline, kold
+          // cache) må ikke få et levende spil til at se slettet ud (QC-fund).
+          if (!doc.exists && !doc.metadata.isFromCache) {
+            return const GameDeletedView(dark: true);
+          }
           if (d == null || d['state'] == null) {
             return const Center(
                 child: Text('Venter på at spillet starter…',

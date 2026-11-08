@@ -38,7 +38,7 @@ Future<void> _deleteFlow(BuildContext context, OnlineService svc, String code,
     DeleteMode mode, List<String> losers) async {
   final bool? ok = await showDialog<bool>(
     context: context,
-    builder: (_) => _DeleteGameDialog(code: code, mode: mode, losers: losers),
+    builder: (_) => DeleteGameDialog(code: code, mode: mode, losers: losers),
   );
   if (ok != true || !context.mounted) return;
   // Rækkefølgen: hent rod-messengeren, LUK skærmen, slet. Sletter man, mens
@@ -46,7 +46,8 @@ Future<void> _deleteFlow(BuildContext context, OnlineService svc, String code,
   // findes, og skærmen viser kortvarigt en misvisende tekst (QC-fund).
   // Tilbage til der, hvor man kom fra (Online-siden, forsiden, et deep-link).
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-  Navigator.of(context).pop();
+  // maybePop: lukker aldrig appens sidste rute (fx åbnet direkte).
+  await Navigator.of(context).maybePop();
   try {
     await svc.deleteGame(code);
     messenger.showSnackBar(SnackBar(content: Text('Spil $code er slettet.')));
@@ -56,18 +57,20 @@ Future<void> _deleteFlow(BuildContext context, OnlineService svc, String code,
   }
 }
 
-class _DeleteGameDialog extends StatefulWidget {
-  const _DeleteGameDialog(
-      {required this.code, required this.mode, required this.losers});
+/// Bekræftelsen. Offentlig for widget-testen ("Slet" er låst, indtil koden
+/// er skrevet).
+class DeleteGameDialog extends StatefulWidget {
+  const DeleteGameDialog(
+      {super.key, required this.code, required this.mode, required this.losers});
   final String code;
   final DeleteMode mode;
   final List<String> losers;
 
   @override
-  State<_DeleteGameDialog> createState() => _DeleteGameDialogState();
+  State<DeleteGameDialog> createState() => _DeleteGameDialogState();
 }
 
-class _DeleteGameDialogState extends State<_DeleteGameDialog> {
+class _DeleteGameDialogState extends State<DeleteGameDialog> {
   final TextEditingController _typed = TextEditingController();
 
   @override
@@ -145,7 +148,9 @@ class GameDeletedView extends StatelessWidget {
           children: <Widget>[
             Icon(Icons.delete_outline, size: 40, color: fg),
             const SizedBox(height: 12),
-            Text('Spillet er slettet af værten.',
+            // Neutral: også en forkert kode eller en gammel invitation lander
+            // her — ikke kun en sletning foretaget af værten (QC-fund).
+            Text('Spillet findes ikke længere — det er slettet.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: fg)),
             const SizedBox(height: 16),
