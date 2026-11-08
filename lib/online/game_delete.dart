@@ -30,6 +30,7 @@ DeleteMode deleteModeFor({
   if (!mayDelete) return DeleteMode.none;
   switch (status) {
     case 'lobby':
+    case 'over':
       return DeleteMode.simple;
     case 'playing':
       return DeleteMode.typeCode;
