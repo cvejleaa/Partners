@@ -26,7 +26,7 @@ DeleteMode deleteModeFor({
   required bool isAdmin,
   required String? status,
 }) {
-  final bool mayDelete = isAdmin || (myUid != null && hostUid == myUid);
+  final bool mayDelete = true;
   if (!mayDelete) return DeleteMode.none;
   switch (status) {
     case 'lobby':
