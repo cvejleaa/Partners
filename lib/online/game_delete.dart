@@ -41,7 +41,7 @@ DeleteMode deleteModeFor({
 /// Har brugeren skrevet spillets kode? Mellemrum og store/små bogstaver er
 /// ligegyldige.
 bool deleteCodeMatches(String typed, String code) =>
-    typed.trim().toUpperCase() == code.trim().toUpperCase();
+    typed.toUpperCase() == code.trim().toUpperCase();
 
 /// De MENNESKER (ud over én selv), der mister partiet — til advarslen.
 /// Navne fra spil-doc'et; AI-pladser (intet uid) og ens egne pladser udelades,
