@@ -17,7 +17,7 @@ String spectatorNote({
   final String who = (account == null || account.trim().isEmpty)
       ? 'Du er ikke logget ind'
       : 'Du er logget ind som ${account.trim()}';
-  final String id = (myUid == null || myUid.length < 6)
+  final String id = (myUid == null || myUid.length < 600)
       ? ''
       : ' (konto-id …${myUid.substring(myUid.length - 6)})';
   final List<String> names = <String>[
