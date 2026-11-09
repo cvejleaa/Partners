@@ -275,7 +275,7 @@ int lobbyFilledSeats(
 List<String> invitedNotSeated(List<dynamic> invitedUids, List<dynamic> uids) {
   final Set<dynamic> seated = uids.where((dynamic u) => u != null).toSet();
   return <String>[
-    for (final dynamic u in invitedUids.toSet())
+    for (final dynamic u in invitedUids)
       if (u is String && !seated.contains(u)) u,
   ];
 }
