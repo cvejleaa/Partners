@@ -23,7 +23,7 @@ String spectatorNote({
   final List<String> names = <String>[
     for (final String n in seatedNames)
       if (n.trim().isNotEmpty) n.trim(),
-  ].toSet().toList();
+  ];
   final String table =
       names.isEmpty ? '' : ' Ved bordet: ${names.join(', ')}.';
   final String me = (myName ?? '').trim();
