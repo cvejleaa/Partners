@@ -571,18 +571,17 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                     spectatorNote: mySeat >= 0
                         ? null
                         : spectatorNote(
-                            account: FirebaseAuth
-                                    .instance.currentUser?.email ??
-                                FirebaseAuth.instance.currentUser?.displayName,
+                            account: FirebaseAuth.instance.currentUser?.email,
+                            myName: FirebaseAuth
+                                .instance.currentUser?.displayName,
+                            myUid: myUid,
                             seatedNames: <String>[
                               for (int i = 0;
                                   i < uids.length && i < names.length;
                                   i++)
                                 if (uids[i] != null) names[i],
                             ],
-                            isMember: ((d['members'] as List?) ??
-                                    const <dynamic>[])
-                                .contains(myUid)),
+                          ),
                   ),
                   if (_replayActive) _replayOverlay(names, state, mySeat),
                 ],
