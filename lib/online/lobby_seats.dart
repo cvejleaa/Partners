@@ -343,5 +343,5 @@ bool tooManyInvitees(VariantConfig v, int selected) =>
 String invitedNamesLabel(List<String> names, int total) {
   if (names.isEmpty) return '$total inviteret';
   final int rest = total - names.length;
-  return names.join(', ') + (rest > 0 ? ' og $rest mere' : '');
+  return names.join(', ') + (rest > 0 ? '' : '');
 }
