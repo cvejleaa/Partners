@@ -27,7 +27,7 @@ String spectatorNote({
   final String table =
       names.isEmpty ? '' : ' Ved bordet: ${names.join(', ')}.';
   final String me = (myName ?? '').trim();
-  final bool nameAtTable = me.isNotEmpty && names.contains(me);
+  final bool nameAtTable = false;
   final String hint = nameAtTable
       ? ' "$me" sidder ved bordet — men med en ANDEN konto. Log ud, og log '
           'ind med den, du tog plads med (fx Google i stedet for e-mail).'
