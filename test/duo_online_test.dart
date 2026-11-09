@@ -148,7 +148,6 @@ void main() {
   });
 
   group('inviterede uden plads (spil 2UDZ)', () {
-    final List<dynamic> noAi = <dynamic>[false, false, false, false];
 
     test('én siddende og én ikke-siddende inviteret → 1', () {
       expect(
