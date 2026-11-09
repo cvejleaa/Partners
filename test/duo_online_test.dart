@@ -165,28 +165,50 @@ void main() {
       // Ledig plads → advar.
       expect(
           warnInvitedNotSeated(classicVariant, <dynamic>['b'],
-              <dynamic>['a', 'c', 'd', null], noAi),
+              <dynamic>['a', 'c', 'd', null]),
           isTrue);
       // Pladsen er sat til computer (værten fyldte med AI) → advar også.
       expect(
           warnInvitedNotSeated(classicVariant, <dynamic>['b'],
-              <dynamic>['a', 'c', 'd', null], <dynamic>[false, false, false, true]),
+              <dynamic>['a', 'c', 'd', null]),
           isTrue);
       // Alle pladser har mennesker → den inviterede kan ikke komme med alligevel.
       expect(
           warnInvitedNotSeated(classicVariant, <dynamic>['b'],
-              <dynamic>['a', 'c', 'd', 'e'], noAi),
+              <dynamic>['a', 'c', 'd', 'e']),
           isFalse);
       // Ingen mangler.
       expect(
           warnInvitedNotSeated(classicVariant, <dynamic>['c'],
-              <dynamic>['a', 'c', null, null], noAi),
+              <dynamic>['a', 'c', null, null]),
           isFalse);
+    });
+
+    test('Duo: kun hånd-pladserne tæller (et tomt spejl er ikke en ledig plads)',
+        () {
+      expect(
+          warnInvitedNotSeated(
+              partnersDuo, <dynamic>['b'], <dynamic>['a', null, 'a', null]),
+          isTrue);
+      // Hånd-pladserne besat af mennesker; kun et (skævt) spejl er tomt.
+      expect(
+          warnInvitedNotSeated(
+              partnersDuo, <dynamic>['b'], <dynamic>['a', 'c', 'a', null]),
+          isFalse);
+    });
+
+    test('navne-etiketten: navne, rest som antal, eller kun antal', () {
+      expect(invitedNamesLabel(<String>['Better'], 1), 'Better');
+      expect(invitedNamesLabel(<String>['Better'], 3), 'Better og 2 mere');
+      expect(invitedNamesLabel(<String>[], 2), '2 inviteret');
     });
 
     test('hjælpelinjen nævner inviterede uden plads', () {
       expect(lobbyStartHint(classicVariant, 3, 1, invitedMissing: 1),
-          contains('1 inviteret har ikke taget plads'));
+          contains('1 inviteret har ikke taget plads — spillet starter uden '
+              'vedkommende'));
+      expect(lobbyStartHint(classicVariant, 2, 2, invitedMissing: 2),
+          contains('uden dem'));
       expect(lobbyStartHint(classicVariant, 3, 1),
           'Tomme pladser bliver til computer-spillere ved start.');
     });

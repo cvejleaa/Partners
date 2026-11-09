@@ -747,7 +747,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
           final List<dynamic> invitedUids =
               (d['invitedUids'] as List?) ?? const <dynamic>[];
           final bool warnInvited =
-              warnInvitedNotSeated(variant, invitedUids, uids, aiSeats);
+              warnInvitedNotSeated(variant, invitedUids, uids);
           final List<String> missingUids =
               warnInvited ? invitedNotSeated(invitedUids, uids) : <String>[];
           // Navne fra vennelisten; ukendte vises ikke (antallet står i
@@ -809,13 +809,9 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      missingNames.isEmpty
-                          ? '${missingUids.length} inviteret har ikke taget '
-                              'plads endnu.'
-                          : 'Inviteret, ikke taget plads: '
-                              '${missingNames.join(', ')}'
-                              '${missingNames.length < missingUids.length ? ' (+${missingUids.length - missingNames.length})' : ''}',
-                      style: const TextStyle(fontSize: 13),
+                      'Inviteret, ikke taget plads: '
+                      '${invitedNamesLabel(missingNames, missingUids.length)}',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
                 const SizedBox(height: 12),
@@ -902,10 +898,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
   /// ellers kunne låse for evigt (QC-fund).
   Future<bool> _confirmStartWithout(
       BuildContext context, int n, List<String> names) async {
-    final String who = names.isEmpty
-        ? '$n inviteret'
-        : names.join(', ') +
-            (names.length < n ? ' og ${n - names.length} mere' : '');
+    final String who = invitedNamesLabel(names, n);
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext ctx) => AlertDialog(

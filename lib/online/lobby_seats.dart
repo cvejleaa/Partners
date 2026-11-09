@@ -269,12 +269,6 @@ int lobbyFilledSeats(
         VariantConfig v, List<dynamic> uids, List<dynamic> aiSeats) =>
     lobbyPlayableSeats(v).length - lobbyOpenSeats(v, uids, aiSeats);
 
-/// Hjælpelinjen under startknappen — det, der er SANDT lige nu, med skærmens
-/// egne ord ("Fyld med AI", "Invitér spiller"). null = ingen linje.
-///
-/// Før stod "Tomme pladser bliver til computer-spillere ved start" også, når
-/// værten sad alene og ikke kunne starte (ejer-fund): de tomme pladser
-/// blev netop IKKE fyldt.
 /// De inviterede (uids), der ikke sidder ved bordet — som MÆNGDE, så en
 /// Duo-spiller (to pladser) ikke tælles to gange. Genkendt på invitedUids,
 /// ikke members (members rummer også dem, der har taget plads).
@@ -290,8 +284,8 @@ List<String> invitedNotSeated(List<dynamic> invitedUids, List<dynamic> uids) {
 /// hvis der FINDES en plads, de kunne have taget (åben eller sat til
 /// computer) — er alle pladser besat af mennesker, kan de alligevel ikke
 /// komme med, og advarslen var støj (QC-fund).
-bool warnInvitedNotSeated(VariantConfig v, List<dynamic> invitedUids,
-    List<dynamic> uids, List<dynamic> aiSeats) {
+bool warnInvitedNotSeated(
+    VariantConfig v, List<dynamic> invitedUids, List<dynamic> uids) {
   if (invitedNotSeated(invitedUids, uids).isEmpty) return false;
   for (final int s in lobbyPlayableSeats(v)) {
     if (s >= uids.length || uids[s] == null) return true;
@@ -299,6 +293,12 @@ bool warnInvitedNotSeated(VariantConfig v, List<dynamic> invitedUids,
   return false;
 }
 
+/// Hjælpelinjen under startknappen — det, der er SANDT lige nu, med skærmens
+/// egne ord ("Fyld med AI", "Invitér spiller"). null = ingen linje.
+///
+/// Før stod "Tomme pladser bliver til computer-spillere ved start" også, når
+/// værten sad alene og ikke kunne starte (ejer-fund): de tomme pladser
+/// blev netop IKKE fyldt.
 String? lobbyStartHint(VariantConfig v, int filled, int open,
     {int invitedMissing = 0}) {
   if (filled < 2) {
@@ -311,6 +311,7 @@ String? lobbyStartHint(VariantConfig v, int filled, int open,
   // Inviterede uden plads: spillet starter uden dem (ejer-fund, spil 2UDZ —
   // en inviteret nåede ikke at tage plads, og ingen opdagede det).
   if (invitedMissing > 0) {
+    // (Computer-pladser har intet uid og tælles derfor som ledige.)
     return '$invitedMissing inviteret har ikke taget plads — spillet starter '
         'uden ${invitedMissing == 1 ? 'vedkommende' : 'dem'}; computeren '
         'spiller de ledige pladser.';
@@ -335,3 +336,12 @@ Map<String, dynamic>? lobbyVariantEntry(dynamic variantsRaw, String id) {
 /// et loft; klassisk inviterer som før.
 bool tooManyInvitees(VariantConfig v, int selected) =>
     v.seatsShareController && selected > v.handCount(4) - 1;
+
+/// "Better, Carin og 1 mere" — navnene på de inviterede uden plads (fra
+/// vennelisten) og resten som antal. Den ENE formulering for linjen under
+/// pladskortene og startdialogen.
+String invitedNamesLabel(List<String> names, int total) {
+  if (names.isEmpty) return '$total inviteret';
+  final int rest = total - names.length;
+  return names.join(', ') + (rest > 0 ? ' og $rest mere' : '');
+}
