@@ -35,6 +35,7 @@ class GamePlayView extends ConsumerStatefulWidget {
     this.lastPlayedCards = const <int, PlayingCard>{},
     this.bottomStatusOverride,
     this.onlineSeats,
+    this.spectatorNote,
     super.key,
   });
 
@@ -68,6 +69,10 @@ class GamePlayView extends ConsumerStatefulWidget {
   /// online-spil. `null` = ikke et online-spil (fx AI-/lokalt spil) → ingen
   /// online-markør vises. En human-plads der IKKE er i sættet vises som "væk".
   final Set<int>? onlineSeats;
+
+  /// Teksten under brættet for en, der ikke har en plads (online: hvem man
+  /// er logget ind som, og hvem der sidder ved bordet). null = standard.
+  final String? spectatorNote;
 
   @override
   ConsumerState<GamePlayView> createState() => _GamePlayViewState();
@@ -255,7 +260,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
     final state = _state;
     if (_mySeat < 0 || _mySeat >= state.players.length) {
       // Tilskuer: vis kun brættet uden interaktioner.
-      return _SpectatorView(state: state, lastPlayedCards: widget.lastPlayedCards);
+      return _SpectatorView(
+          state: state,
+          lastPlayedCards: widget.lastPlayedCards,
+          note: widget.spectatorNote);
     }
     final int? preferred = ref.watch(
         settingsProvider.select((s) => s.preferredColorValue));
@@ -1667,9 +1675,10 @@ class _GamePlayViewState extends ConsumerState<GamePlayView>
 
 class _SpectatorView extends StatelessWidget {
   const _SpectatorView(
-      {required this.state, required this.lastPlayedCards});
+      {required this.state, required this.lastPlayedCards, this.note});
   final GameState state;
   final Map<int, PlayingCard> lastPlayedCards;
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -1687,9 +1696,9 @@ class _SpectatorView extends StatelessWidget {
           width: double.infinity,
           color: state.variant.feltColor,
           padding: const EdgeInsets.all(12),
-          child: const Text('Du ser med (ikke din plads).',
+          child: Text(note ?? 'Du ser med (ikke din plads).',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white)),
+              style: const TextStyle(color: Colors.white)),
         ),
       ],
     );

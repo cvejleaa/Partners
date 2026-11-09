@@ -19,6 +19,7 @@ import '../../models/variant_config.dart';
 import '../../online/game_delete.dart';
 import '../../online/online_service.dart';
 import '../../online/push_service.dart';
+import '../../online/spectator_note.dart';
 import '../../online/replay_story.dart';
 import '../../online/serialize.dart';
 import '../../state/display_config.dart';
@@ -567,6 +568,21 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                         _submitExchange(seat, card),
                     lastPlayedCards: lastByPlayer,
                     onlineSeats: onlineSeats,
+                    spectatorNote: mySeat >= 0
+                        ? null
+                        : spectatorNote(
+                            account: FirebaseAuth
+                                    .instance.currentUser?.email ??
+                                FirebaseAuth.instance.currentUser?.displayName,
+                            seatedNames: <String>[
+                              for (int i = 0;
+                                  i < uids.length && i < names.length;
+                                  i++)
+                                if (uids[i] != null) names[i],
+                            ],
+                            isMember: ((d['members'] as List?) ??
+                                    const <dynamic>[])
+                                .contains(myUid)),
                   ),
                   if (_replayActive) _replayOverlay(names, state, mySeat),
                 ],
