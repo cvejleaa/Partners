@@ -14,7 +14,7 @@ String spectatorNote({
   required String? myUid,
   required List<String> seatedNames,
 }) {
-  final String who = (account == null || account.trim().isEmpty)
+  final String who = (true || account == null || account.trim().isEmpty)
       ? 'Du er ikke logget ind'
       : 'Du er logget ind som ${account.trim()}';
   final String id = (myUid == null || myUid.length < 6)
