@@ -275,13 +275,45 @@ int lobbyFilledSeats(
 /// Før stod "Tomme pladser bliver til computer-spillere ved start" også, når
 /// værten sad alene og ikke kunne starte (ejer-fund): de tomme pladser
 /// blev netop IKKE fyldt.
-String? lobbyStartHint(VariantConfig v, int filled, int open) {
+/// De inviterede (uids), der ikke sidder ved bordet — som MÆNGDE, så en
+/// Duo-spiller (to pladser) ikke tælles to gange. Genkendt på invitedUids,
+/// ikke members (members rummer også dem, der har taget plads).
+List<String> invitedNotSeated(List<dynamic> invitedUids, List<dynamic> uids) {
+  final Set<dynamic> seated = uids.where((dynamic u) => u != null).toSet();
+  return <String>[
+    for (final dynamic u in invitedUids.toSet())
+      if (u is String && !seated.contains(u)) u,
+  ];
+}
+
+/// Skal værten advares om inviterede uden plads, før spillet startes? Kun
+/// hvis der FINDES en plads, de kunne have taget (åben eller sat til
+/// computer) — er alle pladser besat af mennesker, kan de alligevel ikke
+/// komme med, og advarslen var støj (QC-fund).
+bool warnInvitedNotSeated(VariantConfig v, List<dynamic> invitedUids,
+    List<dynamic> uids, List<dynamic> aiSeats) {
+  if (invitedNotSeated(invitedUids, uids).isEmpty) return false;
+  for (final int s in lobbyPlayableSeats(v)) {
+    if (s >= uids.length || uids[s] == null) return true;
+  }
+  return false;
+}
+
+String? lobbyStartHint(VariantConfig v, int filled, int open,
+    {int invitedMissing = 0}) {
   if (filled < 2) {
     return v.seatsShareController
         ? '${v.name} er 1 mod 1 — invitér din modstander, eller tryk '
             '"Fyld med AI" på din modstanders plads.'
         : 'Mindst 2 spillere — invitér en spiller, eller tryk '
             '"Fyld med AI" på en plads.';
+  }
+  // Inviterede uden plads: spillet starter uden dem (ejer-fund, spil 2UDZ —
+  // en inviteret nåede ikke at tage plads, og ingen opdagede det).
+  if (invitedMissing > 0) {
+    return '$invitedMissing inviteret har ikke taget plads — spillet starter '
+        'uden ${invitedMissing == 1 ? 'vedkommende' : 'dem'}; computeren '
+        'spiller de ledige pladser.';
   }
   if (open > 0) return 'Tomme pladser bliver til computer-spillere ved start.';
   return null;

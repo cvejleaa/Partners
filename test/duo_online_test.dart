@@ -147,6 +147,51 @@ void main() {
     });
   });
 
+  group('inviterede uden plads (spil 2UDZ)', () {
+    final List<dynamic> noAi = <dynamic>[false, false, false, false];
+
+    test('én siddende og én ikke-siddende inviteret → 1', () {
+      expect(
+          invitedNotSeated(<dynamic>['c', 'b'], <dynamic>['a', 'c', null, null]),
+          <String>['b']);
+    });
+
+    test('Duo-spiller på to pladser tæller som siddende (mængde)', () {
+      expect(invitedNotSeated(<dynamic>['b'], <dynamic>['a', 'b', 'a', 'b']),
+          isEmpty);
+    });
+
+    test('advar kun, når der findes en åben eller computer-plads', () {
+      // Ledig plads → advar.
+      expect(
+          warnInvitedNotSeated(classicVariant, <dynamic>['b'],
+              <dynamic>['a', 'c', 'd', null], noAi),
+          isTrue);
+      // Pladsen er sat til computer (værten fyldte med AI) → advar også.
+      expect(
+          warnInvitedNotSeated(classicVariant, <dynamic>['b'],
+              <dynamic>['a', 'c', 'd', null], <dynamic>[false, false, false, true]),
+          isTrue);
+      // Alle pladser har mennesker → den inviterede kan ikke komme med alligevel.
+      expect(
+          warnInvitedNotSeated(classicVariant, <dynamic>['b'],
+              <dynamic>['a', 'c', 'd', 'e'], noAi),
+          isFalse);
+      // Ingen mangler.
+      expect(
+          warnInvitedNotSeated(classicVariant, <dynamic>['c'],
+              <dynamic>['a', 'c', null, null], noAi),
+          isFalse);
+    });
+
+    test('hjælpelinjen nævner inviterede uden plads', () {
+      expect(lobbyStartHint(classicVariant, 3, 1, invitedMissing: 1),
+          contains('1 inviteret har ikke taget plads'));
+      expect(lobbyStartHint(classicVariant, 3, 1),
+          'Tomme pladser bliver til computer-spillere ved start.');
+    });
+  });
+
   group('kan startes / åbne pladser', () {
     test('Duo: værten alene kan IKKE starte (to pladser, én spiller)', () {
       final Map<String, dynamic> ready = <String, dynamic>{'a': true};

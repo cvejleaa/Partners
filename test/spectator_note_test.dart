@@ -20,7 +20,34 @@ void main() {
     expect(t, contains('"Better" sidder ved bordet — men med en ANDEN konto'));
   });
 
-  test('navnet ikke ved bordet: stadig konto + et blødt hint', () {
+  test('inviteret, men aldrig taget plads (spil 2UDZ): siger det — intet '
+      'om en anden konto', () {
+    final String t = spectatorNote(
+      account: 'better@gmail.com',
+      myName: 'Better',
+      myUid: 'uid0000001',
+      seatedNames: <String>['Bibamus', 'Carin', 'No 1'],
+      invited: true,
+    );
+    expect(t, contains('logget ind som better@gmail.com'));
+    expect(t, contains('startet, før du tog plads'));
+    expect(t, isNot(contains('anden konto')));
+    expect(t, isNot(contains('ANDEN konto')));
+  });
+
+  test('eget navn ved bordet VINDER over inviteret (to konti)', () {
+    final String t = spectatorNote(
+      account: 'better@mail.dk',
+      myName: 'Better',
+      myUid: 'uid0000001',
+      seatedNames: <String>['Bibamus', 'Better'],
+      invited: true,
+    );
+    expect(t, contains('ANDEN konto'));
+    expect(t, isNot(contains('før du tog plads')));
+  });
+
+  test('hverken inviteret eller ved bordet: almindelig tilskuer', () {
     final String t = spectatorNote(
       account: 'x@example.dk',
       myName: 'X',
@@ -28,8 +55,8 @@ void main() {
       seatedNames: <String>['Bibamus'],
     );
     expect(t, contains('logget ind som x@example.dk'));
-    expect(t, contains('Tog du plads med en anden konto'));
-    expect(t, isNot(contains('ANDEN konto')));
+    expect(t, isNot(contains('anden konto')));
+    expect(t, isNot(contains('før du tog plads')));
   });
 
   test('tomme/dublerede navne og intet login', () {

@@ -581,6 +581,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                                   i++)
                                 if (uids[i] != null) names[i],
                             ],
+                            invited: ((d['invitedUids'] as List?) ??
+                                    const <dynamic>[])
+                                .contains(myUid),
                           ),
                   ),
                   if (_replayActive) _replayOverlay(names, state, mySeat),

@@ -744,8 +744,26 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
               uids, aiSeats, Map<String, dynamic>.from(ready),
               variant: variant);
           final int filled = lobbyFilledSeats(variant, uids, aiSeats);
-          final String? startHint =
-              lobbyStartHint(variant, filled, openSeats);
+          final List<dynamic> invitedUids =
+              (d['invitedUids'] as List?) ?? const <dynamic>[];
+          final bool warnInvited =
+              warnInvitedNotSeated(variant, invitedUids, uids, aiSeats);
+          final List<String> missingUids =
+              warnInvited ? invitedNotSeated(invitedUids, uids) : <String>[];
+          // Navne fra vennelisten; ukendte vises ikke (antallet står i
+          // hjælpelinjen).
+          final Map<String, String> friendNames = <String, String>{
+            for (final FriendRef f
+                in ref.watch(friendsStreamProvider).valueOrNull ??
+                    const <FriendRef>[])
+              f.uid: f.displayName,
+          };
+          final List<String> missingNames = <String>[
+            for (final String u in missingUids)
+              if (friendNames[u] != null) friendNames[u]!,
+          ];
+          final String? startHint = lobbyStartHint(variant, filled, openSeats,
+              invitedMissing: missingUids.length);
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -784,6 +802,22 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                       aiSeats: aiSeats,
                       isHost: isHost,
                       mySeat: mySeat),
+                // Hvem mangler? Står dér, hvor man kigger efter pladserne —
+                // så startdialogen er en sidste sikring, ikke den eneste
+                // besked (QC-fund).
+                if (missingUids.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      missingNames.isEmpty
+                          ? '${missingUids.length} inviteret har ikke taget '
+                              'plads endnu.'
+                          : 'Inviteret, ikke taget plads: '
+                              '${missingNames.join(', ')}'
+                              '${missingNames.length < missingUids.length ? ' (+${missingUids.length - missingNames.length})' : ''}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 if (isHost && willHaveAi) ...<Widget>[
                   const SizedBox(height: 4),
@@ -828,8 +862,16 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
                 if (isHost)
                   FilledButton(
                     onPressed: canStart
-                        ? () => runLobbyAction(
-                            context, svc.startGameFromLobby(code))
+                        ? () async {
+                            if (missingUids.isNotEmpty &&
+                                !await _confirmStartWithout(
+                                    context, missingUids.length, missingNames)) {
+                              return;
+                            }
+                            if (!context.mounted) return;
+                            await runLobbyAction(
+                                context, svc.startGameFromLobby(code));
+                          }
                         : null,
                     child: Text(canStart || filled < 2
                         ? 'Start spil'
@@ -853,6 +895,35 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> {
         },
       ),
     );
+  }
+
+  /// Sidste sikring: "N inviteret har ikke taget plads — start alligevel?"
+  /// Ikke en blokering — en invitation kan ikke afslås, så en lobby ville
+  /// ellers kunne låse for evigt (QC-fund).
+  Future<bool> _confirmStartWithout(
+      BuildContext context, int n, List<String> names) async {
+    final String who = names.isEmpty
+        ? '$n inviteret'
+        : names.join(', ') +
+            (names.length < n ? ' og ${n - names.length} mere' : '');
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Start uden alle inviterede?'),
+        content: Text('$who har ikke taget plads. Spillet starter uden '
+            '${n == 1 ? 'vedkommende' : 'dem'}, og computeren spiller de '
+            'ledige pladser.'),
+        actions: <Widget>[
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Vent')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Start alligevel')),
+        ],
+      ),
+    );
+    return ok == true;
   }
 
   Widget _seatCard(
