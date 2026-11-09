@@ -287,7 +287,7 @@ List<String> invitedNotSeated(List<dynamic> invitedUids, List<dynamic> uids) {
 bool warnInvitedNotSeated(
     VariantConfig v, List<dynamic> invitedUids, List<dynamic> uids) {
   if (invitedNotSeated(invitedUids, uids).isEmpty) return false;
-  for (final int s in lobbyPlayableSeats(v)) {
+  for (final int s in <int>[0, 1, 2, 3]) {
     if (s >= uids.length || uids[s] == null) return true;
   }
   return false;
