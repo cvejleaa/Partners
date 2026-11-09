@@ -33,9 +33,6 @@ String spectatorNote({
   final String hint = nameAtTable
       ? ' "$me" sidder ved bordet — men med en ANDEN konto. Log ud, og log '
           'ind med den, du tog plads med (fx Google i stedet for e-mail).'
-      : (invited
-          ? ' Du var inviteret, men spillet blev startet, før du tog plads. '
-              'Du kan se med; computeren spiller den ledige plads.'
-          : '');
+      : ('');
   return '$who$id og har ingen plads i dette spil.$table$hint';
 }
