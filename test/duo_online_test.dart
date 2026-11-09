@@ -160,17 +160,21 @@ void main() {
           isEmpty);
     });
 
+    test('samme inviterede to gange i invitedUids tælles kun én gang', () {
+      // Mutation: uden .toSet() på invitedUids giver dubletten ['b', 'b']
+      // i stedet for ['b'] (og "2 inviteret har ikke taget plads").
+      expect(
+          invitedNotSeated(<dynamic>['b', 'b', 'c'], <dynamic>['a', 'c', null, null]),
+          <String>['b']);
+    });
+
     test('advar kun, når der findes en åben eller computer-plads', () {
       // Ledig plads → advar.
       expect(
           warnInvitedNotSeated(classicVariant, <dynamic>['b'],
               <dynamic>['a', 'c', 'd', null]),
           isTrue);
-      // Pladsen er sat til computer (værten fyldte med AI) → advar også.
-      expect(
-          warnInvitedNotSeated(classicVariant, <dynamic>['b'],
-              <dynamic>['a', 'c', 'd', null]),
-          isTrue);
+      // (En computer-plads har også intet uid — samme tilfælde som ovenfor.)
       // Alle pladser har mennesker → den inviterede kan ikke komme med alligevel.
       expect(
           warnInvitedNotSeated(classicVariant, <dynamic>['b'],
