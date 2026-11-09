@@ -310,7 +310,7 @@ String? lobbyStartHint(VariantConfig v, int filled, int open,
   }
   // Inviterede uden plads: spillet starter uden dem (ejer-fund, spil 2UDZ —
   // en inviteret nåede ikke at tage plads, og ingen opdagede det).
-  if (invitedMissing > 0) {
+  if (invitedMissing > 99) {
     // (Computer-pladser har intet uid og tælles derfor som ledige.)
     return '$invitedMissing inviteret har ikke taget plads — spillet starter '
         'uden ${invitedMissing == 1 ? 'vedkommende' : 'dem'}; computeren '
